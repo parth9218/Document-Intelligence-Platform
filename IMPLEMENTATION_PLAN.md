@@ -2,49 +2,59 @@
 
 This document maps out the phased execution plan for the platform, ensuring each phase achieves a distinct milestone with clear deliverables.
 
+---
+
 ## Phase 1: Foundation (Database & API Skeleton)
-* **Goal**: Setup database schemas, session mechanisms, upload interfaces, and worker frameworks.
+* **Goal**: Setup database schemas (including tracking tables), session mechanisms, upload interfaces, and worker frameworks.
 * **Tasks**:
-  * Task 1.1: Database Schema Creation (Task 101)
-  * Task 1.2: Port & Adapt Chunker Logic (Task 102)
-  * Task 1.3: Develop Node.js TypeScript API Service (Task 103)
-  * Task 1.4: Develop Python Worker Daemon Skeleton (Task 104)
-* **Milestone**: API returns presigned S3 URLs and validates signed cookies. Worker polls SQS queue safely.
-* **Verification**: API integration checks and local SQS message acknowledgement validation.
+  * **Task 1.1: Database Schema Creation (Task 101)**: Create database tables (`sessions`, `documents`, `document_chunks`, `processing_jobs`, `query_logs`, `audit_log`) using Prisma schema (`schema.prisma`) in `apps/api`. Set up HNSW cosine similarity vector index. Generate and run SQL migrations via `prisma migrate dev`.
+  * **Task 1.2: API Session Management (Task 102)**: Implement signed cookie authentication middleware, session persistence, and session tenancy validations in TypeScript Express.
+  * **Task 1.3: Document Upload Presigning & Status Routes (Task 103)**: Express endpoints for generating S3 presigned PUT URLs and reading document ingestion job status (`GET /api/documents/:id/status`).
+  * **Task 1.4: Worker SQS Consumer Loop (Task 104)**: Setup Python boto3 polling loop with long polling and graceful shutdown handling.
+* **Milestone**: API returns presigned S3 URLs, validates signed cookies, and returns job statuses. Worker polls SQS safely.
+* **Verification**: Integration checks for signed requests, local SQS polling loop execution, and test database schema runs.
+
+---
 
 ## Phase 2: Ingestion Pipeline
-* **Goal**: Build file retrieval, malware validation, text extraction, embedding, and storage logic.
+* **Goal**: Build file downloading, text extraction, paragraph chunking, vector embedding, storage, and progress reporting logic.
 * **Tasks**:
-  * Task 2.1: Worker Document Extraction (PyMuPDF) (Task 201)
-  * Task 2.2: Worker Embedding Generation (Amazon Bedrock) (Task 202)
-  * Task 2.3: Worker Vector Storage (pgvector) (Task 203)
-* **Milestone**: Dropping a PDF into S3 results in vectors stored in pgvector.
-* **Verification**: Assert that `document_chunks` rows match text segments and page numbers.
+  * **Task 2.1: Worker Document Extraction (Task 201)**: Download files, sniff magic numbers to validate type, handle corrupt file states, parse text page-by-page using PyMuPDF, and update status to `downloading` and `extracting`.
+  * **Task 2.2: Worker Chunking & Embedding Generation (Task 202)**: Paragraph-based text chunker (~500 tokens, 75-token overlap) and Amazon Bedrock Titan Embeddings V2 integration.
+  * **Task 2.3: Worker Vector Storage & Job Progress Updates (Task 203)**: Batch insert vector embeddings and chunk metadata to Postgres using SQLAlchemy. Incrementally update `processing_jobs` status (`embedding` state) and progress percentage as batches are completed, marking the document as `ready` and the job as `completed` at the end.
+* **Milestone**: Raw PDF uploaded to S3 is processed by the worker, updating progress updates dynamically in the database and loading vectors into pgvector.
+* **Verification**: Assert `document_chunks` records exist with correct content, page mapping, and active vector data. Assert `processing_jobs` records accurately record progress percentage increments.
+
+---
 
 ## Phase 3: Query & Citation Engine
-* **Goal**: Chat endpoint matching similarity queries and streaming grounded Claude answers.
+* **Goal**: Chat endpoint matching vector queries, streaming grounded answers, verifying citations, and rendering progress.
 * **Tasks**:
-  * Task 3.1: API Similarity Search (Task 301)
-  * Task 3.2: API Answer Generation & Citations (Task 302)
-  * Task 3.3: Frontend Adaptation (Task 303)
-* **Milestone**: React SPA queries API and receives streamed answers with page citations.
-* **Verification**: Verify that query times are < 2.5s and citation indices are verified against DB records.
+  * **Task 3.1: API Similarity Search (Task 301)**: Call Bedrock Titan V2 to embed query, and query pgvector using cosine similarity (`<=>`) with strict session tenancy filter in Express API using Prisma client raw queries.
+  * **Task 3.2: API Answer Generation & Citation Verification (Task 302)**: Construct system prompt with retrieved context snippets. Invoke Bedrock Claude with streaming enabled. Scan response for citation brackets (`[1]..[n]`), verify they match retrieved context IDs, and stream verified citation metadata alongside Claude's text tokens via SSE using Express API.
+  * **Task 3.3: Frontend Progress & Streaming Integration (Task 303)**: Update React SPA to track file upload progress (browser-side), poll/SSE `/api/documents/:id/status` to show chunking/embedding progress bars, and connect to `/api/query` streaming answer endpoint to render interactive, validated citation bubbles.
+* **Milestone**: Full interactive UI where files are uploaded with progress bars, processed, and users query documents to receive streamed answers with citations.
+* **Verification**: Verify citation validation discards hallucinated brackets, SSE streams deliver data in chunk frames, and query responses finish in < 2.5s.
+
+---
 
 ## Phase 4: Observability Integration
-* **Goal**: Standardize telemetry across Node.js API and Python Worker.
+* **Goal**: Standardize telemetry across Express API and Python Worker.
 * **Tasks**:
-  * Task 4.1: OpenTelemetry Tracing (Task 401)
-  * Task 4.2: Prometheus & Loki Aggregation (Task 402)
-* **Milestone**: Prometheus scrapes endpoints; Loki streams JSON logs; Grafana details end-to-end trace maps.
-* **Verification**: Assert traces capture SQS/Bedrock/RDS calls.
+  * **Task 4.1: OpenTelemetry Tracing (Task 401)**: Wire up auto-instrumentation for Express, prisma client, pg, boto3, and Bedrock calls.
+  * **Task 4.2: Prometheus & Loki Aggregation (Task 402)**: Standardize metric collection and structured JSON logging.
+* **Milestone**: Metrics, traces, and logs are aggregated and queryable in Grafana.
+* **Verification**: Verify trace maps connect API requests down through SQS, Worker tasks, Bedrock API calls, and DB transactions.
+
+---
 
 ## Phase 5: Cloud Deployment & Platform Hardening
 * **Goal**: Terraform provisioning, Helm packaging, ArgoCD GitOps, and KEDA autoscaling.
 * **Tasks**:
-  * Task 5.1: Terraform Provisioning (Task 501)
-  * Task 5.2: Helm Charting (Task 502)
-  * Task 5.3: ArgoCD GitOps Integration (Task 503)
-  * Task 5.4: KEDA Autoscaling (Task 504)
-  * Task 5.5: Security Hardening (NetworkPolicies, Kyverno) (Task 505)
+  * **Task 5.1: Terraform Provisioning (Task 501)**
+  * **Task 5.2: Helm Charting (Task 502)**
+  * **Task 5.3: ArgoCD GitOps Integration (Task 503)**
+  * **Task 5.4: KEDA Autoscaling (Task 504)**
+  * **Task 5.5: Security Hardening (NetworkPolicies, Kyverno) (Task 505)**
 * **Milestone**: Infrastructure is created from zero via Terraform and deployed automatically via GitOps.
-* **Verification**: Workers scale down to 0 on empty queue and scale up to 10 replicas under SQS load.
+* **Verification**: Verify workers scale from 0 to 10 based on SQS queue depth KEDA metrics.

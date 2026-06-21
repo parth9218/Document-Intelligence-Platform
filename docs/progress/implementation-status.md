@@ -2,19 +2,19 @@
 
 ## Phase 1: Foundation
 * [ ] **Task 101**: Database Schema Creation ── *Incomplete*
-* [ ] **Task 102**: API Session auth ── *Incomplete*
-* [ ] **Task 103**: API Document Upload ── *Incomplete*
-* [ ] **Task 104**: Worker SQS Consumer ── *Incomplete*
+* [ ] **Task 102**: API Session Management ── *Incomplete*
+* [ ] **Task 103**: Document Upload & Status tracking ── *Incomplete*
+* [ ] **Task 104**: SQS Consumer Loop ── *Incomplete*
 
 ## Phase 2: Ingestion Pipeline
 * [ ] **Task 201**: Worker Document Extraction ── *Incomplete*
 * [ ] **Task 202**: Worker Chunking & Embedding ── *Incomplete*
-* [ ] **Task 203**: Worker Vector Storage ── *Incomplete*
+* [ ] **Task 203**: Worker Vector Storage & Status Updates ── *Incomplete*
 
 ## Phase 3: Query Engine
 * [ ] **Task 301**: API Similarity Search ── *Incomplete*
-* [ ] **Task 302**: API Generation & Citation ── *Incomplete*
-* [ ] **Task 303**: Frontend Adaptation ── *Incomplete*
+* [ ] **Task 302**: API Answer Generation & Citation Verification ── *Incomplete*
+* [ ] **Task 303**: Frontend Progress & Streaming Integration ── *Incomplete*
 
 ## Phase 4: Observability
 * [ ] **Task 401**: OpenTelemetry Tracing ── *Incomplete*

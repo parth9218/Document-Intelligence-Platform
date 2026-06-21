@@ -11,7 +11,7 @@ The objective of this project is to build a production-grade, multi-tenant, clou
 
 ## 2. Core Architectural Principles
 To prevent architectural drift, the codebase enforces the following:
-* **Polyglot Decoupled Services**: The client-facing API is in Node.js/TypeScript (concurrency, fast Web I/O), and the background processing worker is in Python (data science, text parsing).
+* **Polyglot Decoupled Services**: The client-facing API is built in Node.js/TypeScript using Express (optimized for fast asynchronous I/O and concurrent SSE streaming sessions), and the background processing worker is a decoupled Python daemon. This demonstrates specialized multi-language services in a microservice topology.
 * **SQS Handoff & KEDA Scaling**: S3 event notifications trigger SQS messages. Worker pods poll SQS via boto3 and scale 0-10 dynamically via KEDA.
 * **Strict Session Tenancy**: Every query is filtered by the user's cryptographically signed session ID. Access control is verified at the middleware and DB layers.
 * **IAM Database Authentication**: Avoid static database credentials in the cluster. Pods use short-lived IAM connection tokens.
@@ -28,9 +28,9 @@ To prevent architectural drift, the codebase enforces the following:
 * `/tasks/` — Step-by-step task tracking specifications.
 
 ## 4. Coding Standards & Conventions
-* **TypeScript**: Enforce strict typing. Do not use `any`. Utilize custom middleware for route validations.
-* **Python**: Enforce PEP 8 style formatting. Use type hinting. Clean up all DB database resources using context managers.
-* **SQL**: Parameterize all queries. Do not use inline string concatenation for query execution to prevent injection.
+* **TypeScript**: Enforce strict typing. Do not use `any`. Used for the frontend React and Express API services. Database operations in the Express API must be executed strictly using the **Prisma ORM** (no raw SQL).
+* **Python**: Enforce PEP 8 style formatting. Use type hinting. Clean up all DB database resources using context managers. Used for the Python worker daemon. Database operations in the worker must be executed strictly using the **SQLAlchemy ORM** (no raw SQL).
+* **Database / SQL**: Do not write raw SQL queries. All database transactions, inserts, updates, and vector similarity queries must be executed strictly via ORM models and parameters.
 * **Secrets**: Never commit raw credentials. Use AWS Secrets Manager synced via External Secrets Operator to mount secrets inside Pods.
 
 ## 5. Development Workflow for AI Agents

@@ -1,24 +1,30 @@
-# Task 302: Grounded Generation & Citations
+# Task 302: Grounded Generation, SSE Streaming & Citations
 
 ## Goal
-Assemble prompt, call Bedrock Claude, stream answers, and parse hybrid citations.
+Assemble context prompt, invoke Bedrock Claude response stream, process text chunks with real-time citation parsing, and filter out hallucinated references before streaming to the client.
 
 ## Scope
-Implement prompt templating, Bedrock Claude SSE stream reader, and citation extractor in `apps/api`.
+Implement prompt template construction, Bedrock Claude stream reader (SSE/EventStream format), inline citation parser, and reference validator inside `apps/api` using TypeScript Express.
 
 ## Files Expected To Change
 * `apps/api/src/services/llm.ts`
 * `apps/api/src/routes/query.ts`
 
 ## Dependencies
-* Task 301 (API Similarity Search)
+* Task 301 (API Similarity Search & Tenancy Enforcement via Prisma ORM)
 
 ## Acceptance Criteria
-* Prompts format context chunks with bracket IDs (`[1]`..`[n]`).
-* Instruct model to only answer using reference context and output inline bracket citations.
-* Verify generated brackets correspond to retrieved set; discard hallucinatory references.
+* **Context Formatter**: Combine top-5 retrieved chunks into prompt context labeled sequentially `[1]` to `[5]`, containing `doc_name`, `page_number`, and `content`.
+* **Prompt Instructions**: Instruct Claude strictly to answer using the provided contexts, and output inline bracket citations (e.g. `[1]`) for every statement.
+* **SSE Streaming**: Expose query route as a Server-Sent Events endpoint `/api/query` using Express response streaming (`res.setHeader('Content-Type', 'text/event-stream')`).
+* **Citation Parser & Validator**:
+  * Scan outgoing text tokens for bracket patterns (`[n]`).
+  * Verify that any output citation `n` falls within the range `[1..num_chunks]` of actually retrieved contexts.
+  * Filter out or mark as unverified any citation index referencing a document context not provided to the model.
+  * Stream citation metadata (index mapping to `doc_name` and `page_number`) alongside text chunks so that the client has full details for interactive tooltips.
 
 ## Validation Steps
-1. Query API with test questions.
-2. Assert returned stream uses Server-Sent Events syntax.
-3. Verify final response JSON metadata correctly includes source names, page numbers, and snippet values.
+1. Query API via client using EventSource or fetch reader.
+2. Verify response streams in real-time chunk-by-chunk using SSE convention.
+3. Assert that hallucinated citations (e.g., model outputs `[6]` when only 3 chunks exist) are filtered or handled cleanly.
+4. Verify metadata frame contains correct mapping of bracket ID to filename and page number.
