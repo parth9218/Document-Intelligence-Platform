@@ -1,3 +1,8 @@
+---
+name: postgres-schema-design
+description: Help agents model tables, foreign key cascades, and optimization schemas.
+---
+
 # Skill: PostgreSQL Schema Design
 
 ## Purpose

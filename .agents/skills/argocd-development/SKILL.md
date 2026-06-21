@@ -1,3 +1,8 @@
+---
+name: argocd-development
+description: Automate continuous deployment sync cycles and configure self-healing rules.
+---
+
 # Skill: ArgoCD GitOps Workflows
 
 ## Purpose

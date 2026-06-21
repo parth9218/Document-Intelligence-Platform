@@ -1,3 +1,8 @@
+---
+name: testing
+description: Write automated verification checks and simulate local cloud environments.
+---
+
 # Skill: Verification & Integration Testing
 
 ## Purpose

@@ -1,3 +1,8 @@
+---
+name: kubernetes-development
+description: Write Helm charts, configure NetworkPolicies, and apply pod permissions.
+---
+
 # Skill: Kubernetes Deployment & Security
 
 ## Purpose

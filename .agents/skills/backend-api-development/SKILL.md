@@ -1,3 +1,8 @@
+---
+name: backend-api-development
+description: Guide agents in writing concurrent, secure, and typed API routes.
+---
+
 # Skill: Backend API Development (Node.js/TypeScript)
 
 ## Purpose

@@ -1,3 +1,8 @@
+---
+name: pgvector-development
+description: Configure vector dimensions, indexes, and database similarity logic.
+---
+
 # Skill: pgvector Vector Operations
 
 ## Purpose

@@ -1,3 +1,8 @@
+---
+name: llm-integration
+description: Assemble prompts and stream tokens safely using Server-Sent Events.
+---
+
 # Skill: LLM Prompting & Stream Handling
 
 ## Purpose

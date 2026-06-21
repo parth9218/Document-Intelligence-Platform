@@ -1,3 +1,8 @@
+---
+name: rag-retrieval
+description: Retrieve relevant context passages to ground LLM generation prompts.
+---
+
 # Skill: RAG Semantic Retrieval
 
 ## Purpose

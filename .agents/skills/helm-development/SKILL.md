@@ -1,3 +1,8 @@
+---
+name: helm-development
+description: Manage environment values and generate Kubernetes deployment manifests.
+---
+
 # Skill: Helm Chart Configuration
 
 ## Purpose

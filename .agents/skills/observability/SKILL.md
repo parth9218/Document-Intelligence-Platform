@@ -1,3 +1,8 @@
+---
+name: observability
+description: Integrate OpenTelemetry metrics, log streams, and distributed traces.
+---
+
 # Skill: Observability & Logging
 
 ## Purpose

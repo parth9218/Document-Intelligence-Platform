@@ -1,3 +1,8 @@
+---
+name: rag-ingestion
+description: Extract text layout data, create segments, and run ingestion workers.
+---
+
 # Skill: RAG Ingestion Pipeline
 
 ## Purpose
