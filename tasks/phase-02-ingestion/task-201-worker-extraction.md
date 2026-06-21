@@ -1,26 +1,108 @@
 # Task 201: Worker Document Extraction
 
 ## Goal
-Download files from S3, run safety validations, and extract text pages.
+Download documents from S3, validate file integrity via magic number inspection,
+extract text page-by-page using PyMuPDF, and update the processing job status
+through the `downloading`, `validating`, and `extracting` stages.
 
 ## Scope
-Update SQS task handler inside `apps/worker` to pull documents, snif magic numbers, and parse text via PyMuPDF.
+Implement `apps/worker/extractor.py` and wire it into `apps/worker/worker.py`'s
+`process_document()` dispatch function.
 
 ## Files Expected To Change
 * `apps/worker/extractor.py`
 * `apps/worker/worker.py`
+* `apps/worker/models.py` (SQLAlchemy ORM models — if not yet created)
 
 ## Dependencies
-* Task 103 (Upload Presigning)
-* Task 104 (SQS Consumer)
+* Task 103 (Upload Presigning — defines the S3 key format)
+* Task 104 (SQS Consumer — calls `process_document()`)
+
+---
+
+## Stage Transition Sequence
+
+```
+uploaded → downloading → validating → extracting → chunking (Task 202)
+```
+
+Each transition must update `processing_jobs.status` via SQLAlchemy ORM before
+the stage begins. This triggers the PG NOTIFY trigger, which pushes the status
+change to the SSE stream via the Express API.
+
+---
+
+## Stage 1: Downloading
+
+**Entry action:** Update `processing_jobs.status = 'downloading'`, set `started_at = NOW()`,
+set `worker_id = <pod hostname>`.
+
+**Implementation:**
+* Use `boto3.client('s3').download_fileobj()` to stream the S3 object to a local temp file.
+* Use `tempfile.NamedTemporaryFile(delete=False)` to create a temp path.
+* Always clean up the temp file in a `finally` block.
+
+**Failure handling:**
+* `ClientError` with `NoSuchKey` → permanent failure: `status = 'failed'`,
+  `error_code = 'file_not_found'`. Delete SQS message.
+* Network errors → transient failure: raise exception so SQS visibility timeout re-delivers.
+
+---
+
+## Stage 2: Validating
+
+**Entry action:** Update `processing_jobs.status = 'validating'`.
+
+**Implementation:**
+* Read the first 16 bytes of the downloaded file.
+* Check magic bytes:
+  * PDF: `%PDF` (`25 50 44 46`)
+  * Plain text: no specific magic; fall back to UTF-8 decode attempt
+* If magic bytes do not match the `documents.mime_type` on record → permanent failure:
+  `status = 'failed'`, `error_code = 'invalid_file_type'`. Delete SQS message.
+
+**Do not trust the `Content-Type` header from the presigned URL.** Magic number inspection
+is the authoritative validation step.
+
+---
+
+## Stage 3: Extracting
+
+**Entry action:** Update `processing_jobs.status = 'extracting'`.
+
+**Implementation:**
+* For PDFs: open with `fitz.open(temp_path)` (PyMuPDF).
+  * Iterate pages via `doc.pages()`.
+  * For each page: call `page.get_text("text")`, strip whitespace, skip empty pages.
+  * Collect: `List[Tuple[int, str]]` → `[(page_number, page_text), ...]`
+* For plain text: read entire file content, assign `page_number = 1`.
+
+**Output contract:** Return a list of `(page_number: int, text: str)` tuples to the caller
+(`process_document`), which passes it to Task 202's chunker.
+
+**Failure handling:**
+* PyMuPDF raises on corrupt or password-protected PDF → permanent failure:
+  `status = 'failed'`, `error_code = 'extraction_failed'`. Delete SQS message.
+
+---
 
 ## Acceptance Criteria
-* Worker downloads raw file from S3 using boto3.
-* File type is sniffed via magic numbers. Corruption triggers permanent failure (`status=failed`).
-* PyMuPDF (`fitz` library) extracts text from document pages, tracking page numbers.
+* Worker transitions job through `downloading → validating → extracting` with DB updates at each stage.
+* `worker_id` and `started_at` are set on job pickup.
+* Magic byte check rejects files whose bytes do not match the declared MIME type.
+* PyMuPDF extracts page-numbered text from text-native PDFs.
+* Corrupt/password-protected PDFs set `status = 'failed'` with `error_code = 'extraction_failed'`.
+* Temp files are always cleaned up, including on exceptions.
 
 ## Validation Steps
-1. Upload a text-native PDF to local S3.
-2. Queue S3 ObjectCreated notification payload.
-3. Verify worker extracts correct text per page.
-4. Verify uploading corrupted file transitions database document record to `failed`.
+1. Upload a text-native PDF to local S3 (Localstack). Queue an S3 ObjectCreated payload.
+2. Verify worker transitions through all three status stages in order (query DB between each).
+3. Upload a plain `.txt` file — verify single-page extraction.
+4. Rename a `.jpg` as `.pdf` and upload — verify magic byte check triggers `failed` with `error_code = 'invalid_file_type'`.
+5. Upload a password-protected PDF — verify `error_code = 'extraction_failed'`.
+6. Verify temp file does not persist after worker run (even on failure path).
+
+## Definition Of Done
+* `extractor.py` implements the full `downloading → validating → extracting` pipeline.
+* All failure paths set correct `error_code` and delete the SQS message.
+* ORM status updates confirmed to trigger PG NOTIFY (verified via LISTEN on test DB).

@@ -9,7 +9,7 @@ This document maps out the phased execution plan for the platform, ensuring each
 * **Tasks**:
   * **Task 1.1: Database Schema Creation (Task 101)**: Create database tables (`sessions`, `documents`, `document_chunks`, `processing_jobs`, `query_logs`, `audit_log`) using Prisma schema (`schema.prisma`) in `apps/api`. Set up HNSW cosine similarity vector index. Generate and run SQL migrations via `prisma migrate dev`.
   * **Task 1.2: API Session Management (Task 102)**: Implement signed cookie authentication middleware, session persistence, and session tenancy validations in TypeScript Express.
-  * **Task 1.3: Document Upload Presigning & Status Routes (Task 103)**: Express endpoints for generating S3 presigned PUT URLs and reading document ingestion job status (`GET /api/documents/:id/status`).
+  * **Task 1.3: Document Upload, Confirm-Upload & Status Routes (Task 103)**: Express endpoints for generating S3 presigned PUT URLs (with Content-Type and size conditions embedded), confirming upload completion (`POST /api/documents/:id/confirm-upload` — the browser calls this after S3 returns 200 OK to transition status to `uploaded`), polling job status (`GET /api/documents/:id/status`), and streaming real-time progress via SSE (`GET /api/documents/:id/progress`). Includes orphan cleanup job for expired and stuck-uploaded records.
   * **Task 1.4: Worker SQS Consumer Loop (Task 104)**: Setup Python boto3 polling loop with long polling and graceful shutdown handling.
 * **Milestone**: API returns presigned S3 URLs, validates signed cookies, and returns job statuses. Worker polls SQS safely.
 * **Verification**: Integration checks for signed requests, local SQS polling loop execution, and test database schema runs.
@@ -21,7 +21,7 @@ This document maps out the phased execution plan for the platform, ensuring each
 * **Tasks**:
   * **Task 2.1: Worker Document Extraction (Task 201)**: Download files, sniff magic numbers to validate type, handle corrupt file states, parse text page-by-page using PyMuPDF, and update status to `downloading` and `extracting`.
   * **Task 2.2: Worker Chunking & Embedding Generation (Task 202)**: Paragraph-based text chunker (~500 tokens, 75-token overlap) and Amazon Bedrock Titan Embeddings V2 integration.
-  * **Task 2.3: Worker Vector Storage & Job Progress Updates (Task 203)**: Batch insert vector embeddings and chunk metadata to Postgres using SQLAlchemy. Incrementally update `processing_jobs` status (`embedding` state) and progress percentage as batches are completed, marking the document as `ready` and the job as `completed` at the end.
+  * **Task 2.3: Worker Vector Storage & Job Progress Updates (Task 203)**: Batch upsert vector embeddings and chunk metadata to Postgres using SQLAlchemy `ON CONFLICT DO UPDATE` (idempotent on `(document_id, chunk_index)`). Incrementally update `processing_jobs` counters (`processed_chunks`, `progress_pct`, `checkpoint_index`) per batch of 50 chunks. On success, atomically mark the document and job as `completed`. Supports checkpoint-based resume from the last persisted batch on worker restart.
 * **Milestone**: Raw PDF uploaded to S3 is processed by the worker, updating progress updates dynamically in the database and loading vectors into pgvector.
 * **Verification**: Assert `document_chunks` records exist with correct content, page mapping, and active vector data. Assert `processing_jobs` records accurately record progress percentage increments.
 

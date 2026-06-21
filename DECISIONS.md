@@ -59,3 +59,24 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
   1. **Node.js Express API**: Use **Prisma ORM** as the database access layer. Prisma manages database migrations using **Prisma Migrate** as the single source of truth for the database schema.
   2. **Python Worker Daemon**: Use **SQLAlchemy (Declarative)** to map database operations inside the Python worker, writing Python classes that mirror the Prisma-generated database tables exactly.
 * **Rationale**: This leverages the best-in-class ORM for each runtime (Prisma's excellent auto-generated client typing for Express, and SQLAlchemy's robust database session management and custom vector mappings for Python). Database schema state is unified by executing all migrations solely through Prisma Migrate schema files.
+
+## ADR-010: Confirm-Upload Endpoint for Upload Status Transition
+* **Status**: Approved
+* **Context**: Files are uploaded directly from the browser to S3 via presigned URLs. The backend receives no signal from this transfer. The S3 ObjectCreated → SQS event triggers the worker's processing, not the `uploaded` status transition. Without an explicit confirmation step, the frontend has no mechanism to show "Upload Complete" until the worker begins downloading.
+* **Decision**: Implement `POST /api/documents/:id/confirm-upload` as the sole mechanism to transition `processing_jobs.status` from `pending_upload` to `uploaded`. The browser calls this endpoint immediately after receiving `200 OK` from S3.
+* **Rationale**: Decouples the "upload completed" UX signal from the asynchronous SQS delivery. Keeps the state machine coherent: `uploaded` means the file is in S3 and the browser confirmed it; `downloading` means the worker has begun acting on the SQS event.
+
+## ADR-011: Hybrid Batch-Level Progress Tracking
+* **Status**: Approved
+* **Context**: Progress tracking for the embedding stage requires a balance between update granularity and write amplification. Per-chunk writes produce unacceptable DB load (5,000 writes for a 5,000-chunk document). Phase-level tracking only (processing/embedding/done) is too coarse for user experience.
+* **Decision**: Track progress using aggregate counters on `processing_jobs`: `total_chunks` (set after chunking), `processed_chunks` (incremented per batch), `progress_pct` (computed linear percentage). Update these counters once per batch of 50 chunks. The PG NOTIFY trigger fires on each update, delivering one SSE frame per batch to the browser.
+* **Rationale**: A 5,000-chunk document at batch size 50 produces 100 DB writes and 100 SSE events — acceptable write amplification. Progress display remains granular enough for user transparency. `progress_pct` is capped at 99 until the final completion transaction to avoid premature 100% display.
+
+## ADR-012: Idempotency Strategy for Worker Processing
+* **Status**: Approved
+* **Context**: SQS delivers messages at least once. Workers can crash mid-batch. Document processing must be safe to retry from any point without duplicating chunks, re-embedding completed batches, or corrupting job state.
+* **Decision**: Three-mechanism idempotency strategy:
+  1. **Upsert key**: `UNIQUE (document_id, chunk_index)` constraint on `document_chunks` enables `INSERT ... ON CONFLICT DO UPDATE` — any batch can be re-run safely.
+  2. **Checkpoint resume**: `checkpoint_index` on `processing_jobs` records the last successfully persisted batch index. On restart, the worker reads `checkpoint_index + 1` and skips completed batches.
+  3. **Re-indexing support**: `model_version` column on `document_chunks` enables future targeted re-embedding (e.g., on model upgrade) without full document reprocessing.
+* **Rationale**: Provides exactly-once logical processing semantics at the batch level without requiring distributed locks or external coordination. SQS visibility timeout (600s) acts as the distributed lock preventing concurrent workers from processing the same document.

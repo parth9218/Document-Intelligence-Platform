@@ -28,9 +28,9 @@ To give users transparency during ingestion, the system tracks and updates progr
        |   (XHR progress: 0-100% upload status)|                |                 |                   |
        |                                       |-- 5. Event --->|                 |                   |
        |                                       |   Notification |                 |                   |
-       |                                       |   to SQS       |<- 6. Long Poll -|                   |
-       |                                       |                |   (Message) ----|                   |
-       |                                       |                |-- 7. Payload ------>|               |
+       |-- 5b. POST confirm-upload ----------->|   to SQS       |<- 6. Long Poll -|                   |
+       |   (status: uploaded)                  |                |   (Message) ----|                   |
+       |<- 5c. 200 OK -------------------------|                |-- 7. Payload ------>|               |
        |                                       |                |                     |               |
        |                                       |                                      |-- 8. Status ->|
        |                                       |                                      |  'downloading'|
@@ -41,6 +41,7 @@ To give users transparency during ingestion, the system tracks and updates progr
        |                                       |======= 12. File Data ===============>|               |
        |                                       |                                      |               |
        |                                       |                                      |-- 13. Status ->|
+       |<- 13b. SSE ("Validating...") ---------|                                      |  'validating' |
        |<- 14. SSE updates ("Extracting...") --|                                      |  'extracting' |
        |                                       |                                      |               |
        |                                       |                                      |-- 15. Chunks ->|
@@ -56,7 +57,7 @@ To give users transparency during ingestion, the system tracks and updates progr
 
 ### Detailed Ingestion Progress Mechanism
 1. **Upload Progress**: Tracked natively on the browser client via XMLHttpRequests/Fetch upload progress callbacks (since files are uploaded directly from the browser to the S3 bucket via presigned URLs).
-2. **State Updates**: The worker performs database transactions on a `processing_jobs` table to checkpoint progress. Statuses transition through: `pending_upload` -> `uploaded` -> `downloading` -> `extracting` -> `chunking` -> `embedding` -> `indexing` -> `completed` / `failed`.
+2. **State Updates**: The worker performs database transactions on a `processing_jobs` table to checkpoint progress. Statuses transition through: `pending_upload` -> `uploaded` -> `downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`. The `uploaded` transition is triggered by the browser calling `POST /api/documents/:id/confirm-upload` after receiving a `200 OK` from S3 — not by the SQS event. The SQS ObjectCreated event triggers the worker's `downloading` transition.
 3. **Synchronous/Asynchronous Propagation**:
    * **SSE Connection (Push Model)**: The API hosts `/api/documents/:id/progress`. It uses PostgreSQL `LISTEN/NOTIFY` (specifically listening to a `progress_channel` triggered when `processing_jobs` rows are updated). This triggers real-time SSE stream frames containing state updates to the React client.
    * **Status Endpoint (Pull Fallback)**: The API implements `GET /api/documents/:id/status`. The frontend can poll this endpoint every 3 seconds to recover status if the SSE connection drops or is blocked.
