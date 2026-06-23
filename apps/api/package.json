@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
     "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "test:session": "ts-node src/test-session.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

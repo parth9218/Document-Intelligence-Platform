@@ -35,8 +35,14 @@ This document lists completed tasks and code files created.
   - Implemented `pgvector` indexing by declaring the embedding vector size to 1024 dimensions (`Unsupported("vector(1024)")`) and defining a custom HNSW cosine similarity index `document_chunks_embedding_hnsw_idx` (with `m=16`, `ef_construction=64`).
   - Added a PG `LISTEN/NOTIFY` trigger `processing_jobs_notify` on table `processing_jobs` to publish progress updates automatically on channel `progress_channel` for Server-Sent Events (SSE).
   - Drafted database schema specification document [database-schema-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/database-schema-spec.md) detailing indices, triggers, and entity relationships.
+* **API Session Management (Task 102)**:
+  - Implemented session signature middleware in [session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/middleware/session.ts) using HMAC-SHA256 and node's native `crypto.timingSafeEqual` to sign/verify session tokens, securing lookup queries and preventing timing attacks.
+  - Set up sliding window updates: on every valid request, the session's `expires_at` is extended by 24 hours in the database, and the cookie is re-issued with the updated expiration date.
+  - Built GET `/api/session` router in [session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/routes/session.ts) returning current session details, mounted globally on Express in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts).
+  - Drafted session management specification document [session-management-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/session-management-spec.md) capturing the authentication flow, security mechanism, and cookie flags.
 
 ## Verification Records
 * **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
 * **Database Schema & Migration Validation**: Verified successful clean database reset and schema migration application using `npx prisma migrate reset`.
 * **PG NOTIFY Trigger Validation**: Successfully executed ts-node script [test-trigger.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/test-trigger.ts) which connects to the database, issues `LISTEN progress_channel`, inserts mock data, updates progress, and validates receipt of trigger notification payload.
+* **API Session Management Validation**: Added and ran typescript integration script [test-session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/test-session.ts) (mapped to `npm run test:session`) which verifies session creation, database entry insertion, sliding cookie issuance, and HTTP 401 response on tampered session signatures.
