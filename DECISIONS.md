@@ -84,19 +84,30 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 ## ADR-013: Per-Session Upload Concurrency Limit
 * **Status**: Approved
 * **Context**: Without a server-side cap, a single session could initiate an unbounded number of simultaneous document processing jobs, exhausting SQS throughput, worker pod capacity, and database connection headroom. Frontend-only enforcement is insufficient — it can be trivially bypassed by direct API calls.
-* **Decision**: Cap active (in-flight) document uploads to **5 per session**. Enforcement is dual-layer:
-  1. **API layer**: `POST /api/documents` counts documents belonging to the current session whose status is in the set of active processing states. If the count is >= 5, the endpoint returns `HTTP 429 Too Many Requests`.
-  2. **Frontend layer**: The React SPA tracks the active upload count and disables the file picker / surfaces an error message when the count reaches 5, preventing redundant rejected API calls.
-* **Active states** (count toward the limit): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`. These are all states through which a document passes during ingestion processing.
+* **Decision**: Cap simultaneous (in-flight) document uploads to **5 per session**. Enforcement is dual-layer:
+  1. **API layer (batch mode — see ADR-015)**: After per-file validation, `POST /api/documents` counts documents for the current session in active processing states. If `active_count + valid_batch_count > 5`, the entire batch is rejected with `HTTP 429 Too Many Requests` before any DB records are created.
+  2. **Frontend layer**: The React SPA tracks the active upload count derived from document list state and disables the file picker when the count reaches 5, preventing redundant rejected API calls.
+* **Active states** (count toward the limit): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`.
 * **Terminal states** (do NOT count): `completed`, `failed`, `cancelled`, `expired`. A slot is freed when a document transitions to any terminal state.
-* **Rationale**: Dual-layer enforcement gives both a hard security boundary (API) and a responsive UX signal (frontend). Scoping the limit to active processing states ensures completed documents do not permanently consume quota.
+* **Rationale**: Dual-layer enforcement gives both a hard security boundary (API) and a responsive UX signal (frontend). Scoping the limit to active processing states ensures completed documents do not permanently consume concurrency slots.
 
 ## ADR-014: Cumulative Per-Session Storage Quota
 * **Status**: Approved
-* **Context**: Individual file size limits (ADR-013 amendment, 5 MB per file) do not prevent a session from accumulating unbounded S3 storage by uploading many files sequentially. A cumulative cap is required to bound total session storage consumption.
-* **Decision**: Enforce a **50 MB cumulative storage quota per session** at `POST /api/documents`. Before presigning, a live query sums `file_size_bytes` for all non-excluded documents in the session. If `existing_bytes + new_file_size_bytes > 52428800`, return `HTTP 400` with `error: "storage_quota_exceeded"`.
+* **Context**: Individual file size limits (5 MB per file) do not prevent a session from accumulating unbounded S3 storage by uploading many files sequentially. A cumulative cap is required to bound total session storage consumption.
+* **Decision**: Enforce a **50 MB cumulative storage quota per session** at `POST /api/documents`. In batch mode (see ADR-015), the quota is evaluated atomically across the entire valid file subset: `existing_bytes + SUM(fileSizeBytes for all per-file-validated files in batch) > 52428800` → reject the entire batch with `HTTP 400`, `error: "storage_quota_exceeded"`. No DB records are created on quota rejection.
 * **Quota inclusion/exclusion**:
   - **Excluded** (no active S3 storage assumed): `expired`, `failed`, `cancelled`
   - **Included** (occupy or will occupy S3 storage): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`
 * **No schema change**: Quota is computed via a live aggregate query on the existing `documents.file_size_bytes` and `documents.status` columns (both present from Task 101). No counter column is maintained.
-* **Rationale**: A denormalized counter column would require decrement logic across three separate code paths (document failure, expiry, and cancellation). A live query at upload-request frequency is simpler, always accurate, and has negligible performance cost given the low frequency of upload operations relative to query operations.
+* **Rationale**: A denormalized counter column would require decrement logic across three separate code paths (document failure, expiry, and cancellation). A live query at upload-request frequency is simpler, always accurate, and has negligible performance cost.
+
+## ADR-015: Batch Upload API Contract
+* **Status**: Approved 🔴 *Overrides one-call-per-file decision in `ingestion-flow-decisions.md §1`*
+* **Context**: The original design required one `POST /api/documents` call per file, resulting in N network round-trips for an N-file selection. This is suboptimal for multi-file uploads and creates unnecessary frontend complexity.
+* **Decision**: `POST /api/documents` accepts an array of file metadata objects (`{ filename, mimeType, fileSizeBytes }[]`) in a single request and returns a `results` array with per-file outcomes.
+* **Two-tier validation model**:
+  1. **Per-file (independent)**: Each file is validated for `mimeType` allowlist and `fileSizeBytes` limit. Files failing these checks are included in the response as `status: "rejected"` with an error code. No DB records are created for rejected files.
+  2. **Batch-level (atomic)**: After per-file filtering, the valid file subset is checked against: (a) concurrency limit — `active_count + valid_batch_count > 5` → HTTP 429, entire batch rejected; (b) storage quota — `existing_bytes + SUM(valid_sizes) > 52428800` → HTTP 400, entire batch rejected. If either batch-level check fails, no DB records are created for any file.
+* **Response**: Always `HTTP 200 OK` (including partial per-file rejections). `HTTP 400`/`HTTP 429` are returned only on batch-level failures.
+* **Per-file rejection error codes**: `invalid_mime_type`, `file_too_large`.
+* **Rationale**: Batch upload eliminates N round-trips. Partial success at the per-file level is acceptable because per-file failures are independent. Batch-level checks remain atomic because they involve shared session state (concurrent slot count, cumulative storage) where partial commits would create race conditions.

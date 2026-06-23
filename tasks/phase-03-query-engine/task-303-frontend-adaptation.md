@@ -7,8 +7,10 @@ Adapt the React SPA frontend to track upload progress, monitor worker ingestion 
 Update React hooks, file upload forms, progress indicators, and chat layout components inside `apps/frontend`.
 
 Includes:
+- Batch file selection with one `POST /api/documents` call per selection event
+- Per-file `results` array processing: surface `ready` files for upload, surface `rejected` entries as inline errors
 - Upload file picker with concurrency enforcement (disable when active uploads >= 5)
-- Browser-side S3 upload progress tracking
+- Browser-side S3 upload progress tracking per file
 - Worker ingestion progress via SSE (with polling fallback)
 - Streaming chat responses with citation bubbles
 
@@ -23,7 +25,7 @@ Includes:
 * Task 302 (Grounded Generation, SSE Streaming & Citations)
 
 ## Acceptance Criteria
-* **Upload Concurrency Enforcement**: The file picker UI is disabled and an informational message is displayed when the session has >= 5 documents in active processing states (`pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`). The count must be derived from the document list state, not from a separate API call. When any active document transitions to a terminal state (`completed`, `failed`, `cancelled`, `expired`), the slot is freed and the file picker re-enables. See ADR-013 and `ingestion-flow-decisions.md §10`.
+* **Batch Upload Handling**: File selection triggers a single `POST /api/documents` with all selected files. The frontend processes the `results` array: files with `status: "ready"` proceed to S3 upload; files with `status: "rejected"` display inline per-file error messages (`invalid_mime_type`, `file_too_large`). If the API returns `HTTP 429`, display a session concurrency error. If `HTTP 400` with `storage_quota_exceeded`, display a session quota error.
 * **Browser-Side Upload Progress**: Track and display raw S3 file upload percentage (0-100%) dynamically using browser `xhr.upload.onprogress` or equivalent fetch wrappers.
 * **Worker Ingestion Progress Bar**:
   * Establish SSE connection to `/api/documents/:id/progress` (fallback to polling `/api/documents/:id/status` every 3 seconds if SSE fails or disconnects).

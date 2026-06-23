@@ -2,7 +2,7 @@
 
 ## Goal
 
-Expose Express endpoints for generating S3 presigned PUT URLs, confirming upload completion, polling document status, and streaming real-time ingestion progress via SSE. Enforce file size and per-session upload concurrency limits at the API layer.
+Expose Express endpoints for batch presigned URL generation, upload confirmation, status polling, and SSE progress streaming. Enforce per-file validation, batch-level concurrency and storage quota limits.
 
 ---
 
@@ -10,7 +10,7 @@ Expose Express endpoints for generating S3 presigned PUT URLs, confirming upload
 
 Implement the following routes inside `apps/api/src/routes/documents.ts`:
 
-- `POST /api/documents` — initialize document record, enforce limits, return presigned URL
+- `POST /api/documents` — batch initialization: validate files, enforce limits, return presigned URLs per valid file
 - `POST /api/documents/:id/confirm-upload` — transition status to `uploaded` after S3 success
 - `GET /api/documents/:id/status` — polling fallback for current job status
 - `GET /api/documents/:id/progress` — SSE stream for real-time progress updates
@@ -32,28 +32,40 @@ Implement the orphan record cleanup job in `apps/api/src/jobs/cleanup.ts`.
 
 ### POST /api/documents
 
-Initializes a document upload. One call per file.
+Accepts a batch of file metadata. Returns per-file outcomes. See ADR-015 and `ingestion-flow-decisions.md §1`.
 
-**Request body fields:** `filename`, `mimeType`, `fileSizeBytes`
+**Request body:** `{ "documents": [{ "filename", "mimeType", "fileSizeBytes" }] }`
 
-**Validations (reject before presigning, in this order):**
+**Validation is two-tiered:**
 
-1. Active session must exist (enforced by session middleware from Task 102).
-2. `mimeType` must be `application/pdf` or `text/plain`. Reject with `400` if invalid.
-3. `fileSizeBytes` must be `>= 1` and `<= 5242880` (5 MB). Reject with `400` if exceeded.
-4. Cumulative session storage quota: sum `file_size_bytes` from `documents` for the current session where status is not in `{expired, failed, cancelled}`. If `existing_bytes + fileSizeBytes > 52428800` (50 MB), reject with `400`, `error_code = 'storage_quota_exceeded'`. See ADR-014 and `ingestion-flow-decisions.md §11`.
-5. Active upload concurrency: count documents for the current session with status in `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`. If count `>= 5`, reject with `429 Too Many Requests`. See ADR-013 and `ingestion-flow-decisions.md §10`.
+**Tier 1 — Per-file (independent):**
 
-**On success:**
+Validate each file in the input array independently:
+- `mimeType` not in `{application/pdf, text/plain}` → result entry: `status: "rejected"`, `error: "invalid_mime_type"`
+- `fileSizeBytes < 1` or `> 5242880` → result entry: `status: "rejected"`, `error: "file_too_large"`
 
-- Generate a UUID for `document_id`.
+Files failing tier-1 are included in the response as `rejected`. No DB records are created for them.
+
+**Tier 2 — Batch-level (atomic, on the valid subset only):**
+
+After tier-1 filtering, apply both checks to the valid subset before any DB writes:
+
+1. Concurrency: query `processing_jobs.status` for the current session. If `active_count + valid_batch_count > 5`, return `HTTP 429`. Active states: `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`. See ADR-013 and `ingestion-flow-decisions.md §10`.
+2. Storage quota: sum `file_size_bytes` from `documents` for the current session where status not in `{expired, failed, cancelled}`. If `existing_bytes + SUM(valid_batch_sizes) > 52428800`, return `HTTP 400`, `error_code = 'storage_quota_exceeded'`. See ADR-014 and `ingestion-flow-decisions.md §11`.
+
+If either batch-level check fails, no DB records are created for any file in the batch.
+
+**On batch-level success**, for each valid file:
+- Generate a `document_id` (UUID).
 - Construct S3 key: `sessions/{sessionId}/documents/{documentId}/original`.
-- Generate a presigned S3 PUT URL (5-minute TTL) with embedded conditions:
-  - `content-length-range: [1, 5242880]`
-  - `Content-Type: <validated mimeType>`
-- Create `documents` row (`status = 'pending_upload'`) via Prisma.
-- Create `processing_jobs` row (`status = 'pending_upload'`, `progress_pct = 0`, `checkpoint_index = -1`) via Prisma.
-- Return `documentId`, `uploadUrl`, `s3Key`.
+- Generate a presigned S3 PUT URL (5-minute TTL) with: `content-length-range: [1, 5242880]`, `Content-Type: <validated mimeType>`.
+- Create `documents` row (`status = 'pending_upload'`) and `processing_jobs` row (`status = 'pending_upload'`, `progress_pct = 0`, `checkpoint_index = -1`) via Prisma.
+
+**Response:** Always `HTTP 200 OK`. Body: `{ "results": [...] }` where each entry is either:
+- `{ filename, status: "ready", documentId, uploadUrl, s3Key }` for valid files
+- `{ filename, status: "rejected", error, message }` for rejected files
+
+`HTTP 400` and `HTTP 429` are returned only on batch-level failures (no `results` array in that case).
 
 ---
 
@@ -114,14 +126,14 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 
 ## Acceptance Criteria
 
-- `POST /api/documents` rejects `mimeType` outside `{application/pdf, text/plain}` with `400`.
-- `POST /api/documents` rejects `fileSizeBytes > 5242880` with `400`.
-- `POST /api/documents` rejects when `existing_session_bytes + fileSizeBytes > 52428800` with `400` and `error_code = 'storage_quota_exceeded'`.
-- `POST /api/documents` rejects requests when the session has `>= 5` documents in active states with `429`.
-- Active state set for concurrency quota: `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`.
-- Included state set for storage quota: all statuses except `{expired, failed, cancelled}`.
-- Presigned URL includes `content-length-range: [1, 5242880]` and the validated `Content-Type`.
-- `documents` and `processing_jobs` rows created in `pending_upload` state on success.
+- `POST /api/documents` accepts a `documents` array and returns a `results` array.
+- Per-file `mimeType` failure produces `status: "rejected"`, `error: "invalid_mime_type"` in the results array; overall response is `HTTP 200`.
+- Per-file `fileSizeBytes` failure produces `status: "rejected"`, `error: "file_too_large"` in the results array; overall response is `HTTP 200`.
+- Batch with mixed valid and invalid files returns `HTTP 200` with both `ready` and `rejected` entries; DB records are created only for `ready` files.
+- Batch-level concurrency check: if `active_count + valid_batch_count > 5`, returns `HTTP 429`; no DB records created for any file.
+- Batch-level quota check: if `existing_bytes + SUM(valid batch sizes) > 52428800`, returns `HTTP 400` with `error_code = 'storage_quota_exceeded'`; no DB records created for any file.
+- Presigned URL includes `content-length-range: [1, 5242880]` and the validated `Content-Type` for each valid file.
+- `documents` and `processing_jobs` rows created in `pending_upload` state for each `ready` file.
 - `POST /api/documents/:id/confirm-upload` atomically transitions both rows to `uploaded`; returns `409` on double-call.
 - `GET /api/documents/:id/status` returns current progress state including chunk counters.
 - `GET /api/documents/:id/progress` SSE stream delivers an initial state frame on connect and NOTIFY-triggered frames as the worker progresses.
@@ -133,12 +145,12 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 
 ## Notes
 
-- Upload quota check must query `processing_jobs.status` (not `documents.status`) — `processing_jobs` is the authoritative status source.
-- The storage quota check (step 4) must query `documents.file_size_bytes` and `documents.status` directly — `documents` holds the file size and the materialized status is sufficient for this aggregate.
-- All validation checks (steps 2–5) must execute **before** any DB writes or S3 presigning to avoid partial state on rejection.
-- Do not implement quota enforcement using an application-level counter or cache — always read from the database to avoid race conditions under concurrent uploads.
-- The two quota checks use different state sets: storage quota excludes only `{expired, failed, cancelled}`; concurrency quota counts only the 7 active processing states. Completed documents consume storage quota but free a concurrency slot.
-- See `ingestion-flow-decisions.md §11` and ADR-014 for the canonical storage quota specification.
-- See `ingestion-flow-decisions.md §10` and ADR-013 for the canonical concurrency limit specification.
-- See `ingestion-flow-decisions.md §1` for the canonical file size limit specification.
+- Concurrency check must query `processing_jobs.status` — `processing_jobs` is the authoritative status source.
+- Storage quota check must query `documents.file_size_bytes` and `documents.status` — `documents` holds the file size; materialized status is sufficient for the aggregate.
+- Both batch-level checks must execute after tier-1 per-file filtering and before any DB writes or S3 presigning.
+- The two quota checks use different state sets: storage quota excludes `{expired, failed, cancelled}`; concurrency quota counts only the 7 active processing states. Completed documents consume storage quota but free a concurrency slot.
+- Do not use application-level counters or cache for quota enforcement — always query the database to prevent race conditions under concurrent uploads.
+- See `ingestion-flow-decisions.md §1` for the full batch API contract and validation sequence.
+- See `ingestion-flow-decisions.md §10` and ADR-013 for the concurrency limit specification.
+- See `ingestion-flow-decisions.md §11` and ADR-014 for the storage quota specification.
 - See `ingestion-flow-decisions.md §9` for orphan cleanup timing parameters.

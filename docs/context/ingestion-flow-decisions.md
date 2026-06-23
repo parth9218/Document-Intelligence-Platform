@@ -6,23 +6,37 @@ not be changed without updating the relevant task specifications and ADRs.
 
 ---
 
-## 1. Upload Initialization & Presigned URL Timing
+## 1. Upload Initialization & Presigned URL — Batch API
 
-**Decision:** Presigned PUT URLs are generated **after** file selection (Option B).
+🔴 *This section overrides the original one-call-per-file design. See ADR-015.*
 
-One `POST /api/documents` call per file. Each call:
-1. Validates `mimeType` and `fileSizeBytes` server-side before presigning.
-2. Creates one `documents` row and one `processing_jobs` row.
-3. Returns one presigned URL valid for 5 minutes.
+**Decision:** `POST /api/documents` accepts an **array** of file metadata objects in a single request body. One API call per user file selection event (not one per file).
 
-The presigned URL includes embedded S3 policy conditions:
+Validation is two-tiered:
 
-- `content-length-range: [1, 5242880]` (5 MB max) 🔴 *Updated from 25 MB — see ADR-013 amendment*
-- `Content-Type: <validated mimeType>` (enforces type at the S3 layer)
+**Tier 1 — Per-file (independent, produces `rejected` result entries):**
+- `mimeType` not in allowlist → `rejected`, `error: 'invalid_mime_type'`
+- `fileSizeBytes < 1` or `> 5242880` → `rejected`, `error: 'file_too_large'`
 
-**File size validation:** `fileSizeBytes` must be `>= 1` and `<= 5242880` (5 MB). Requests exceeding this are rejected with `400 Bad Request` before presigning.
+Files failing tier-1 checks are included in the response as `rejected`. No DB records are created for them.
 
-Multi-file upload = multiple parallel/sequential API calls.
+**Tier 2 — Batch-level (atomic, applied to the valid subset after tier 1):**
+- Concurrency: `active_count + valid_batch_count > 5` → HTTP 429, entire batch rejected
+- Storage quota: `existing_bytes + SUM(valid file sizes) > 52428800` → HTTP 400, entire batch rejected
+
+If either batch-level check fails, **no DB records are created for any file in the batch**.
+
+**On batch-level success**, for each valid file:
+1. Generate a `document_id` (UUID).
+2. Construct S3 key: `sessions/{sessionId}/documents/{documentId}/original`.
+3. Generate a presigned PUT URL (5-minute TTL) with conditions: `content-length-range: [1, 5242880]`, `Content-Type: <validated mimeType>`.
+4. Create `documents` row (`status = 'pending_upload'`) and `processing_jobs` row via Prisma.
+
+**Response structure:** Always `HTTP 200 OK`. The `results` array contains one entry per input file:
+- Valid files: `{ filename, status: "ready", documentId, uploadUrl, s3Key }`
+- Rejected files: `{ filename, status: "rejected", error, message }`
+
+`HTTP 400` (quota exceeded) and `HTTP 429` (concurrency exceeded) are returned only on batch-level failures, with no partial DB state.
 
 ---
 
@@ -183,11 +197,11 @@ pending_upload, uploaded, downloading, validating, extracting, chunking, embeddi
 completed, failed, cancelled, expired
 ```
 
-**API enforcement:** `POST /api/documents` queries `documents.status` (or `processing_jobs.status`) for the current session, counting rows in any active state. If count `>= 5`, return `HTTP 429 Too Many Requests` before any DB writes or presigning occur.
+**API enforcement (batch mode):** After tier-1 per-file validation, `POST /api/documents` checks: `active_count + valid_batch_count > 5` → `HTTP 429 Too Many Requests`, entire batch rejected, no DB records created. See ADR-013.
 
-**Frontend enforcement:** The React SPA maintains a count of active uploads derived from the document list state. When the count reaches 5, the file picker is disabled and an informational message is displayed. This prevents avoidable rejected API calls and provides immediate UX feedback.
+**Frontend enforcement:** The React SPA derives the active upload count from document list state. When the count reaches 5, the file picker is disabled and an informational message is displayed.
 
-**Rationale:** Frontend-only enforcement is bypassable via direct API calls. API enforcement provides a hard security boundary. The limit is scoped to active processing states only, so completed documents do not permanently consume quota.
+**Rationale:** Frontend-only enforcement is bypassable via direct API calls. API enforcement provides a hard security boundary. The limit is scoped to active processing states only, so completed documents do not permanently consume concurrency slots.
 
 ---
 
@@ -195,15 +209,15 @@ completed, failed, cancelled, expired
 
 **Decision:** Maximum cumulative storage per session is **50 MB**. Enforced at `POST /api/documents` via a live aggregate query before presigning. See ADR-014.
 
-**Quota query:** Sum `file_size_bytes` for all documents in the session excluding statuses `expired`, `failed`, `cancelled`. If `existing_bytes + new_file_size_bytes > 52428800`, reject with `HTTP 400`.
+**Quota query (batch mode):** After tier-1 per-file filtering, sum `file_size_bytes` from `documents` for the current session where status is not in `{expired, failed, cancelled}`. If `existing_bytes + SUM(valid_batch_file_sizes) > 52428800`, reject the entire batch with `HTTP 400`, `error_code = 'storage_quota_exceeded'`. No DB records are created for any file in the batch. See ADR-014.
 
 **States excluded from quota** (no active S3 storage): `expired`, `failed`, `cancelled`
 
 **States included in quota** (occupy or will occupy S3 storage): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`
 
-**Error response:** `HTTP 400` with `error_code = 'storage_quota_exceeded'` and a human-readable message. This is distinct from the per-file size rejection (also `400`) and the concurrency rejection (`429`).
+**Error response:** `HTTP 400` with `error_code = 'storage_quota_exceeded'` (batch-level failure, distinct from per-file `file_too_large` which produces a `rejected` entry at `HTTP 200`).
 
 **No schema change required.** The `documents.file_size_bytes` and `documents.status` columns required for the quota query are already defined in Task 101.
 
-**Rationale:** A denormalized counter column would require decrement logic in three separate code paths (failure handler, expiry cleanup job, cancellation handler). A live query is simpler, always accurate, and is acceptable at upload-request frequency.
+**Rationale:** Batch quota must be evaluated atomically across the valid subset to prevent partial commits that would leave the session partially over quota.
 
