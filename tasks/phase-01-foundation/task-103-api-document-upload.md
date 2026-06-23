@@ -73,14 +73,17 @@ If either batch-level check fails, no DB records are created for any file in the
 
 Called by the browser after receiving `200 OK` from S3. This is the **only mechanism** that transitions `pending_upload → uploaded`.
 
-**Validations:**
+**Request body:** None.
 
-- Document must belong to the current session. Return `403` if not.
-- Document status must be `pending_upload`. Return `409` if already confirmed (idempotency guard).
+**Required checks (in order):**
 
-**On success:** Atomically update `documents.status` and `processing_jobs.status` to `uploaded` in a single Prisma transaction. Return `200 OK`.
+1. **Session ownership:** Load document by `:id`. If the document is not found, or `document.session_id` does not match the current session, return `HTTP 404`. Do not return `403` — a `403` would confirm the document exists to an unauthorized caller.
 
-> The S3 ObjectCreated → SQS event that triggers the worker fires independently. This endpoint only updates DB status for the UI to immediately reflect "Upload Complete."
+2. **Idempotency / status guard:** If `processing_jobs.status` is not `'pending_upload'`, return `HTTP 409 Conflict` with `error: "already_confirmed"`. This prevents double-calling from corrupting the state machine transition.
+
+3. **Atomic status transition:** Execute a single Prisma transaction updating both records: `documents.status = 'uploaded'` and `processing_jobs.status = 'uploaded'`. Return `HTTP 200` with `{ "status": "uploaded" }`.
+
+> **No S3 headObject call at this endpoint.** The endpoint does not verify that the S3 object exists. S3 object existence verification is performed by the Python worker during the `downloading` stage (see Task 201). This endpoint only updates DB status so the UI can immediately reflect "Upload Complete."
 
 ---
 
@@ -134,7 +137,9 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 - Batch-level quota check: if `existing_bytes + SUM(valid batch sizes) > 52428800`, returns `HTTP 400` with `error_code = 'storage_quota_exceeded'`; no DB records created for any file.
 - Presigned URL includes `content-length-range: [1, 5242880]` and the validated `Content-Type` for each valid file.
 - `documents` and `processing_jobs` rows created in `pending_upload` state for each `ready` file.
-- `POST /api/documents/:id/confirm-upload` atomically transitions both rows to `uploaded`; returns `409` on double-call.
+- `POST /api/documents/:id/confirm-upload` returns `HTTP 404` if the document does not exist or does not belong to the current session (ownership check must not return `403`).
+- `POST /api/documents/:id/confirm-upload` returns `HTTP 409` with `error: "already_confirmed"` if `processing_jobs.status` is not `'pending_upload'` (idempotency guard).
+- `POST /api/documents/:id/confirm-upload` atomically transitions both `documents.status` and `processing_jobs.status` to `'uploaded'` in a single transaction; returns `HTTP 200` with `{ "status": "uploaded" }`.
 - `GET /api/documents/:id/status` returns current progress state including chunk counters.
 - `GET /api/documents/:id/progress` SSE stream delivers an initial state frame on connect and NOTIFY-triggered frames as the worker progresses.
 - All document endpoints return `404` for unowned or non-existent document IDs.
