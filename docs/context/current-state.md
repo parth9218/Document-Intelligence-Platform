@@ -3,7 +3,7 @@
 This document records the exact state of code modules and active tasks. Update it after every coding cycle.
 
 ## Current Code State
-* **API Service (`/apps/api`)**: Initialized. Database schema configured using Prisma ORM. Session management middleware (`sessionMiddleware`) and GET `/api/session` endpoint implemented with HMAC signature verification and 24h sliding expiration.
+* **API Service (`/apps/api`)**: Refactored into a production-grade modular architecture. Enforces separation of concerns via Routes, Controllers, Services, and structural Validators. Configured with a central environment-aware configuration module (`config/`), custom HTTP/business error classes (`errors/`), centralized Express error handler middleware, and a structured logger (`utils/logger.ts`) producing JSON in production and colorized text in development. File validation supports central configurations and easily extensible MIME types following the Open/Closed Principle. DB interactions leverage pgPool connection pooling (SSE streams) and Prisma transactions (batch upload metadata initializations & confirm-upload status updates). Scheduled cleanup daemon handles expired and stuck uploads.
 * **Worker Service (`/apps/worker`)**: Not started (boto3 Python / SQLAlchemy). Directory does not exist yet.
 * **Frontend Service (`/apps/frontend`)**: Not started (React SPA). Directory does not exist yet.
 * **Infrastructure (`/infra/terraform`)**: Not started. Directory does not exist yet.
@@ -13,7 +13,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Refined Architecture & Diagrams**: Completed. Specifications added for Retrieval Q&A, SSE streams, PG LISTEN/NOTIFY, and UI progress bars.
 - **Ingestion Flow Brainstorm & Pre-Implementation Review**: Completed. Full ingestion pipeline reviewed and corrections applied. See `docs/context/ingestion-flow-decisions.md`.
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
-- **Phase 1 (Foundation)**: In Progress. Tasks 101 (Database Schema) and 102 (API Session Management) are complete. Next is Task 103 (Document Upload & Status tracking).
+- **Phase 1 (Foundation)**: In Progress. Tasks 101 (Database Schema), 102 (API Session Management), and 103 (Document Upload & Status tracking) are complete. Next is Task 104 (SQS Consumer Loop).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.

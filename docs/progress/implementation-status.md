@@ -3,7 +3,7 @@
 ## Phase 1: Foundation
 * [x] **Task 101**: Database Schema Creation ── *Complete*
 * [x] **Task 102**: API Session Management ── *Complete*
-* [ ] **Task 103**: Document Upload & Status tracking ── *Incomplete*
+* [x] **Task 103**: Document Upload & Status tracking ── *Complete*
 * [ ] **Task 104**: SQS Consumer Loop ── *Incomplete*
 
 ## Phase 2: Ingestion Pipeline

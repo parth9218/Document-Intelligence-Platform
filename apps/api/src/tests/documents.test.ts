@@ -1,7 +1,7 @@
 import request from 'supertest';
 import app from '../app';
 import { prisma } from '../db';
-import { sign } from '../middleware/session';
+import { sign } from '../middlewares/session';
 import crypto from 'crypto';
 import { runCleanupJob } from '../jobs/cleanup';
 

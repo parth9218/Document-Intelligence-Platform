@@ -1,24 +1,22 @@
-import dotenv from 'dotenv';
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config();
-}
-
+import { config } from './config';
 import app from './app';
 import { startCleanupJob } from './jobs/cleanup';
+import { logger } from './utils/logger';
 
-const PORT = process.env.PORT || 3000;
+const PORT = config.port;
 
+// Start database orphan cleanup timer
 const cleanupInterval = startCleanupJob();
 
 const server = app.listen(PORT, () => {
-  console.log(`API Server is running on port ${PORT}`);
+  logger.info(`API Server is running on port ${PORT} in [${config.nodeEnv}] mode`);
 });
 
+// Handle graceful shutdown on process termination
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server...');
   clearInterval(cleanupInterval);
   server.close(() => {
-    console.log('HTTP server closed');
+    logger.info('HTTP server closed');
   });
 });
-

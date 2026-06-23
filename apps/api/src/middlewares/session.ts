@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db';
 import { Session } from '@prisma/client';
+import { config } from '../config';
+import { logger } from '../utils/logger';
+import { UnauthorizedError } from '../errors/app-error';
 
 // Extend Express Request interface to include session
 declare global {
@@ -12,11 +15,13 @@ declare global {
   }
 }
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret-key-change-in-production-12345';
-const COOKIE_NAME = 'session_token';
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_SECRET = config.sessionSecret;
+const COOKIE_NAME = config.cookies.name;
+const SESSION_EXPIRY_MS = config.cookies.maxAgeMs;
 
-// Helper to sign a value with HMAC-SHA256
+/**
+ * Helper to sign a value with HMAC-SHA256
+ */
 export function sign(value: string, secret: string): string {
   const signature = crypto
     .createHmac('sha256', secret)
@@ -26,7 +31,9 @@ export function sign(value: string, secret: string): string {
   return `${value}.${signature}`;
 }
 
-// Helper to verify and unsign a value
+/**
+ * Helper to verify and unsign a value
+ */
 export function unsign(input: string, secret: string): string | false {
   const parts = input.split('.');
   if (parts.length < 2) return false;
@@ -49,7 +56,9 @@ export function unsign(input: string, secret: string): string | false {
   return false;
 }
 
-// Helper to extract a cookie from headers
+/**
+ * Helper to extract a cookie from headers
+ */
 function getCookie(req: Request, name: string): string | undefined {
   const cookieHeader = req.headers.cookie;
   if (!cookieHeader) return undefined;
@@ -64,19 +73,13 @@ function getCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-
-export async function getSession(req: Request, res: Response, next: NextFunction) {
-  const rawCookieValue = getCookie(req, COOKIE_NAME);
-  const cookieValue = rawCookieValue ? decodeURIComponent(rawCookieValue) : undefined;
-  if (!cookieValue) {
-    return next();
-  }
-  return verifyExtendAndReturn(cookieValue, req, res, next);
-}
-
+/**
+ * Verifies the session cookie and returns 401 if invalid. Extends the expiration.
+ */
 async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Response, next: NextFunction) {
   const unsignedToken = unsign(cookieValue, SESSION_SECRET);
   if (unsignedToken === false) {
+    logger.warn('Session verification failed: invalid signature');
     return res.status(401).json({ error: 'Invalid session signature' });
   }
 
@@ -87,12 +90,13 @@ async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Res
     });
 
     if (!session) {
+      logger.warn('Session verification failed: session not found in DB', { cookieValue });
       return res.status(401).json({ error: 'Session not found' });
     }
 
     // Check if session is expired
     if (new Date() > session.expires_at) {
-      // Clear expired cookie
+      logger.info('Session expired, clearing cookie', { sessionId: session.id });
       res.clearCookie(COOKIE_NAME);
       return res.status(401).json({ error: 'Session expired' });
     }
@@ -110,7 +114,7 @@ async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Res
     // Re-issue cookie with sliding expiration
     res.cookie(COOKIE_NAME, cookieValue, {
       httpOnly: true,
-      secure: true,
+      secure: config.nodeEnv === 'production',
       sameSite: 'lax',
       expires: expiresAt,
     });
@@ -118,11 +122,26 @@ async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Res
     req.session = updatedSession;
     return next();
   } catch (err) {
-    console.error('Session validation error:', err);
+    logger.error('Session validation error:', err);
     return res.status(500).json({ error: 'Internal server error validating session' });
   }
 }
 
+/**
+ * Middleware to fetch an existing session without creating one if absent
+ */
+export async function getSession(req: Request, res: Response, next: NextFunction) {
+  const rawCookieValue = getCookie(req, COOKIE_NAME);
+  const cookieValue = rawCookieValue ? decodeURIComponent(rawCookieValue) : undefined;
+  if (!cookieValue) {
+    return next();
+  }
+  return verifyExtendAndReturn(cookieValue, req, res, next);
+}
+
+/**
+ * Middleware that validates or auto-creates a session cookie
+ */
 export async function sessionMiddleware(req: Request, res: Response, next: NextFunction) {
   const rawCookieValue = getCookie(req, COOKIE_NAME);
   const cookieValue = rawCookieValue ? decodeURIComponent(rawCookieValue) : undefined;
@@ -145,15 +164,16 @@ export async function sessionMiddleware(req: Request, res: Response, next: NextF
 
       res.cookie(COOKIE_NAME, signedToken, {
         httpOnly: true,
-        secure: true,
+        secure: config.nodeEnv === 'production',
         sameSite: 'lax',
         expires: expiresAt,
       });
 
       req.session = session;
+      logger.info('Established new session', { sessionId: session.id });
       return next();
     } catch (err) {
-      console.error('Failed to create new session:', err);
+      logger.error('Failed to create new session:', err);
       return res.status(500).json({ error: 'Internal server error establishing session' });
     }
   }

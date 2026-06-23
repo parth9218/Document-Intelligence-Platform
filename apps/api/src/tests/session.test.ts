@@ -2,7 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import app from '../app';
 import { prisma } from '../db';
-import { sign, sessionMiddleware } from '../middleware/session';
+import { sign, sessionMiddleware } from '../middlewares/session';
 import crypto from 'crypto';
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret-key-change-in-production-12345';

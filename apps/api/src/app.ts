@@ -1,24 +1,28 @@
 import express from 'express';
-import { sessionMiddleware, getSession } from './middleware/session';
-import sessionRouter from './routes/session';
-import documentsRouter from './routes/documents';
+import { getSession, sessionMiddleware } from './middlewares/session';
+import { sessionController } from './controllers/session.controller';
+import documentsRouter from './routes/documents.route';
+import { errorHandler } from './middlewares/error-handler';
 
 const app = express();
 
 app.use(express.json());
 
-// Basic health check route
+// Basic health check route (exempt from session checks)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use('/api/session', getSession, sessionRouter);
+// Mount active session details fetch (runs getSession only - no auto-creation)
+app.get('/api/session', getSession, (req, res, next) => sessionController.getActiveSession(req, res, next));
 
-// Apply session middleware to all API requests
+// Apply session creation/verification middleware globally to subsequent routes & fallbacks
 app.use(sessionMiddleware);
 
-// Mount routes
+// Mount protected document tracking routes
 app.use('/api/documents', documentsRouter);
 
-export default app;
+// Mount centralized error handler middleware (registered last)
+app.use(errorHandler);
 
+export default app;
