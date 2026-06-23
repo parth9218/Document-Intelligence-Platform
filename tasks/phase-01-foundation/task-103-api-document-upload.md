@@ -41,7 +41,8 @@ Initializes a document upload. One call per file.
 1. Active session must exist (enforced by session middleware from Task 102).
 2. `mimeType` must be `application/pdf` or `text/plain`. Reject with `400` if invalid.
 3. `fileSizeBytes` must be `>= 1` and `<= 5242880` (5 MB). Reject with `400` if exceeded.
-4. Count of documents for the current session with status in `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}` must be `< 5`. Reject with `429 Too Many Requests` if the active count is `>= 5`. See ADR-013 and `ingestion-flow-decisions.md §10`.
+4. Cumulative session storage quota: sum `file_size_bytes` from `documents` for the current session where status is not in `{expired, failed, cancelled}`. If `existing_bytes + fileSizeBytes > 52428800` (50 MB), reject with `400`, `error_code = 'storage_quota_exceeded'`. See ADR-014 and `ingestion-flow-decisions.md §11`.
+5. Active upload concurrency: count documents for the current session with status in `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`. If count `>= 5`, reject with `429 Too Many Requests`. See ADR-013 and `ingestion-flow-decisions.md §10`.
 
 **On success:**
 
@@ -115,8 +116,10 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 
 - `POST /api/documents` rejects `mimeType` outside `{application/pdf, text/plain}` with `400`.
 - `POST /api/documents` rejects `fileSizeBytes > 5242880` with `400`.
+- `POST /api/documents` rejects when `existing_session_bytes + fileSizeBytes > 52428800` with `400` and `error_code = 'storage_quota_exceeded'`.
 - `POST /api/documents` rejects requests when the session has `>= 5` documents in active states with `429`.
-- Active state set for quota check: `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`.
+- Active state set for concurrency quota: `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`.
+- Included state set for storage quota: all statuses except `{expired, failed, cancelled}`.
 - Presigned URL includes `content-length-range: [1, 5242880]` and the validated `Content-Type`.
 - `documents` and `processing_jobs` rows created in `pending_upload` state on success.
 - `POST /api/documents/:id/confirm-upload` atomically transitions both rows to `uploaded`; returns `409` on double-call.
@@ -131,8 +134,11 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 ## Notes
 
 - Upload quota check must query `processing_jobs.status` (not `documents.status`) — `processing_jobs` is the authoritative status source.
-- The 429 check must execute **before** any DB writes or S3 presigning to avoid partial state on rejection.
-- Do not implement quota enforcement using an application-level counter or cache — always read from the database to avoid race conditions.
+- The storage quota check (step 4) must query `documents.file_size_bytes` and `documents.status` directly — `documents` holds the file size and the materialized status is sufficient for this aggregate.
+- All validation checks (steps 2–5) must execute **before** any DB writes or S3 presigning to avoid partial state on rejection.
+- Do not implement quota enforcement using an application-level counter or cache — always read from the database to avoid race conditions under concurrent uploads.
+- The two quota checks use different state sets: storage quota excludes only `{expired, failed, cancelled}`; concurrency quota counts only the 7 active processing states. Completed documents consume storage quota but free a concurrency slot.
+- See `ingestion-flow-decisions.md §11` and ADR-014 for the canonical storage quota specification.
 - See `ingestion-flow-decisions.md §10` and ADR-013 for the canonical concurrency limit specification.
 - See `ingestion-flow-decisions.md §1` for the canonical file size limit specification.
 - See `ingestion-flow-decisions.md §9` for orphan cleanup timing parameters.

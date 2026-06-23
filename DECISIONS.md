@@ -90,3 +90,13 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 * **Active states** (count toward the limit): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`. These are all states through which a document passes during ingestion processing.
 * **Terminal states** (do NOT count): `completed`, `failed`, `cancelled`, `expired`. A slot is freed when a document transitions to any terminal state.
 * **Rationale**: Dual-layer enforcement gives both a hard security boundary (API) and a responsive UX signal (frontend). Scoping the limit to active processing states ensures completed documents do not permanently consume quota.
+
+## ADR-014: Cumulative Per-Session Storage Quota
+* **Status**: Approved
+* **Context**: Individual file size limits (ADR-013 amendment, 5 MB per file) do not prevent a session from accumulating unbounded S3 storage by uploading many files sequentially. A cumulative cap is required to bound total session storage consumption.
+* **Decision**: Enforce a **50 MB cumulative storage quota per session** at `POST /api/documents`. Before presigning, a live query sums `file_size_bytes` for all non-excluded documents in the session. If `existing_bytes + new_file_size_bytes > 52428800`, return `HTTP 400` with `error: "storage_quota_exceeded"`.
+* **Quota inclusion/exclusion**:
+  - **Excluded** (no active S3 storage assumed): `expired`, `failed`, `cancelled`
+  - **Included** (occupy or will occupy S3 storage): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`
+* **No schema change**: Quota is computed via a live aggregate query on the existing `documents.file_size_bytes` and `documents.status` columns (both present from Task 101). No counter column is maintained.
+* **Rationale**: A denormalized counter column would require decrement logic across three separate code paths (document failure, expiry, and cancellation). A live query at upload-request frequency is simpler, always accurate, and has negligible performance cost given the low frequency of upload operations relative to query operations.

@@ -188,3 +188,22 @@ completed, failed, cancelled, expired
 **Frontend enforcement:** The React SPA maintains a count of active uploads derived from the document list state. When the count reaches 5, the file picker is disabled and an informational message is displayed. This prevents avoidable rejected API calls and provides immediate UX feedback.
 
 **Rationale:** Frontend-only enforcement is bypassable via direct API calls. API enforcement provides a hard security boundary. The limit is scoped to active processing states only, so completed documents do not permanently consume quota.
+
+---
+
+## 11. Cumulative Session Storage Quota
+
+**Decision:** Maximum cumulative storage per session is **50 MB**. Enforced at `POST /api/documents` via a live aggregate query before presigning. See ADR-014.
+
+**Quota query:** Sum `file_size_bytes` for all documents in the session excluding statuses `expired`, `failed`, `cancelled`. If `existing_bytes + new_file_size_bytes > 52428800`, reject with `HTTP 400`.
+
+**States excluded from quota** (no active S3 storage): `expired`, `failed`, `cancelled`
+
+**States included in quota** (occupy or will occupy S3 storage): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`
+
+**Error response:** `HTTP 400` with `error_code = 'storage_quota_exceeded'` and a human-readable message. This is distinct from the per-file size rejection (also `400`) and the concurrency rejection (`429`).
+
+**No schema change required.** The `documents.file_size_bytes` and `documents.status` columns required for the quota query are already defined in Task 101.
+
+**Rationale:** A denormalized counter column would require decrement logic in three separate code paths (failure handler, expiry cleanup job, cancellation handler). A live query is simpler, always accurate, and is acceptable at upload-request frequency.
+
