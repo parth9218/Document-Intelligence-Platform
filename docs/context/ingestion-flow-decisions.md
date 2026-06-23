@@ -16,8 +16,11 @@ One `POST /api/documents` call per file. Each call:
 3. Returns one presigned URL valid for 5 minutes.
 
 The presigned URL includes embedded S3 policy conditions:
-* `content-length-range: [1, 26214400]` (25 MB max)
-* `Content-Type: <validated mimeType>` (enforces type at the S3 layer)
+
+- `content-length-range: [1, 5242880]` (5 MB max) 🔴 *Updated from 25 MB — see ADR-013 amendment*
+- `Content-Type: <validated mimeType>` (enforces type at the S3 layer)
+
+**File size validation:** `fileSizeBytes` must be `>= 1` and `<= 5242880` (5 MB). Requests exceeding this are rejected with `400 Bad Request` before presigning.
 
 Multi-file upload = multiple parallel/sequential API calls.
 
@@ -161,3 +164,27 @@ Two cleanup conditions handled by a scheduled job in the API service:
 | SQS delivery failure | `status = 'uploaded'` AND `updated_at < NOW() - 10 min`       | Set `status = 'failed'`, `error_code = 'sqs_delivery_failure'` |
 
 Runs every 5 minutes via `setInterval` in the API service.
+
+---
+
+## 10. Upload Concurrency Limit
+
+**Decision:** A maximum of **5 active (in-flight) uploads** are permitted per session at any one time. Enforced at both the API and frontend layers (see ADR-013).
+
+**Active states** (count toward the limit):
+
+```
+pending_upload, uploaded, downloading, validating, extracting, chunking, embedding
+```
+
+**Terminal states** (do NOT count — slot freed on transition):
+
+```
+completed, failed, cancelled, expired
+```
+
+**API enforcement:** `POST /api/documents` queries `documents.status` (or `processing_jobs.status`) for the current session, counting rows in any active state. If count `>= 5`, return `HTTP 429 Too Many Requests` before any DB writes or presigning occur.
+
+**Frontend enforcement:** The React SPA maintains a count of active uploads derived from the document list state. When the count reaches 5, the file picker is disabled and an informational message is displayed. This prevents avoidable rejected API calls and provides immediate UX feedback.
+
+**Rationale:** Frontend-only enforcement is bypassable via direct API calls. API enforcement provides a hard security boundary. The limit is scoped to active processing states only, so completed documents do not permanently consume quota.

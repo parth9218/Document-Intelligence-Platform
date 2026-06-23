@@ -6,6 +6,12 @@ Adapt the React SPA frontend to track upload progress, monitor worker ingestion 
 ## Scope
 Update React hooks, file upload forms, progress indicators, and chat layout components inside `apps/frontend`.
 
+Includes:
+- Upload file picker with concurrency enforcement (disable when active uploads >= 5)
+- Browser-side S3 upload progress tracking
+- Worker ingestion progress via SSE (with polling fallback)
+- Streaming chat responses with citation bubbles
+
 ## Files Expected To Change
 * `apps/frontend/src/components/ChatInterface.tsx`
 * `apps/frontend/src/components/DocumentUpload.tsx`
@@ -17,9 +23,10 @@ Update React hooks, file upload forms, progress indicators, and chat layout comp
 * Task 302 (Grounded Generation, SSE Streaming & Citations)
 
 ## Acceptance Criteria
+* **Upload Concurrency Enforcement**: The file picker UI is disabled and an informational message is displayed when the session has >= 5 documents in active processing states (`pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`). The count must be derived from the document list state, not from a separate API call. When any active document transitions to a terminal state (`completed`, `failed`, `cancelled`, `expired`), the slot is freed and the file picker re-enables. See ADR-013 and `ingestion-flow-decisions.md §10`.
 * **Browser-Side Upload Progress**: Track and display raw S3 file upload percentage (0-100%) dynamically using browser `xhr.upload.onprogress` or equivalent fetch wrappers.
 * **Worker Ingestion Progress Bar**:
-  * Establish SSE connection to `/api/documents/:id/progress` (fallback to polling `/api/documents/:id/status` every 3 seconds if SSE fails).
+  * Establish SSE connection to `/api/documents/:id/progress` (fallback to polling `/api/documents/:id/status` every 3 seconds if SSE fails or disconnects).
   * Render a progress bar tracking the worker through states: "Downloading file..." -> "Extracting text..." -> "Chunking pages..." -> "Embedding vectors (X% done)..." -> "Completed!".
 * **Streaming Chat & Citations**:
   * Connect to `/api/query` SSE stream to receive token-by-token answer frames.
@@ -31,3 +38,12 @@ Update React hooks, file upload forms, progress indicators, and chat layout comp
 2. Select a PDF and click upload: check that the file upload progress bar updates smoothly.
 3. Once uploaded, check that the processing progress bar updates from downloading, extracting, to chunking, and embedding (with dynamic percentages).
 4. Send a chat query, verify response streams token by token, and confirm citations display correct metadata on click.
+5. Initiate 5 concurrent uploads. Verify the file picker is disabled and an informational message appears. Complete or fail one upload; verify the picker re-enables.
+
+---
+
+## Notes
+- The active upload count must be derived from local document state (not a separate `/api/session/quota` call) to avoid excess API round-trips.
+- Do not hard-code the limit value in the component; source it from a shared constants file to keep it consistent with the API enforcement value (5).
+- SSE reconnect behavior: on `EventSource.onclose`, the client must reconnect or fall back to polling — the initial SSE frame always delivers the current status, so reconnect is safe at any point in processing.
+- See ADR-013 for the full dual-layer enforcement rationale.

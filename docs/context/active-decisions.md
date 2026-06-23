@@ -16,7 +16,9 @@ This document summarizes active decisions currently being implemented.
 
 ## Upload & Ingestion Flow
 * **Presigned URL timing**: URLs generated after file selection (Option B). One API call per file.
-* **Presigned URL policy conditions**: Content-Type and content-length-range embedded into S3 policy at signing time.
+* **File size limit**: 5 MB per file (`fileSizeBytes` must be >= 1 and <= 5242880). Requests exceeding this are rejected with `400 Bad Request` before presigning. 🔴 *Breaking — overrides the previous 25 MB limit.*
+* **Presigned URL policy conditions**: Content-Type and `content-length-range: [1, 5242880]` embedded into S3 policy at signing time.
+* **Upload concurrency limit**: Maximum **5 active uploads per session** at any time. Active states: `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`. Terminal states (`completed`, `failed`, `cancelled`, `expired`) free the slot. API returns `HTTP 429` if the active count is >= 5. Frontend disables the file picker when the active count reaches 5. See `ingestion-flow-decisions.md §10` and ADR-013.
 * **Confirm-upload endpoint**: `POST /api/documents/:id/confirm-upload` is the only mechanism to transition `pending_upload → uploaded`. Browser calls it after S3 returns 200 OK.
 * **S3 → SQS (no Lambda)**: S3 Event Notifications deliver directly to SQS. No intermediate Lambda.
 * **SQS parameters**: `WaitTimeSeconds=20`, `MaxNumberOfMessages=1`, `VisibilityTimeout=600`, `MaxReceiveCount=3`.

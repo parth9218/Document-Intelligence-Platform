@@ -80,3 +80,13 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
   2. **Checkpoint resume**: `checkpoint_index` on `processing_jobs` records the last successfully persisted batch index. On restart, the worker reads `checkpoint_index + 1` and skips completed batches.
   3. **Re-indexing support**: `model_version` column on `document_chunks` enables future targeted re-embedding (e.g., on model upgrade) without full document reprocessing.
 * **Rationale**: Provides exactly-once logical processing semantics at the batch level without requiring distributed locks or external coordination. SQS visibility timeout (600s) acts as the distributed lock preventing concurrent workers from processing the same document.
+
+## ADR-013: Per-Session Upload Concurrency Limit
+* **Status**: Approved
+* **Context**: Without a server-side cap, a single session could initiate an unbounded number of simultaneous document processing jobs, exhausting SQS throughput, worker pod capacity, and database connection headroom. Frontend-only enforcement is insufficient — it can be trivially bypassed by direct API calls.
+* **Decision**: Cap active (in-flight) document uploads to **5 per session**. Enforcement is dual-layer:
+  1. **API layer**: `POST /api/documents` counts documents belonging to the current session whose status is in the set of active processing states. If the count is >= 5, the endpoint returns `HTTP 429 Too Many Requests`.
+  2. **Frontend layer**: The React SPA tracks the active upload count and disables the file picker / surfaces an error message when the count reaches 5, preventing redundant rejected API calls.
+* **Active states** (count toward the limit): `pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`. These are all states through which a document passes during ingestion processing.
+* **Terminal states** (do NOT count): `completed`, `failed`, `cancelled`, `expired`. A slot is freed when a document transitions to any terminal state.
+* **Rationale**: Dual-layer enforcement gives both a hard security boundary (API) and a responsive UX signal (frontend). Scoping the limit to active processing states ensures completed documents do not permanently consume quota.
