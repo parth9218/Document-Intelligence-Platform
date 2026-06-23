@@ -13,6 +13,8 @@
     "test:trigger": "ts-node src/tests/test-trigger.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/s3-presigned-post": "^3.1075.0",
     "@prisma/client": "^5.14.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
