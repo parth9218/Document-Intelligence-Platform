@@ -1,7 +1,7 @@
 # Implementation Status Board
 
 ## Phase 1: Foundation
-* [ ] **Task 101**: Database Schema Creation ── *Incomplete*
+* [x] **Task 101**: Database Schema Creation ── *Complete*
 * [ ] **Task 102**: API Session Management ── *Incomplete*
 * [ ] **Task 103**: Document Upload & Status tracking ── *Incomplete*
 * [ ] **Task 104**: SQS Consumer Loop ── *Incomplete*

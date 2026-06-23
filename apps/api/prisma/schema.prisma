@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_token  String    @unique
+  created_at     DateTime  @default(now()) @db.Timestamptz
+  last_active_at DateTime? @db.Timestamptz
+  expires_at     DateTime  @db.Timestamptz
+  ip_address     String?   @db.Inet
+  user_agent     String?
+
+  documents      Document[]
+  query_logs     QueryLog[]
+
+  @@map("sessions")
+}
+
+model Document {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_id      String         @db.Uuid
+  filename        String
+  mime_type       String
+  file_size_bytes BigInt
+  s3_key          String         @unique
+  status          String         @default("pending_upload")
+  created_at      DateTime       @default(now()) @db.Timestamptz
+  updated_at      DateTime       @default(now()) @updatedAt @db.Timestamptz
+
+  session         Session        @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  processing_job  ProcessingJob?
+  chunks          DocumentChunk[]
+
+  @@index([session_id])
+  @@map("documents")
+}
+
+model ProcessingJob {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id      String    @unique @db.Uuid
+  session_id       String    @db.Uuid
+  status           String    @default("pending_upload")
+  total_chunks     Int?
+  processed_chunks Int       @default(0)
+  progress_pct     Int       @default(0) @db.SmallInt
+  checkpoint_index Int       @default(-1)
+  worker_id        String?
+  error_code       String?
+  error_message    String?
+  started_at       DateTime? @db.Timestamptz
+  completed_at     DateTime? @db.Timestamptz
+  created_at       DateTime  @default(now()) @db.Timestamptz
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  document         Document  @relation(fields: [document_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id, status])
+  @@map("processing_jobs")
+}
+
+model DocumentChunk {
+  id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id   String                      @db.Uuid
+  session_id    String                      @db.Uuid
+  chunk_index   Int
+  page_number   Int?
+  content       String
+  token_count   Int?
+  embedding     Unsupported("vector(1024)")?
+  model_version String                      @default("titan-embed-text-v2")
+  created_at    DateTime                    @default(now()) @db.Timestamptz
+  updated_at    DateTime                    @default(now()) @updatedAt @db.Timestamptz
+
+  document      Document                    @relation(fields: [document_id], references: [id], onDelete: Cascade)
+
+  @@unique([document_id, chunk_index])
+  @@index([session_id])
+  @@map("document_chunks")
+}
+
+model QueryLog {
+  id                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_id          String                      @db.Uuid
+  query_text          String
+  query_embedding     Unsupported("vector(1024)")?
+  retrieved_chunk_ids String[]                    @db.Uuid
+  answer_text         String?
+  latency_ms          Int?
+  model_version       String?
+  created_at          DateTime                    @default(now()) @db.Timestamptz
+
+  session             Session                     @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@map("query_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_id String?  @db.Uuid
+  event_type String
+  entity_id  String?  @db.Uuid
+  metadata   Json?
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  @@map("audit_log")
+}

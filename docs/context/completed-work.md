@@ -29,6 +29,14 @@ This document lists completed tasks and code files created.
   - Added DLQ bridge (secondary polling loop) and orphan cleanup job specifications.
   - Identified 8 known risks and mitigations.
   - Updated task files: [Task 101](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-101-db-schema.md), [Task 103](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-103-api-document-upload.md), [Task 104](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-104-worker-sqs-consumer.md), [Task 201](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-201-worker-extraction.md), [Task 202](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-202-worker-chunking-embedding.md), [Task 203](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-203-worker-vector-storage.md).
+* **Database Schema Creation (Task 101)**:
+  - Formulated full Prisma schema file [schema.prisma](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/prisma/schema.prisma) covering six database tables: `sessions`, `documents`, `processing_jobs`, `document_chunks`, `query_logs`, and `audit_log`.
+  - Configured PostgreSQL relational rules including cascading delete relations from session to documents, chunks, and jobs.
+  - Implemented `pgvector` indexing by declaring the embedding vector size to 1024 dimensions (`Unsupported("vector(1024)")`) and defining a custom HNSW cosine similarity index `document_chunks_embedding_hnsw_idx` (with `m=16`, `ef_construction=64`).
+  - Added a PG `LISTEN/NOTIFY` trigger `processing_jobs_notify` on table `processing_jobs` to publish progress updates automatically on channel `progress_channel` for Server-Sent Events (SSE).
+  - Drafted database schema specification document [database-schema-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/database-schema-spec.md) detailing indices, triggers, and entity relationships.
 
 ## Verification Records
 * **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
+* **Database Schema & Migration Validation**: Verified successful clean database reset and schema migration application using `npx prisma migrate reset`.
+* **PG NOTIFY Trigger Validation**: Successfully executed ts-node script [test-trigger.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/test-trigger.ts) which connects to the database, issues `LISTEN progress_channel`, inserts mock data, updates progress, and validates receipt of trigger notification payload.
