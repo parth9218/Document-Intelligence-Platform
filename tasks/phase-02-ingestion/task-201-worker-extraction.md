@@ -37,14 +37,22 @@ change to the SSE stream via the Express API.
 **Entry action:** Update `processing_jobs.status = 'downloading'`, set `started_at = NOW()`,
 set `worker_id = <pod hostname>`.
 
-**Implementation:**
+**Pre-download S3 object verification (execute before downloading):**
+
+Perform a `boto3.client('s3').head_object(Bucket=BUCKET, Key=document.s3_key)` call and apply the following checks. All three failures are permanent — delete the SQS message and do not retry.
+
+- `ClientError` with `404` (object does not exist) → `status = 'failed'`, `error_code = 'file_not_found'`.
+- `response['ContentLength'] != document.file_size_bytes` → `status = 'failed'`, `error_code = 'size_mismatch'`.
+- `response['ContentType'] != document.mime_type` → `status = 'failed'`, `error_code = 'content_type_mismatch'`.
+
+Only proceed to download if all three checks pass. This is the authoritative server-side verification of uploaded file metadata integrity. The confirm-upload API endpoint (Task 103) does not perform this verification.
+
+**Download implementation:**
 * Use `boto3.client('s3').download_fileobj()` to stream the S3 object to a local temp file.
 * Use `tempfile.NamedTemporaryFile(delete=False)` to create a temp path.
 * Always clean up the temp file in a `finally` block.
 
-**Failure handling:**
-* `ClientError` with `NoSuchKey` → permanent failure: `status = 'failed'`,
-  `error_code = 'file_not_found'`. Delete SQS message.
+**Download failure handling:**
 * Network errors → transient failure: raise exception so SQS visibility timeout re-delivers.
 
 ---
@@ -89,7 +97,11 @@ is the authoritative validation step.
 ## Acceptance Criteria
 * Worker transitions job through `downloading → validating → extracting` with DB updates at each stage.
 * `worker_id` and `started_at` are set on job pickup.
-* Magic byte check rejects files whose bytes do not match the declared MIME type.
+* Pre-download `headObject` check sets `status = 'failed'` with `error_code = 'file_not_found'` if the S3 object does not exist.
+* Pre-download `headObject` check sets `status = 'failed'` with `error_code = 'size_mismatch'` if `ContentLength` does not match `document.file_size_bytes`.
+* Pre-download `headObject` check sets `status = 'failed'` with `error_code = 'content_type_mismatch'` if `ContentType` does not match `document.mime_type`.
+* All three `headObject` failure paths delete the SQS message (permanent failures, no retry).
+* Magic byte check rejects files whose bytes do not match the declared MIME type (`error_code = 'invalid_file_type'`).
 * PyMuPDF extracts page-numbered text from text-native PDFs.
 * Corrupt/password-protected PDFs set `status = 'failed'` with `error_code = 'extraction_failed'`.
 * Temp files are always cleaned up, including on exceptions.
@@ -98,11 +110,15 @@ is the authoritative validation step.
 1. Upload a text-native PDF to local S3 (Localstack). Queue an S3 ObjectCreated payload.
 2. Verify worker transitions through all three status stages in order (query DB between each).
 3. Upload a plain `.txt` file — verify single-page extraction.
-4. Rename a `.jpg` as `.pdf` and upload — verify magic byte check triggers `failed` with `error_code = 'invalid_file_type'`.
-5. Upload a password-protected PDF — verify `error_code = 'extraction_failed'`.
-6. Verify temp file does not persist after worker run (even on failure path).
+4. Queue an SQS event for a non-existent S3 key — verify `error_code = 'file_not_found'` and SQS message deleted.
+5. Upload a file where the declared `file_size_bytes` does not match the actual S3 object size — verify `error_code = 'size_mismatch'` and SQS message deleted.
+6. Upload a file with a mismatched declared `mime_type` vs actual S3 `ContentType` — verify `error_code = 'content_type_mismatch'` and SQS message deleted.
+7. Rename a `.jpg` as `.pdf` and upload — verify magic byte check triggers `failed` with `error_code = 'invalid_file_type'`.
+8. Upload a password-protected PDF — verify `error_code = 'extraction_failed'`.
+9. Verify temp file does not persist after worker run (even on failure path).
 
 ## Definition Of Done
 * `extractor.py` implements the full `downloading → validating → extracting` pipeline.
+* Pre-download `headObject` verification covers all three checks (existence, size, content-type) before any download begins.
 * All failure paths set correct `error_code` and delete the SQS message.
 * ORM status updates confirmed to trigger PG NOTIFY (verified via LISTEN on test DB).
