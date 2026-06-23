@@ -108,6 +108,15 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 * **Two-tier validation model**:
   1. **Per-file (independent)**: Each file is validated for `mimeType` allowlist and `fileSizeBytes` limit. Files failing these checks are included in the response as `status: "rejected"` with an error code. No DB records are created for rejected files.
   2. **Batch-level (atomic)**: After per-file filtering, the valid file subset is checked against: (a) concurrency limit — `active_count + valid_batch_count > 5` → HTTP 429, entire batch rejected; (b) storage quota — `existing_bytes + SUM(valid_sizes) > 52428800` → HTTP 400, entire batch rejected. If either batch-level check fails, no DB records are created for any file.
-* **Response**: Always `HTTP 200 OK` (including partial per-file rejections). `HTTP 400`/`HTTP 429` are returned only on batch-level failures.
+* **Response**: Always `HTTP 200 OK` (including partial per-file rejections). `HTTP 400`/`HTTP 429` are returned only on batch-level failures. Each `ready` result entry includes `{ filename, status, documentId, uploadUrl, uploadFields, s3Key }` where `uploadFields` is the key-value object the browser must include in the multipart POST body (see ADR-016).
 * **Per-file rejection error codes**: `invalid_mime_type`, `file_too_large`.
 * **Rationale**: Batch upload eliminates N round-trips. Partial success at the per-file level is acceptable because per-file failures are independent. Batch-level checks remain atomic because they involve shared session state (concurrent slot count, cumulative storage) where partial commits would create race conditions.
+
+## ADR-016: Presigned POST for S3 Direct Upload
+* **Status**: Approved 🔴 *Overrides any reference to presigned PUT URL in prior planning artifacts*
+* **Context**: Presigned PUT URLs (`getSignedUrl('putObject')`) do not support S3 policy conditions such as `content-length-range` or `Content-Type` enforcement. Without these conditions, S3 cannot enforce file size limits or MIME type at the storage layer — only API-level validation would exist.
+* **Decision**: Use `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). This returns both a `url` and a `fields` object. The browser must construct a `FormData`, append all `fields` key-value pairs, append the file last, and send a multipart `POST` to `url`.
+* **Policy conditions enforced at S3**: `content-length-range: [1, 5242880]` (rejects uploads outside 1 byte–5 MB), `Content-Type: <validated mimeType>` (rejects type mismatches at the storage layer).
+* **Response field mapping**: `uploadUrl` → `url` (the S3 endpoint), `uploadFields` → `fields` (key-value pairs required in the multipart body).
+* **Confirm-upload trigger**: The browser calls `POST /api/documents/:id/confirm-upload` after receiving a `2xx` response from S3 (not a redirect). S3 presigned POST returns `204 No Content` on success when no `success_action_status` is set.
+* **Rationale**: Only presigned POST supports S3-layer policy condition enforcement. This makes the 5 MB size cap and MIME type enforcement operate at the infrastructure level, not just the application level.

@@ -29,11 +29,11 @@ If either batch-level check fails, **no DB records are created for any file in t
 **On batch-level success**, for each valid file:
 1. Generate a `document_id` (UUID).
 2. Construct S3 key: `sessions/{sessionId}/documents/{documentId}/original`.
-3. Generate a presigned PUT URL (5-minute TTL) with conditions: `content-length-range: [1, 5242880]`, `Content-Type: <validated mimeType>`.
+3. Generate a presigned POST using `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). Returns a `url` and a `fields` object. Do NOT use `getSignedUrl('putObject')` — presigned PUT does not support policy conditions. Policy conditions: `content-length-range: [1, 5242880]`, `Content-Type: <validated mimeType>`. TTL: 5 minutes. See ADR-016.
 4. Create `documents` row (`status = 'pending_upload'`) and `processing_jobs` row via Prisma.
 
 **Response structure:** Always `HTTP 200 OK`. The `results` array contains one entry per input file:
-- Valid files: `{ filename, status: "ready", documentId, uploadUrl, s3Key }`
+- Valid files: `{ filename, status: "ready", documentId, uploadUrl, uploadFields, s3Key }` where `uploadUrl` = the S3 endpoint URL and `uploadFields` = the key-value object the browser must include in the multipart POST body before the file.
 - Rejected files: `{ filename, status: "rejected", error, message }`
 
 `HTTP 400` (quota exceeded) and `HTTP 429` (concurrency exceeded) are returned only on batch-level failures, with no partial DB state.
@@ -44,8 +44,7 @@ If either batch-level check fails, **no DB records are created for any file in t
 
 **Decision:** `POST /api/documents/:id/confirm-upload` is a **required** endpoint.
 
-The browser calls this immediately after receiving `200 OK` from S3. This is the
-**only mechanism** that transitions `pending_upload → uploaded`.
+The browser calls this immediately after receiving a `2xx` response from S3 (presigned POST returns `204 No Content` on success when no `success_action_status` is set). This is the **only mechanism** that transitions `pending_upload → uploaded`.
 
 The S3 ObjectCreated → SQS event triggers the worker's processing, not this status update.
 

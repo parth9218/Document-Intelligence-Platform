@@ -58,11 +58,11 @@ If either batch-level check fails, no DB records are created for any file in the
 **On batch-level success**, for each valid file:
 - Generate a `document_id` (UUID).
 - Construct S3 key: `sessions/{sessionId}/documents/{documentId}/original`.
-- Generate a presigned S3 PUT URL (5-minute TTL) with: `content-length-range: [1, 5242880]`, `Content-Type: <validated mimeType>`.
+- Generate a presigned POST using `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). This returns both a `url` and a `fields` object. Do NOT use `getSignedUrl('putObject')` — presigned PUT does not support policy conditions. See ADR-016.
 - Create `documents` row (`status = 'pending_upload'`) and `processing_jobs` row (`status = 'pending_upload'`, `progress_pct = 0`, `checkpoint_index = -1`) via Prisma.
 
 **Response:** Always `HTTP 200 OK`. Body: `{ "results": [...] }` where each entry is either:
-- `{ filename, status: "ready", documentId, uploadUrl, s3Key }` for valid files
+- `{ filename, status: "ready", documentId, uploadUrl, uploadFields, s3Key }` for valid files — `uploadUrl` is the S3 endpoint, `uploadFields` is the key-value object the browser must include in the multipart POST body before appending the file.
 - `{ filename, status: "rejected", error, message }` for rejected files
 
 `HTTP 400` and `HTTP 429` are returned only on batch-level failures (no `results` array in that case).
@@ -135,7 +135,7 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 - Batch with mixed valid and invalid files returns `HTTP 200` with both `ready` and `rejected` entries; DB records are created only for `ready` files.
 - Batch-level concurrency check: if `active_count + valid_batch_count > 5`, returns `HTTP 429`; no DB records created for any file.
 - Batch-level quota check: if `existing_bytes + SUM(valid batch sizes) > 52428800`, returns `HTTP 400` with `error_code = 'storage_quota_exceeded'`; no DB records created for any file.
-- Presigned URL includes `content-length-range: [1, 5242880]` and the validated `Content-Type` for each valid file.
+- Each `ready` result entry includes `uploadUrl` (S3 endpoint) and `uploadFields` (key-value object for multipart POST body). The presigned POST policy enforces `content-length-range: [1, 5242880]` and the validated `Content-Type` at the S3 layer.
 - `documents` and `processing_jobs` rows created in `pending_upload` state for each `ready` file.
 - `POST /api/documents/:id/confirm-upload` returns `HTTP 404` if the document does not exist or does not belong to the current session (ownership check must not return `403`).
 - `POST /api/documents/:id/confirm-upload` returns `HTTP 409` with `error: "already_confirmed"` if `processing_jobs.status` is not `'pending_upload'` (idempotency guard).
@@ -155,6 +155,7 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 - Both batch-level checks must execute after tier-1 per-file filtering and before any DB writes or S3 presigning.
 - The two quota checks use different state sets: storage quota excludes `{expired, failed, cancelled}`; concurrency quota counts only the 7 active processing states. Completed documents consume storage quota but free a concurrency slot.
 - Do not use application-level counters or cache for quota enforcement — always query the database to prevent race conditions under concurrent uploads.
+- Use `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). Do NOT use `getSignedUrl('putObject')` — presigned PUT does not support S3 policy conditions (`content-length-range`, `Content-Type`). See ADR-016.
 - See `ingestion-flow-decisions.md §1` for the full batch API contract and validation sequence.
 - See `ingestion-flow-decisions.md §10` and ADR-013 for the concurrency limit specification.
 - See `ingestion-flow-decisions.md §11` and ADR-014 for the storage quota specification.

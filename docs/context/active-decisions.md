@@ -18,10 +18,12 @@ This document summarizes active decisions currently being implemented.
 * **Presigned URL timing**: URLs generated after file selection. One API call per selection event (batch, not per-file). 🔴 *Overrides original one-call-per-file design — see ADR-015.*
 * **Batch API contract**: `POST /api/documents` accepts `{ "documents": [{ filename, mimeType, fileSizeBytes }] }`. Returns `{ "results": [...] }` with per-file `status: "ready" | "rejected"`. HTTP 200 always (including partial per-file rejections). HTTP 400/429 only on batch-level failures.
 * **File size limit**: 5 MB per file (`fileSizeBytes` must be >= 1 and <= 5242880). Per-file failure produces `rejected` result entry with `error: 'file_too_large'`.
-* **Presigned URL policy conditions**: Content-Type and `content-length-range: [1, 5242880]` embedded into S3 policy at signing time for each valid file.
+* **Presigned POST (not PUT)**: Use `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). Returns `url` + `fields`. Presigned PUT (`getSignedUrl('putObject')`) does NOT support policy conditions. See ADR-016.
+* **S3 policy conditions**: `content-length-range: [1, 5242880]` and `Content-Type: <mimeType>` enforced at the S3 layer via presigned POST policy.
+* **`ready` result entry shape**: `{ filename, status: "ready", documentId, uploadUrl, uploadFields, s3Key }`. Browser constructs FormData with all `uploadFields` key-value pairs, appends the file, then multipart-POSTs to `uploadUrl`.
 * **Upload concurrency limit**: Maximum **5 simultaneous uploads per session**. Batch-level check: `active_count + valid_batch_count > 5` → HTTP 429, entire batch rejected. Frontend disables file picker when active count reaches 5. See `ingestion-flow-decisions.md §10` and ADR-013.
 * **Cumulative storage quota**: Maximum **50 MB cumulative storage per session**. Batch-level check: `existing_bytes + SUM(valid batch sizes) > 52428800` → HTTP 400, entire batch rejected. No schema change required. See `ingestion-flow-decisions.md §11` and ADR-014.
-* **Confirm-upload endpoint**: `POST /api/documents/:id/confirm-upload` is the only mechanism to transition `pending_upload → uploaded`. Browser calls it after S3 returns 200 OK.
+* **Confirm-upload endpoint**: `POST /api/documents/:id/confirm-upload` is the only mechanism to transition `pending_upload → uploaded`. Browser calls it after receiving a `2xx` from S3 (presigned POST returns `204 No Content` on success).
 * **S3 → SQS (no Lambda)**: S3 Event Notifications deliver directly to SQS. No intermediate Lambda.
 * **SQS parameters**: `WaitTimeSeconds=20`, `MaxNumberOfMessages=1`, `VisibilityTimeout=600`, `MaxReceiveCount=3`.
 
