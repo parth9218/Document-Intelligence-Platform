@@ -63,42 +63,18 @@ function getCookie(req: Request, name: string): string | undefined {
   }
   return undefined;
 }
-export async function sessionMiddleware(req: Request, res: Response, next: NextFunction) {
+
+
+export async function getSession(req: Request, res: Response, next: NextFunction) {
   const rawCookieValue = getCookie(req, COOKIE_NAME);
   const cookieValue = rawCookieValue ? decodeURIComponent(rawCookieValue) : undefined;
-
   if (!cookieValue) {
-    // Session cookie not present - create a new session
-    try {
-      const sessionTokenRaw = crypto.randomBytes(32).toString('hex');
-      const signedToken = sign(sessionTokenRaw, SESSION_SECRET);
-      const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
-
-      const session = await prisma.session.create({
-        data: {
-          session_token: signedToken,
-          expires_at: expiresAt,
-          ip_address: req.ip || null,
-          user_agent: req.headers['user-agent'] || null,
-        },
-      });
-
-      res.cookie(COOKIE_NAME, signedToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        expires: expiresAt,
-      });
-
-      req.session = session;
-      return next();
-    } catch (err) {
-      console.error('Failed to create new session:', err);
-      return res.status(500).json({ error: 'Internal server error establishing session' });
-    }
+    return next();
   }
+  return verifyExtendAndReturn(cookieValue, req, res, next);
+}
 
-  // Session cookie is present - verify signature
+async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Response, next: NextFunction) {
   const unsignedToken = unsign(cookieValue, SESSION_SECRET);
   if (unsignedToken === false) {
     return res.status(401).json({ error: 'Invalid session signature' });
@@ -145,4 +121,43 @@ export async function sessionMiddleware(req: Request, res: Response, next: NextF
     console.error('Session validation error:', err);
     return res.status(500).json({ error: 'Internal server error validating session' });
   }
+}
+
+export async function sessionMiddleware(req: Request, res: Response, next: NextFunction) {
+  const rawCookieValue = getCookie(req, COOKIE_NAME);
+  const cookieValue = rawCookieValue ? decodeURIComponent(rawCookieValue) : undefined;
+
+  if (!cookieValue) {
+    // Session cookie not present - create a new session
+    try {
+      const sessionTokenRaw = crypto.randomBytes(32).toString('hex');
+      const signedToken = sign(sessionTokenRaw, SESSION_SECRET);
+      const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+
+      const session = await prisma.session.create({
+        data: {
+          session_token: signedToken,
+          expires_at: expiresAt,
+          ip_address: req.ip || null,
+          user_agent: req.headers['user-agent'] || null,
+        },
+      });
+
+      res.cookie(COOKIE_NAME, signedToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        expires: expiresAt,
+      });
+
+      req.session = session;
+      return next();
+    } catch (err) {
+      console.error('Failed to create new session:', err);
+      return res.status(500).json({ error: 'Internal server error establishing session' });
+    }
+  }
+
+  // Session cookie is present - verify signature
+  return verifyExtendAndReturn(cookieValue, req, res, next);
 }

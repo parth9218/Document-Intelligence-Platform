@@ -1,5 +1,5 @@
 import express from 'express';
-import { sessionMiddleware } from './middleware/session';
+import { sessionMiddleware, getSession } from './middleware/session';
 import sessionRouter from './routes/session';
 
 const app = express();
@@ -11,10 +11,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/session', getSession, sessionRouter);
+
 // Apply session middleware to all API requests
 app.use(sessionMiddleware);
-
 // Mount routes
-app.use('/api/session', sessionRouter);
-
 export default app;
