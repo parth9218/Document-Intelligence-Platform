@@ -9,7 +9,8 @@
     "dev": "nodemon src/index.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "test:session": "ts-node src/test-session.ts"
+    "test:session": "ts-node src/tests/test-session.ts",
+    "test:trigger": "ts-node src/tests/test-trigger.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

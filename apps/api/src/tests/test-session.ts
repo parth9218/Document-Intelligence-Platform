@@ -1,5 +1,5 @@
-import app from './app';
-import { prisma } from './db';
+import app from '../app';
+import { prisma } from '../db';
 import { Server } from 'http';
 
 const PORT = 3005;
