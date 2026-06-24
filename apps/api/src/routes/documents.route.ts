@@ -18,15 +18,15 @@ router.post(
   (req, res, next) => documentController.confirmUpload(req, res, next)
 );
 
-// GET /api/documents/:id/status - Status polling fallback
+// GET /api/documents/status - Status polling fallback
 router.get(
-  '/:id/status',
-  (req, res, next) => documentController.getStatus(req, res, next)
+  '/status',
+  (req, res, next) => documentController.getSessionStatus(req, res, next)
 );
 
-// GET /api/documents/:id/progress - SSE stream progress update tracking
+// GET /api/documents/progress - SSE stream progress update tracking
 router.get(
-  '/:id/progress',
+  '/progress',
   (req, res, next) => documentController.getProgressStream(req, res, next)
 );
 

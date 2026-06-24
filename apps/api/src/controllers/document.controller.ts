@@ -39,17 +39,15 @@ class DocumentController {
   }
 
   /**
-   * Handles returning polling statuses.
+   * Handles returning polling statuses for all documents in the session.
    */
-  public async getStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  public async getSessionStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.session) {
         throw new UnauthorizedError();
       }
 
-      const documentId = req.params.id;
-      const statusDetails = await documentService.getDocumentStatus(req.session.id, documentId);
-      
+      const statusDetails = await documentService.getSessionDocumentsStatus(req.session.id);
       res.status(200).json(statusDetails);
     } catch (err) {
       next(err);
@@ -57,7 +55,7 @@ class DocumentController {
   }
 
   /**
-   * Handles SSE progress streaming connection configuration.
+   * Handles SSE progress streaming connection configuration for the session.
    */
   public async getProgressStream(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -65,30 +63,36 @@ class DocumentController {
         throw new UnauthorizedError();
       }
 
-      const documentId = req.params.id;
+      const sessionId = req.session.id;
 
       // Connect progress stream logic via service
-      const initialPayload = await documentService.connectProgressStream(
-        req.session.id,
-        documentId,
+      const { snapshot, metadataCache, cleanup } = await documentService.connectProgressStream(
+        sessionId,
         (payload) => {
-          // Write progress notifications as SSE frames
-          res.write(`data: ${JSON.stringify({
-            documentId: payload.document_id,
+          const documentId = payload.document_id;
+          const meta = metadataCache.get(documentId) || {
+            filename: 'unknown',
+            mimeType: 'application/octet-stream',
+            fileSizeBytes: 0,
+            createdAt: new Date(),
+          };
+
+          const enrichedPayload = {
+            documentId,
+            filename: meta.filename,
+            mimeType: meta.mimeType,
+            fileSizeBytes: meta.fileSizeBytes,
             status: payload.status,
             progressPct: payload.progress_pct,
             processedChunks: payload.processed_chunks,
             totalChunks: payload.total_chunks,
             errorCode: payload.error_code,
             errorMessage: payload.error_message,
-          })}\n\n`);
-        },
-        (cleanup) => {
-          // Hook cleanup to closed connection event
-          req.on('close', async () => {
-            logger.info('SSE Client disconnected, executing stream cleanup', { documentId });
-            await cleanup();
-          });
+            createdAt: meta.createdAt,
+          };
+
+          // Write progress notifications as named 'update' SSE event frames
+          res.write(`event: update\ndata: ${JSON.stringify(enrichedPayload)}\n\n`);
         }
       );
 
@@ -99,8 +103,14 @@ class DocumentController {
         'Connection': 'keep-alive',
       });
 
-      // Push initial data frame immediately on connect
-      res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
+      // Push initial snapshot data frame immediately on connect
+      res.write(`event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`);
+
+      // Hook cleanup to closed connection event
+      req.on('close', async () => {
+        logger.info('SSE Client disconnected, executing stream cleanup', { sessionId });
+        await cleanup();
+      });
     } catch (err) {
       // Forward to error handler if connection setup failed
       next(err);
