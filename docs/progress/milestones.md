@@ -8,7 +8,7 @@
 - [ ] **Milestone 5: Production Deployment Active** (Backend Phase 5 Complete)
 
 ## Frontend Development Milestones
-- [ ] **Milestone F1: Scaffolding, Tailwind & Mocking Gateway** (Frontend Phase 1 Complete)
+- [x] **Milestone F1: Scaffolding, Tailwind & Mocking Gateway** (Frontend Phase 1 Complete)
 - [ ] **Milestone F2: Global Shell, Auth & Dashboard Frame** (Frontend Phase 2 Complete)
 - [ ] **Milestone F3: Batch Upload & Multipart S3 Connector** (Frontend Phase 3 Complete)
 - [ ] **Milestone F4: Real-Time Ingestion Feed & SSE Synced** (Frontend Phase 4 Complete)
