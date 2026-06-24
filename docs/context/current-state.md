@@ -3,7 +3,7 @@
 This document records the exact state of code modules and active tasks. Update it after every coding cycle.
 
 ## Current Code State
-* **API Service (`/apps/api`)**: Refactored into a production-grade modular architecture. Enforces separation of concerns via Routes, Controllers, Services, and structural Validators. Configured with a central environment-aware configuration module (`config/`), custom HTTP/business error classes (`errors/`), centralized Express error handler middleware, and a structured logger (`utils/logger.ts`) producing JSON in production and colorized text in development. File validation supports central configurations and easily extensible MIME types following the Open/Closed Principle. DB interactions leverage pgPool connection pooling (SSE streams) and Prisma transactions (batch upload metadata initializations & confirm-upload status updates). Scheduled cleanup daemon handles expired and stuck uploads. **SSE and status endpoints are currently implemented as per-document routes (`GET /api/documents/:id/progress`, `GET /api/documents/:id/status`) — Task 105 must replace these with session-scoped routes per ADR-017.**
+* **API Service (`/apps/api`)**: Refactored into a production-grade modular architecture. Enforces separation of concerns via Routes, Controllers, Services, and structural Validators. Configured with a central environment-aware configuration module (`config/`), custom HTTP/business error classes (`errors/`), centralized Express error handler middleware, and a structured logger (`utils/logger.ts`) producing JSON in production and colorized text in development. File validation supports central configurations and easily extensible MIME types following the Open/Closed Principle. DB interactions leverage pgPool connection pooling (SSE streams) and Prisma transactions (batch upload metadata initializations & confirm-upload status updates). Scheduled cleanup daemon handles expired and stuck uploads. **SSE and status endpoints are fully refactored to session-scoped equivalents (`GET /api/documents/progress`, `GET /api/documents/status`) per ADR-017, using session-scoped PG NOTIFY channels.**
 * **Worker Service (`/apps/worker`)**: Not started (boto3 Python / SQLAlchemy). Directory does not exist yet.
 * **Frontend Service (`/apps/frontend`)**: Not started (React SPA). Directory does not exist yet.
 * **Infrastructure (`/infra/terraform`)**: Not started. Directory does not exist yet.
@@ -13,7 +13,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Refined Architecture & Diagrams**: Completed. Specifications added for Retrieval Q&A, SSE streams, PG LISTEN/NOTIFY, and UI progress bars.
 - **Ingestion Flow Brainstorm & Pre-Implementation Review**: Completed. Full ingestion pipeline reviewed and corrections applied. See `docs/context/ingestion-flow-decisions.md`.
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
-- **Phase 1 (Foundation)**: In Progress. Tasks 101 (Database Schema), 102 (API Session Management), and 103 (Document Upload & Status tracking) are complete. Next is Task 104 (SQS Consumer Loop).
+- **Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, and 105 are complete. Next is Task 104 (SQS Consumer Loop).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.
@@ -23,7 +23,6 @@ This document records the exact state of code modules and active tasks. Update i
 
 - Ensure local Docker runs pgvector before implementing Task 101.
 - Verify local environment variables avoid colliding with AWS profile parameters.
-- **Task 105 — SSE Architecture Refactor is pending**: The PG NOTIFY trigger in the database still uses the legacy global `'progress_channel'` channel. The Express API still has per-document `GET /api/documents/:id/progress` and `GET /api/documents/:id/status` routes. Both must be replaced via Task 105 (new Prisma migration + route refactor) before any frontend SSE integration begins. See ADR-017.
 - The PG NOTIFY trigger on `processing_jobs` must be appended to the Prisma-generated migration SQL — it cannot be expressed in `schema.prisma` directly.
 - `EMBEDDING_PROVIDER=local` env var switches worker embedding from Bedrock to Sentence-Transformers. Must be set in local `.env` during development.
 - SQLAlchemy models in `apps/worker/models.py` must be manually kept in sync with Prisma schema changes. Prisma Migrate is the single source of truth.
