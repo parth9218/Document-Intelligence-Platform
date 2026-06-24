@@ -33,7 +33,7 @@
 
 ## Frontend Phase 1: Foundation, Tailwind & Hybrid Mocking
 * [x] **Task F1.1**: Next.js Workspace Scaffolding & Core Configurations ── *Complete*
-* [ ] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── *Incomplete*
+* [x] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── *Complete*
 * [ ] **Task F1.3**: Reusable Tailwind UI & Theme System ── *Incomplete*
 
 ## Frontend Phase 2: Application Shell, Session & API Layer
