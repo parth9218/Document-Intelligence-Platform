@@ -6,7 +6,7 @@
 * [x] **Task 103**: Document Upload & Status tracking ── *Complete*
 * [ ] **Task 104**: SQS Consumer Loop ── *Incomplete*
 * [x] **Task 105**: SSE Architecture Refactor ── *Complete*
-* [ ] **Task 106**: Automated API Specification Generation ── *Incomplete*
+* [x] **Task 106**: Automated API Specification Generation ── *Complete*
 
 ## Phase 2: Ingestion Pipeline
 * [ ] **Task 201**: Worker Document Extraction ── *Incomplete*
