@@ -9,25 +9,29 @@ const pgClient = new Client({
 async function main() {
   console.log('Connecting to database...');
   await pgClient.connect();
-  
-  // Start listening to the progress channel
-  await pgClient.query('LISTEN progress_channel');
-  console.log('Listening on progress_channel...');
 
-  // Set up listener callback
-  let triggerFired = false;
-  pgClient.on('notification', (msg) => {
-    console.log('Received notification payload:', msg.payload);
-    triggerFired = true;
-  });
-
-  // Create a session, document and processing job
+  // Create a session first to obtain the sessionId
   console.log('Creating mock session...');
   const session = await prisma.session.create({
     data: {
       session_token: 'test-signature-hmac-token',
       expires_at: new Date(Date.now() + 3600000), // 1 hour
     },
+  });
+
+  const channelName = `progress_${session.id.replace(/-/g, '_')}`;
+  
+  // Start listening to the session-scoped progress channel
+  await pgClient.query(`LISTEN ${channelName}`);
+  console.log(`Listening on ${channelName}...`);
+
+  // Set up listener callback
+  let triggerFired = false;
+  pgClient.on('notification', (msg) => {
+    if (msg.channel === channelName) {
+      console.log('Received notification payload:', msg.payload);
+      triggerFired = true;
+    }
   });
 
   console.log('Creating mock document...');
