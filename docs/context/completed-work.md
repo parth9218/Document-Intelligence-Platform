@@ -79,6 +79,8 @@ This document lists completed tasks and code files created.
   - Formulated layout loading wrapper in [providers.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/providers.tsx).
   - Configured Outfit and JetBrains Mono dynamic Next.js fonts within [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx).
   - Built core reusable visual UI widgets: [Button](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/button.tsx), [Card](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/card.tsx), [ProgressBar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/progress-bar.tsx), and [Toast](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/toast.tsx) alerts context managers.
+  - Setup environment variable configuration loader structure (with separate settings for `.env.development` and `.env.production` alongside a `.env.example` template reference).
+  - Restricted the sandbox component visualization page to development-only environments by implementing runtime and compile-time router blockages.
 
 ## Verification Records
 * **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
@@ -91,3 +93,4 @@ This document lists completed tasks and code files created.
 * **Frontend Compilation Verification**: Successfully verified clean production compilation of the scaffolded application without type errors using `npm run build` in the `apps/frontend/` workspace directory.
 * **MSW Configuration and Route Switcher Verification**: Executed mock server boots inside dev builds, confirming custom interceptors intercept and mock HTTP requests correctly based on `api-routing.ts` environment flags, and verified compiled build bundles.
 * **Tailwind UI & Theme System Compilation Verification**: Verified clean build output with zero warnings, validating exact responsive rendering hooks and theme transitions.
+* **Environment Configuration & Build Isolation Verification**: Verified that building the project loader dynamically reads `.env.production` during execution and correctly injects compile-time blockages, routing `/sandbox` hits to the system 404 page in production.

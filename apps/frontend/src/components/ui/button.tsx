@@ -17,13 +17,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center rounded-xl font-medium transition-all duration-200 outline-none select-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer',
           // Variants
           {
-            'bg-primary text-foreground shadow-lg shadow-primary/20 hover:bg-primary-glow hover:-translate-y-0.5 active:translate-y-0':
+            'bg-primary text-slate-50 shadow-lg shadow-primary/20 hover:bg-primary-glow hover:-translate-y-0.5 active:translate-y-0':
               variant === 'primary',
-            'bg-secondary text-foreground shadow-lg shadow-secondary/20 hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0':
+            'bg-secondary text-slate-50 shadow-lg shadow-secondary/20 hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0':
               variant === 'secondary',
             'glass-panel-interactive text-foreground hover:bg-white/10':
               variant === 'glass',
-            'bg-red-500/20 border border-red-500/30 text-red-200 hover:bg-red-500/30 active:scale-95':
+            'bg-red-500/10 dark:bg-red-500/20 border border-red-500/30 text-red-600 dark:text-red-200 hover:bg-red-500/20 dark:hover:bg-red-500/30 active:scale-95':
               variant === 'danger',
             'hover:bg-white/5 text-muted hover:text-foreground':
               variant === 'ghost',
