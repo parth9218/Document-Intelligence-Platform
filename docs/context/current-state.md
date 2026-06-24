@@ -13,7 +13,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Refined Architecture & Diagrams**: Completed. Specifications added for Retrieval Q&A, SSE streams, PG LISTEN/NOTIFY, and UI progress bars.
 - **Ingestion Flow Brainstorm & Pre-Implementation Review**: Completed. Full ingestion pipeline reviewed and corrections applied. See `docs/context/ingestion-flow-decisions.md`.
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
-- **Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, and 105 are complete. Next is Task 104 (SQS Consumer Loop).
+- **Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, and 105 are complete. Task 106 (Automated API Specification Generation) is defined and added to the tracking board. Next is Task 104 (SQS Consumer Loop).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.
