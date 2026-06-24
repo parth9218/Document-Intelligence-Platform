@@ -65,6 +65,10 @@ This document lists completed tasks and code files created.
   - Mounted Swagger UI in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts) at `GET /api-docs` using `swagger-ui-express` conditional on environment, rendering only in non-production environments and returning `404 Not Found` in production.
   - Implemented automatic OpenAPI specification export script [generate-openapi.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/scripts/generate-openapi.ts) writing JSON spec directly to [api-specification.json](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/api-specification.json), registered under `npm run api:docs:generate`.
   - Written dedicated integration test suite [swagger.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/swagger.test.ts) to verify correct Swagger UI loading in development/test environments and secure blocking (returning 404) in production environment.
+* **Frontend Scaffolding & Setup (Task F1.1)**:
+  - Scaffolded Next.js App Router workspace under `apps/frontend/` using TypeScript, Tailwind CSS, and NPM package manager.
+  - Configured import aliases in `tsconfig.json` mapping `@/*` to `src/*`.
+  - Installed node dependencies: `zustand`, `lucide-react`, `msw`, `clsx`, and `tailwind-merge`.
 
 ## Verification Records
 * **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
@@ -74,3 +78,4 @@ This document lists completed tasks and code files created.
 * **API Document Upload & Progress Streaming Validation**: Updated complete Jest integration tests in [documents.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/documents.test.ts) covering batch uploads, validation limits, S3 presigned URLs, upload confirmation state-machine transitions, session status polling fallbacks, SSE streams, and orphan cleanup timer rules.
 * **API Specification & Swagger Routing Verification**: Implemented and successfully ran automated integration test suite `swagger.test.ts` verifying environments logic, and executed spec builder CLI command `npm run api:docs:generate` producing error-free syntax validated OpenAPI 3.0.0 JSON output.
 * **Refactored Architecture Integration Verification**: Re-compiled the entire TypeScript project using `npm run build` and validated 100% test compatibility and functional parity by running all 20 sequential integration tests (`npm test -- --runInBand`) post-refactoring. All tests passed successfully.
+* **Frontend Compilation Verification**: Successfully verified clean production compilation of the scaffolded application without type errors using `npm run build` in the `apps/frontend/` workspace directory.
