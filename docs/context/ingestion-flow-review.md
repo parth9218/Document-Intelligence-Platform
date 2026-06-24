@@ -312,25 +312,30 @@ If a session expires while a document is being processed:
 ```
 Worker
   → UPDATE processing_jobs SET status=..., progress_pct=..., checkpoint_index=...
-  → PG trigger fires NOTIFY 'progress_channel'
-  → Express API (LISTEN on progress_channel)
+  → PG trigger fires NOTIFY 'progress_{sessionId}'
+  → Express API (LISTEN on 'progress_{sessionId}' per connected SSE client)
   → SSE stream → React browser
 ```
 
-**Why not Redis / sidecar / external pub-sub?**
+**SSE Endpoint:** `GET /api/documents/progress` (session-scoped). One connection per session. Named events:
+- `event: snapshot` — initial frame on connect; JSON array of all session document statuses
+- `event: update` — subsequent frames per NOTIFY; single document status object
+
+**Polling Fallback:** `GET /api/documents/status` (session-scoped). Returns `{ "documents": [...] }` matching the snapshot array schema. Polled every 3 seconds on SSE disconnect.
+
+**Why session-scoped PG NOTIFY channels?**
 
 | Option | Pros | Cons |
 |--------|------|------|
-| PG LISTEN/NOTIFY (chosen) | No extra infra, atomic with DB write, single source of truth | NOTIFY has a ~8KB payload limit; doesn't persist messages for reconnect |
+| Global `progress_channel` + session filter in Express | Simple trigger | Every SSE connection receives all sessions' events; Express discards non-matching ones — O(sessions) waste |
+| Session-scoped channel (chosen) | PostgreSQL routes only matching events; zero Express filtering | Trigger uses `replace(session_id::text, '-', '_')` for valid identifier | 
 | Redis pub/sub | Very fast | Extra infra, separate failure domain, data can drift from DB |
-| Sidecar process | Isolation | Extra container, another failure point |
-| Polling fallback | Dead simple | 3s latency, higher DB load |
 
-The **polling fallback** (`GET /api/documents/:id/status`) is the right safety net when the SSE connection drops (network interruption, browser sleep). It hits the same `processing_jobs` row and costs one DB read per 3 seconds per document — negligible.
+The **polling fallback** (`GET /api/documents/status`) is the right safety net when the SSE connection drops. It returns the same schema as the `snapshot` event, so frontend parsing logic is shared.
 
-The PG NOTIFY payload limit (8KB) is not a concern here — the NOTIFY payload is a small JSON object, not the chunk content.
+The PG NOTIFY payload limit (8KB) is not a concern — the NOTIFY payload is a small JSON object of progress fields, not chunk content.
 
-**One important caveat:** If the Express API restarts while a user is watching a document process, the SSE connection drops. The React client must detect the SSE `onclose` event and either reconnect (which replays the current status from the polling endpoint) or fall back to polling. This reconnect logic must be explicitly implemented in the frontend.
+**Important caveat:** If the Express API restarts while a user is watching document processing, the SSE connection drops. The React client must detect `EventSource.onclose` and reconnect (which replays the full `snapshot` for all documents) or fall back to polling. This reconnect logic must be explicitly implemented in the frontend (Task 303).
 
 ---
 

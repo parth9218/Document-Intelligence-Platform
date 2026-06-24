@@ -124,7 +124,7 @@ CREATE OR REPLACE FUNCTION notify_progress_channel()
 RETURNS trigger AS $$
 BEGIN
   PERFORM pg_notify(
-    'progress_channel',
+    'progress_' || replace(NEW.session_id::text, '-', '_'),
     json_build_object(
       'document_id',      NEW.document_id,
       'status',           NEW.status,
@@ -144,8 +144,9 @@ AFTER UPDATE ON processing_jobs
 FOR EACH ROW EXECUTE FUNCTION notify_progress_channel();
 ```
 
-The Express API `LISTEN`s to `progress_channel` and routes NOTIFY payloads to the
-matching SSE connection by `document_id`.
+Channel name convention: `progress_{sessionId}` where hyphens in the UUID are replaced with underscores, producing a valid unquoted PostgreSQL identifier. The Express SSE handler derives the same channel name from the authenticated session ID to `LISTEN`.
+
+> **Migration note**: Task 101 is complete and the initial migration (`20260621133135_init`) is committed. That migration deployed the trigger with the legacy global channel `'progress_channel'`. Task 105 introduces a new Prisma migration using `CREATE OR REPLACE FUNCTION` to overwrite the trigger function with the session-scoped channel above. The `CREATE TRIGGER` binding does not need to be recreated.
 
 ---
 
@@ -183,7 +184,7 @@ Terminal states: `completed`, `failed`, `cancelled`, `expired` — no further tr
 2. Run `npx prisma migrate dev --name init` inside `apps/api`.
 3. Verify all tables, foreign keys, UNIQUE constraints, and the HNSW index created.
 4. Run `psql -c "SELECT tgname FROM pg_trigger WHERE tgrelid = 'processing_jobs'::regclass;"` and assert `processing_jobs_notify` is present.
-5. Manually update a `processing_jobs` row and assert `LISTEN progress_channel` receives a payload.
+5. Manually update a `processing_jobs` row and assert `LISTEN progress_{sessionId}` (with the session's UUID hyphens replaced by underscores) receives a payload on the session-scoped channel.
 
 ## Definition Of Done
 * `schema.prisma` checked in.

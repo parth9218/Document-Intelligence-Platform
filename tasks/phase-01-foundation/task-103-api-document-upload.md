@@ -12,12 +12,12 @@ Implement the following routes inside `apps/api/src/routes/documents.ts`:
 
 - `POST /api/documents` — batch initialization: validate files, enforce limits, return presigned URLs per valid file
 - `POST /api/documents/:id/confirm-upload` — transition status to `uploaded` after S3 success
-- `GET /api/documents/:id/status` — polling fallback for current job status
-- `GET /api/documents/:id/progress` — SSE stream for real-time progress updates
+- `GET /api/documents/status` — session-wide polling fallback: returns current status of all session documents
+- `GET /api/documents/progress` — session-wide SSE stream: emits `snapshot` on connect, then `update` events per PG NOTIFY
 
 Implement the orphan record cleanup job in `apps/api/src/jobs/cleanup.ts`.
 
-**Out of scope:** Frontend upload UI, S3 bucket configuration, SQS configuration.
+**Out of scope:** Frontend upload UI, S3 bucket configuration, SQS configuration, per-document status endpoints (removed per ADR-017).
 
 ---
 
@@ -87,29 +87,52 @@ Called by the browser after receiving `200 OK` from S3. This is the **only mecha
 
 ---
 
-### GET /api/documents/:id/status
+### GET /api/documents/status
 
-Polling fallback endpoint. Used when SSE is unavailable or the connection drops.
+Session-wide polling fallback. Used when SSE is unavailable or the connection drops.
 
-Returns `documentId`, `status`, `progressPct`, `processedChunks`, `totalChunks`, `errorCode`, `errorMessage`.
+Returns `{ "documents": [ <DocumentStatusObject> ] }` — an array of status objects for all documents belonging to the current session, ordered by `created_at` ascending.
 
-Returns `404` if the document does not exist or does not belong to the current session.
+Each `DocumentStatusObject` has the unified shape:
+
+| Field             | Type            |
+|-------------------|-----------------|
+| `documentId`      | string (UUID)   |
+| `filename`        | string          |
+| `mimeType`        | string          |
+| `fileSizeBytes`   | number          |
+| `status`          | string          |
+| `progressPct`     | number          |
+| `processedChunks` | number          |
+| `totalChunks`     | number \| null  |
+| `errorCode`       | string \| null  |
+| `errorMessage`    | string \| null  |
+| `createdAt`       | string (ISO)    |
+
+Requires `documents` JOIN `processing_jobs` on `document_id`. Returns an empty array if the session has no documents. Returns `401` if session is invalid.
 
 ---
 
-### GET /api/documents/:id/progress
+### GET /api/documents/progress
 
-SSE stream endpoint. Sets `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`.
+Session-wide SSE stream endpoint. Sets `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`.
 
 **Behavior:**
 
-- On connect: send an initial `data:` frame with the current job status from DB so the client does not see a blank state on connect or reconnect.
-- Open a PostgreSQL `LISTEN progress_channel` connection (via `pg` driver, not Prisma).
-- On each NOTIFY payload received: parse the JSON, match `document_id` to the connected client, forward as SSE `data:` frame.
-- On client disconnect (`res.on('close')`): issue `UNLISTEN progress_channel` and release the pg connection back to the pool.
-- Return `404` if the document does not exist or does not belong to the current session.
+- On connect: query all documents for the session (JOIN `processing_jobs`) and emit a single `event: snapshot` frame. The `data` field is a JSON array of `DocumentStatusObject` items (same shape as `GET /api/documents/status` response array). Cache the document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) keyed by `documentId` for use when enriching subsequent NOTIFY payloads.
+- Open a PostgreSQL `LISTEN` connection (via `pg` driver, not Prisma) on channel `progress_{sessionId}` where the session UUID hyphens are replaced with underscores.
+- On each NOTIFY payload received: parse the JSON (contains `document_id`, `status`, `progress_pct`, `processed_chunks`, `total_chunks`, `error_code`, `error_message`). Enrich with cached document metadata. Emit as `event: update` frame with a single `DocumentStatusObject` as `data`.
+- On client disconnect (`req.on('close')`): issue `UNLISTEN progress_{sessionId}` and release the pg connection back to the pool.
+- Returns `401` if session is invalid.
 
-**Frontend reconnect contract:** On `EventSource.onclose`, the React client must either reconnect (initial frame delivers current status) or fall back to polling `GET /api/documents/:id/status` every 3 seconds. This is a Task 303 implementation requirement.
+**SSE frame format:**
+```
+event: snapshot
+data: [{...}, {...}]
+
+event: update
+data: {...}
+```
 
 ---
 
@@ -140,9 +163,15 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 - `POST /api/documents/:id/confirm-upload` returns `HTTP 404` if the document does not exist or does not belong to the current session (ownership check must not return `403`).
 - `POST /api/documents/:id/confirm-upload` returns `HTTP 409` with `error: "already_confirmed"` if `processing_jobs.status` is not `'pending_upload'` (idempotency guard).
 - `POST /api/documents/:id/confirm-upload` atomically transitions both `documents.status` and `processing_jobs.status` to `'uploaded'` in a single transaction; returns `HTTP 200` with `{ "status": "uploaded" }`.
-- `GET /api/documents/:id/status` returns current progress state including chunk counters.
-- `GET /api/documents/:id/progress` SSE stream delivers an initial state frame on connect and NOTIFY-triggered frames as the worker progresses.
-- All document endpoints return `404` for unowned or non-existent document IDs.
+- `GET /api/documents/status` returns a `{ "documents": [...] }` response where each item includes all `DocumentStatusObject` fields for every document in the session.
+- `GET /api/documents/status` returns an empty `documents` array if the session has no documents.
+- `GET /api/documents/progress` SSE stream emits `event: snapshot` on connect with a JSON array of all session document statuses.
+- `GET /api/documents/progress` SSE stream emits `event: update` on each PG NOTIFY with a single `DocumentStatusObject`.
+- Update `event` frames include enriched document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) sourced from the snapshot cache, not from a live DB query per notification.
+- The `LISTEN` channel used is `progress_{sessionId}` with UUID hyphens replaced by underscores.
+- On SSE client disconnect, the handler issues `UNLISTEN progress_{sessionId}` and releases the pg pool connection.
+- All `GET /api/documents/status` and `GET /api/documents/progress` requests return `401` if session is missing or invalid (not `404`).
+- No per-document `GET /:id/status` or `GET /:id/progress` routes exist.
 - Cleanup job marks `pending_upload` records older than 30 min as `expired`.
 - Cleanup job marks stuck `uploaded` records older than 10 min as `failed` with `error_code = 'sqs_delivery_failure'`.
 
@@ -160,3 +189,7 @@ Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes 
 - See `ingestion-flow-decisions.md §10` and ADR-013 for the concurrency limit specification.
 - See `ingestion-flow-decisions.md §11` and ADR-014 for the storage quota specification.
 - See `ingestion-flow-decisions.md §9` for orphan cleanup timing parameters.
+- SSE and status endpoints are session-scoped (no document ID). See ADR-017 and `ingestion-flow-decisions.md §8` for the full SSE architecture specification including event types, payload shape, and channel naming.
+- The PG LISTEN channel `progress_{sessionId}` is derived by replacing all hyphens in the session UUID with underscores. This produces a valid unquoted PostgreSQL identifier. The `LISTEN` query string must use this derived form; using the raw UUID with hyphens will fail silently.
+- The SSE snapshot cache (document metadata keyed by `documentId`) is local to the SSE handler closure and is NOT shared across requests. Each SSE connection builds its own cache on connect.
+- The `GET /api/documents/:id/status` and `GET /api/documents/:id/progress` routes must NOT exist. Any existing implementation of those routes must be removed as part of Task 105.

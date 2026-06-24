@@ -118,7 +118,9 @@ WITH (m = 16, ef_construction = 64);
 
 ## 4. Real-Time Processing Trigger
 
-To support real-time user-facing ingestion progress indicators, a PostgreSQL `LISTEN/NOTIFY` trigger is configured on the `processing_jobs` table. When the Python worker makes a database batch checkpoint update, the DB issues a `pg_notify` message on the `progress_channel` containing the updated document metadata. The API server listens to this channel and streams frames directly to the client via Server-Sent Events (SSE).
+To support real-time user-facing ingestion progress indicators, a PostgreSQL `LISTEN/NOTIFY` trigger is configured on the `processing_jobs` table. When the Python worker makes a database batch checkpoint update, the DB issues a `pg_notify` message on a **session-scoped channel** containing the updated document metadata. The API server listens on the channel specific to the connected user's session and streams frames directly to the client via Server-Sent Events (SSE).
+
+**Channel naming convention**: `progress_{sessionId}` where hyphens in the UUID are replaced with underscores, producing a valid unquoted PostgreSQL identifier (e.g., `progress_550e8400_e29b_41d4_a716_446655440000`). This ensures each SSE connection receives only its own session's events — no Express-side session filtering is required.
 
 ### Trigger Definition
 ```sql
@@ -126,7 +128,7 @@ CREATE OR REPLACE FUNCTION notify_progress_channel()
 RETURNS trigger AS $$
 BEGIN
   PERFORM pg_notify(
-    'progress_channel',
+    'progress_' || replace(NEW.session_id::text, '-', '_'),
     json_build_object(
       'document_id',      NEW.document_id,
       'status',           NEW.status,
@@ -145,6 +147,12 @@ CREATE TRIGGER processing_jobs_notify
 AFTER UPDATE ON processing_jobs
 FOR EACH ROW EXECUTE FUNCTION notify_progress_channel();
 ```
+
+> **Note on `session_id` in payload**: The session ID is encoded in the channel name itself. It does NOT need to appear in the JSON payload. The payload carries only document-level progress fields.
+
+> **Migration history**: The initial migration (`20260621133135_init`) deployed this trigger with the legacy global channel name `'progress_channel'`. Task 105 introduces a new Prisma migration that uses `CREATE OR REPLACE FUNCTION` to overwrite the trigger function with the session-scoped channel name above. The trigger binding (`CREATE TRIGGER`) does not need to be recreated.
+
+The Express API `LISTEN`s to `progress_{sessionId}` (using `LISTEN progress_550e8400_e29b_41d4_a716_446655440000`) on a dedicated pg Pool client per SSE connection. On client disconnect, the handler issues `UNLISTEN progress_{sessionId}` and releases the pg connection back to the pool.
 
 ---
 

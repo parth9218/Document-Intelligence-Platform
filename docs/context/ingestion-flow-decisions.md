@@ -155,15 +155,42 @@ stuck in their last non-terminal status in the UI indefinitely.
 ```
 Worker
   → SQLAlchemy ORM update on processing_jobs
-  → PG trigger fires NOTIFY 'progress_channel'
-  → Express API (LISTEN on pg driver connection)
-  → SSE data frame → React browser
+  → PG trigger fires NOTIFY 'progress_{sessionId}'
+  → Express API (LISTEN on progress_{sessionId} per connected SSE client)
+  → SSE 'update' event frame → React browser
 ```
 
-**Fallback:** React polls `GET /api/documents/:id/status` every 3 seconds on SSE disconnect.
+**SSE Endpoint:** `GET /api/documents/progress` (session-scoped; no document ID in path).
 
-**SSE reconnect contract:** On `EventSource.onclose`, React must either reconnect (initial
-frame delivers current status) or fall back to polling. This is a Task 303 implementation requirement.
+**SSE Event Types (named):**
+- `event: snapshot` — emitted once on connect. `data` is a JSON array of all session document status objects. Enables the frontend to bootstrap state without a separate API call.
+- `event: update` — emitted on each PG NOTIFY. `data` is a single document status object. Frontend merges into existing state by `documentId`.
+
+**Unified Document Status Object** (used in both `snapshot` array items and `update` frames):
+
+| Field             | Source                          |
+|-------------------|---------------------------------|
+| `documentId`      | `processing_jobs.document_id`   |
+| `filename`        | `documents.filename`            |
+| `mimeType`        | `documents.mime_type`           |
+| `fileSizeBytes`   | `documents.file_size_bytes`     |
+| `status`          | `processing_jobs.status`        |
+| `progressPct`     | `processing_jobs.progress_pct`  |
+| `processedChunks` | `processing_jobs.processed_chunks` |
+| `totalChunks`     | `processing_jobs.total_chunks`  |
+| `errorCode`       | `processing_jobs.error_code`    |
+| `errorMessage`    | `processing_jobs.error_message` |
+| `createdAt`       | `documents.created_at`          |
+
+**Payload enrichment for `update` events:** The PG NOTIFY payload contains only `processing_jobs` fields (`document_id`, `status`, `progress_pct`, `processed_chunks`, `total_chunks`, `error_code`, `error_message`). The Express SSE handler must enrich each incoming NOTIFY payload with document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) cached from the initial snapshot query executed on SSE connect.
+
+**PG NOTIFY Channel:** Session-scoped. The trigger fires on `'progress_' || replace(NEW.session_id::text, '-', '_')`. The Express handler LISTENs on this same channel string derived from the authenticated session ID. PostgreSQL routes events only to the matching listener — no Express-side session filtering required.
+
+**Fallback:** React polls `GET /api/documents/status` every 3 seconds on SSE disconnect.
+- Returns `{ "documents": [ <status object> ] }` where each item uses the identical unified document status object shape.
+- Frontend must use the same parsing logic for both `snapshot` event data and the polling response body.
+
+**SSE reconnect contract:** On `EventSource.onclose`, React must either reconnect or fall back to polling. Reconnecting is safe at any point — the `snapshot` event on reconnect delivers current state for all documents. This is a Task 303 implementation requirement.
 
 ---
 

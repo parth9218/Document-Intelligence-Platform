@@ -45,12 +45,10 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 * **Rationale**: Decouples local execution from AWS API keys/bills, guarantees 100% SQL and indexing parity with production, and permits developer workflows to execute entirely offline.
 
 ## ADR-008: Ingestion Progress Updates via SSE and PG LISTEN/NOTIFY
-* **Status**: Approved
+* **Status**: Superseded by ADR-017 🔴
 * **Context**: The frontend needs to update the user on the progress of document ingestion (downloading, extracting, chunking, embedding) in real-time.
-* **Decision**: Implement a hybrid push/pull progress communication system:
-  1. **Primary Push**: Node.js Express API streams status updates to React SPA using Server-Sent Events (SSE) via `/api/documents/:id/progress`. The API listens to updates from the database using PostgreSQL `LISTEN/NOTIFY` on updates to the `processing_jobs` table.
-  2. **Fallback Pull**: React SPA polls `GET /api/documents/:id/status` every 3 seconds if the SSE connection fails to establish or disconnects.
-* **Rationale**: This provides efficient, near-instantaneous status propagation to the client with minimal connection/server overhead, avoiding the operational complexity of full WebSockets while maintaining a robust polling fallback.
+* **Decision**: ~~Implement a hybrid push/pull progress communication system with per-document SSE endpoints.~~ See ADR-017.
+* **Rationale**: Per-document SSE connections (one connection per document) create an unacceptable number of concurrent connections when a session tracks multiple documents simultaneously. Replaced by a single session-scoped connection.
 
 ## ADR-009: Polyglot ORM Strategy (Prisma for Node.js API, SQLAlchemy for Python Worker)
 * **Status**: Approved
@@ -120,3 +118,23 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 * **Response field mapping**: `uploadUrl` → `url` (the S3 endpoint), `uploadFields` → `fields` (key-value pairs required in the multipart body).
 * **Confirm-upload trigger**: The browser calls `POST /api/documents/:id/confirm-upload` after receiving a `2xx` response from S3 (not a redirect). S3 presigned POST returns `204 No Content` on success when no `success_action_status` is set.
 * **Rationale**: Only presigned POST supports S3-layer policy condition enforcement. This makes the 5 MB size cap and MIME type enforcement operate at the infrastructure level, not just the application level.
+
+## ADR-017: Session-Scoped SSE Architecture
+* **Status**: Approved 🔴 *Overrides ADR-008*
+* **Context**: ADR-008 defined per-document SSE connections (`GET /api/documents/:id/progress`) and a per-document polling fallback (`GET /api/documents/:id/status`). Tracking N documents required N concurrent SSE connections, creating unacceptable connection overhead. A session may have up to 5 concurrent in-flight documents (ADR-013), making the N-connection model architecturally undesirable.
+* **Decision**: Replace all per-document SSE and status endpoints with two session-scoped static endpoints:
+  1. **Primary Push — `GET /api/documents/progress`**: A single SSE connection per user session. On connect, sends a `snapshot` event containing the current status of all session documents as an array. Subsequent `update` events are pushed as individual document status objects triggered by PG NOTIFY.
+  2. **Fallback Pull — `GET /api/documents/status`**: Returns the current status of all session documents as an array. The frontend polls this endpoint every 3 seconds on SSE disconnect. The response schema is identical to the `snapshot` event data, ensuring consistent frontend parsing.
+* **PG NOTIFY Channel**: The trigger fires on a session-scoped channel: `'progress_' || replace(NEW.session_id::text, '-', '_')`. The Express SSE handler `LISTEN`s on `progress_{sessionId}` (hyphens replaced with underscores) rather than the global `progress_channel`. PostgreSQL routes events only to the matching listener — no Express-side session filtering required.
+* **Named SSE Event Types**: The SSE stream uses typed events (standard SSE `event:` field) to distinguish frame semantics:
+  - `event: snapshot` — emitted once on connect; `data` is a JSON array of all session document status objects
+  - `event: update` — emitted on each PG NOTIFY; `data` is a single document status object
+* **Unified Document Status Object**: Both `snapshot` array items and `update` frames use the same shape:
+  ```
+  { documentId, filename, mimeType, fileSizeBytes, status, progressPct,
+    processedChunks, totalChunks, errorCode, errorMessage, createdAt }
+  ```
+  The PG NOTIFY payload contains only `processing_jobs` fields (`document_id`, `status`, `progress_pct`, `processed_chunks`, `total_chunks`, `error_code`, `error_message`). The Express SSE handler enriches NOTIFY payloads with document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) cached from the initial snapshot query on connect.
+* **Removed Endpoints**: `GET /api/documents/:id/progress` and `GET /api/documents/:id/status` are removed entirely. `POST /api/documents/:id/confirm-upload` retains its dynamic `:id` parameter (unaffected).
+* **Migration Required**: The existing `notify_progress_channel()` trigger function (from the initial migration) must be overwritten via a new Prisma migration using `CREATE OR REPLACE FUNCTION`. The new function uses the session-scoped channel name. See Task 105.
+* **Rationale**: One SSE connection per session eliminates the N-connection scaling problem. Session-scoped PG NOTIFY channels provide tenant isolation at the PostgreSQL routing layer with zero Express-side filtering overhead. Named SSE events provide unambiguous semantics for the frontend without shape-inference heuristics.

@@ -33,7 +33,9 @@ Error states: `failed`, `cancelled`, `expired`. See `docs/context/ingestion-flow
 
 ## Progress Tracking
 * **Hybrid model (Option C)**: Aggregate counters (`total_chunks`, `processed_chunks`, `progress_pct`, `checkpoint_index`) on `processing_jobs`. Updated per batch of 50 chunks, not per individual chunk.
-* **PG NOTIFY trigger**: Fires on every `processing_jobs` UPDATE, powering the SSE stream.
+* **PG NOTIFY trigger**: Fires on every `processing_jobs` UPDATE. Channel is session-scoped: `progress_{sessionId}` (hyphens in UUID replaced with underscores). See ADR-017.
+* **SSE endpoint**: `GET /api/documents/progress` — session-scoped; single connection per session. Emits `event: snapshot` on connect (array of all document statuses) and `event: update` per NOTIFY (single document status object).
+* **Polling fallback**: `GET /api/documents/status` — session-scoped; returns array of all document statuses. Polled every 3 seconds on SSE disconnect. Response schema identical to `snapshot` data for consistent parsing.
 
 ## Idempotency & Resumability
 * **Upsert key**: `UNIQUE (document_id, chunk_index)` on `document_chunks` enables `ON CONFLICT DO UPDATE`.
