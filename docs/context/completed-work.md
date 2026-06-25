@@ -117,6 +117,11 @@ This document lists completed tasks and code files created.
   - Programmed concurrency pool limit logic executing up to 5 concurrent uploads in parallel and awaiting subsequent runs recursively.
   - Implemented API confirm-upload route invocation on success of each S3 upload item and rollback logic on failure.
   - Wired `useUpload` hook in `page.tsx` and implemented custom glassmorphic modal dialog to show concurrency limit or quota exceeded errors.
+- **Task F3.3 S3 Direct POST Upload Engine**:
+  - Implemented the direct S3 upload library in [s3-uploader.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/s3-uploader.ts) using native `XMLHttpRequest` to support file upload progress callbacks.
+  - Enforced strict FormData compliance: appended all pre-signed POST fields in the exact order received, and appended the file payload as the final parameter.
+  - Linked the S3 upload module into the concurrent queue hook (`useUpload.ts`) to replace the simulated timer progress loop.
+  - Added full post-upload confirmation integration calling `POST /api/documents/:id/confirm-upload` on successful completion of each file upload and updating document registry statuses.
 
 ## Verification Records
 
@@ -144,3 +149,7 @@ This document lists completed tasks and code files created.
   - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero TypeScript or compiling warnings.
   - Verified concurrency limit checks by selecting 6 files: mock MSW interceptor returns HTTP 429 which triggers the custom glassmorphic error dialog modal on the dashboard page.
   - Verified inline error reporting by selecting a mix of valid and invalid files: valid files successfully update progress to S3 and trigger confirm-upload, while invalid files show their error details inline on the document card list.
+- **Task F3.3 S3 Direct POST Upload Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified upload progress tracking: XMLHttpRequests trigger smooth progress bar updates during simulation.
+  - Verified confirm-upload triggers: network logs assert `POST /api/documents/:id/confirm-upload` is called right after S3 returns 204 No Content.

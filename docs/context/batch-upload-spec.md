@@ -1,12 +1,12 @@
-# Batch Upload Queue & Controller Specification
+# Batch Upload Queue & S3 Ingestion Specification
 
-This document details the architectural design, implementation parameters, and error-mitigation paths of the batch upload engine implemented in Task F3.2.
+This document details the architectural design, implementation parameters, and error-mitigation paths of the batch upload engine implemented in Tasks F3.2 and F3.3.
 
 ---
 
 ## 1. Core Architecture
 
-The frontend uses `useUpload` (a custom React hook) to orchestrate batch uploads. It coordinates with the Zustand store (`localProgressQueue`, `documentRegistry`) and communicates with the backend API to initialize and confirm uploads.
+The frontend uses `useUpload` (a custom React hook) to orchestrate batch uploads. It coordinates with the Zustand store (`localProgressQueue`, `documentRegistry`), interacts with the backend API to initialize uploads, and calls the direct S3 multipart POST engine (`s3-uploader.ts`) before confirming status changes.
 
 ```mermaid
 graph TD
@@ -23,7 +23,7 @@ graph TD
     
     %% Parallel Executions
     Queue -->|Throttled Task Pool| Pool{Concurrency Pool Limit}
-    Pool -->|Active Task <= 5| Upload[Mock / S3 Upload Engine]
+    Pool -->|Active Task <= 5| Upload[s3-uploader: XHR Direct Upload]
     Pool -->|Wait Queue| Queue
     
     Upload -->|204 No Content| Confirm[POST /api/documents/:id/confirm-upload]
@@ -49,20 +49,35 @@ When files are passed to `useUpload`, they undergo two phases of classification 
 
 ---
 
-## 3. Concurrency Pool Controller
+## 3. S3 Direct Upload Engine (`s3-uploader.ts`)
+
+Direct file transfer to S3 uses a custom XMLHttpRequst module rather than standard `fetch` to enable native upload progress tracking:
+
+- **FormData Order Compliance**:
+  AWS S3 Presigned POST requires that all policy fields (e.g., `key`, `policy`, `signature`, `x-amz-*`) are appended to the `FormData` body *exactly in the order received*, and the raw `file` payload itself must be appended *last*. Placing the file field before policy fields causes S3 to reject the signature, throwing `AccessDenied` (403). The engine programmatically ensures this ordering by iterating over `uploadFields` keys before appending the file.
+  
+- **XMLHttpRequest Progress Tracking**:
+  By binding to `xhr.upload.onprogress`, the engine listens to native upload progress callbacks, computing the percentage complete and calling `onProgress(percent)` which updates the Zustand store (`updateLocalProgressPct`).
+
+- **Confirmation Handback**:
+  Upon successful completion (S3 returns `204 No Content` for presigned POST requests), the hook invokes `POST /api/documents/:id/confirm-upload` to transition the status of the document from `pending_upload` to `uploaded`. If this succeeds, the local queue item is cleared, allowing the backend SSE pipeline to govern subsequent processing status broadcasts.
+
+---
+
+## 4. Concurrency Pool Controller
 
 To prevent resource exhaustion and browser rate-limiting, uploads are throttled to a maximum of 5 concurrent operations:
 
 - **Asynchronous Queue Loop**:
   - The orchestrator maintains an array of `tasks` (ready files) and an `activeCount` counter.
   - Up to 5 concurrent promises are kicked off.
-  - Each task executes, simulating upload progress and invoking `confirm-upload` on completion.
+  - Each task executes, uploading files to S3 and invoking `confirm-upload` on completion.
   - When a task resolves, it decrements `activeCount` and recursively triggers the next available task in the queue, ensuring the promise pool is always saturated at exactly 5 (or fewer) active uploads.
   - By using `await runNext()`, the pool is guaranteed to resolve the batch promise only when all tasks are complete.
 
 ---
 
-## 4. UI Elements & Integration
+## 5. UI Elements & Integration
 
 ### Interactive Upload Zone
 - Monitored by the Zustand store. If the number of active uploads (local progress items + non-terminal backend items) is $\ge 5$, the zone locks itself, disabling clicks/drops and showing a warning banner.

@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useToast } from '../components/ui/toast';
 import { apiClient } from '../lib/api-client';
 import { type BatchUploadInitResponse, type BatchUploadInitResultReady, type ConfirmUploadResponse } from '../types/api';
+import { uploadToS3 } from '../lib/s3-uploader';
 
 export function useUpload() {
   const [uploading, setUploading] = useState(false);
@@ -88,11 +89,15 @@ export function useUpload() {
             status: 'uploading',
           });
 
-          // Simulate progress updates for Task F3.2 (will be replaced by XHR/fetch in F3.3)
-          for (let pct = 10; pct <= 100; pct += 10) {
-            await new Promise((resolve) => setTimeout(resolve, 150));
-            updateLocalProgressPct(result.documentId, pct);
-          }
+          // Call native S3 multipart POST upload engine
+          await uploadToS3({
+            uploadUrl: result.uploadUrl,
+            uploadFields: result.uploadFields,
+            file: file,
+            onProgress: (pct) => {
+              updateLocalProgressPct(result.documentId, pct);
+            },
+          });
 
           setLocalProgress(result.documentId, {
             filename: result.filename,

@@ -45,7 +45,7 @@
 ## Frontend Phase 3: Batch Upload & S3 Ingestion Flow
 * [x] **Task F3.1**: Drag-and-Drop Picker UI ── *Complete*
 * [x] **Task F3.2**: Batch Initialization & Queue Controller Hook ── *Complete*
-* [ ] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── *Incomplete*
+* [x] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── *Complete*
 
 ## Frontend Phase 4: Real-Time Processing & Progress Visualizer
 * [ ] **Task F4.1**: SSE Client & Polling Fallback Hook ── *Incomplete*
