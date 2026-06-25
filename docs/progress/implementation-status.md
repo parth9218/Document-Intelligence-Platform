@@ -32,14 +32,14 @@
 ---
 
 ## Frontend Phase 1: Foundation, Tailwind & Hybrid Mocking
-* [ ] **Task F1.1**: Next.js Workspace Scaffolding & Core Configurations ── *Incomplete*
-* [ ] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── *Incomplete*
-* [ ] **Task F1.3**: Reusable Tailwind UI & Theme System ── *Incomplete*
+* [x] **Task F1.1**: Next.js Workspace Scaffolding & Core Configurations ── *Complete*
+* [x] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── *Complete*
+* [x] **Task F1.3**: Reusable Tailwind UI & Theme System ── *Complete*
 
 ## Frontend Phase 2: Application Shell, Session & API Layer
-* [ ] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Incomplete*
-* [ ] **Task F2.2**: Session Verification & Auth Shell ── *Incomplete*
-* [ ] **Task F2.3**: Dashboard Homepage & Empty States ── *Incomplete*
+* [x] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Complete*
+* [x] **Task F2.2**: Session Verification & Auth Shell ── *Complete*
+* [x] **Task F2.3**: Dashboard Homepage & Empty States ── *Complete*
 
 ## Frontend Phase 3: Batch Upload & S3 Ingestion Flow
 * [ ] **Task F3.1**: Drag-and-Drop Picker UI ── *Incomplete*
