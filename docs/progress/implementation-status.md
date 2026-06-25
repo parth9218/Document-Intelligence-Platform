@@ -43,7 +43,7 @@
 * [x] **Task F2.3**: Dashboard Homepage & Empty States ── *Complete*
 
 ## Frontend Phase 3: Batch Upload & S3 Ingestion Flow
-* [ ] **Task F3.1**: Drag-and-Drop Picker UI ── *Incomplete*
+* [x] **Task F3.1**: Drag-and-Drop Picker UI ── *Complete*
 * [ ] **Task F3.2**: Batch Initialization & Queue Controller Hook ── *Incomplete*
 * [ ] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── *Incomplete*
 

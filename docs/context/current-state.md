@@ -16,7 +16,8 @@ This document records the exact state of code modules and active tasks. Update i
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
 - **Backend Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, 105, 106, and 107 are complete. Next is Task 104 (SQS Consumer Loop).
 - **Frontend Phase 1 (Foundation)**: Complete. Tasks F1.1, F1.2, and F1.3 are complete.
-- **Frontend Phase 2 (Application Shell & API)**: Complete. Tasks F2.1, F2.2, and F2.3 are complete. Milestone F2 is active. Next is Frontend Phase 3 (Task F3.1).
+- **Frontend Phase 2 (Application Shell & API)**: Complete. Tasks F2.1, F2.2, and F2.3 are complete.
+- **Frontend Phase 3 (Batch Upload & Ingestion)**: In Progress. Task F3.1 (Drag-and-Drop Picker UI) is complete. Next is Task F3.2 (Batch Initialization & Queue Hook).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.

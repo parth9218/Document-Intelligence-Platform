@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { EmptyState } from '@/components/documents/empty-state';
+import { UploadZone } from '@/components/upload/upload-zone';
 import { Upload, HardDrive, Cpu, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Home() {
@@ -141,23 +142,8 @@ export default function Home() {
 
         {/* Right Column: Upload Zone and Limits (1 col on lg screens) */}
         <div className="flex flex-col space-y-6">
-          {/* Upload Placeholder Zone */}
-          <div className="glass-panel p-6 rounded-2xl flex flex-col space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted select-none">
-              Upload Files
-            </h2>
-            <div className="border border-dashed border-card-border/60 hover:border-cyan-500/30 transition-all rounded-xl p-8 flex flex-col items-center justify-center space-y-3 cursor-pointer bg-card-border/20 hover:bg-card-border/30 group">
-              <div className="p-3 rounded-full bg-card-border/30 dark:bg-slate-900/60 border border-card-border/30 group-hover:scale-105 transition-all text-muted group-hover:text-cyan-600 dark:group-hover:text-cyan-400">
-                <Upload className="w-6 h-6" />
-              </div>
-              <div className="text-center">
-                <span className="text-sm font-semibold text-foreground">
-                  Select documents to upload
-                </span>
-                <p className="text-xs text-muted mt-1.5">PDF or Plain Text (max 5MB)</p>
-              </div>
-            </div>
-          </div>
+          {/* Interactive Upload Zone */}
+          <UploadZone />
 
           {/* Session Limit Tracker Panel */}
           <div className="glass-panel p-6 rounded-2xl flex flex-col space-y-5">
