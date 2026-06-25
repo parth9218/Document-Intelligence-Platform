@@ -4,9 +4,11 @@ import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { EmptyState } from '@/components/documents/empty-state';
 import { UploadZone } from '@/components/upload/upload-zone';
+import { useUpload } from '@/hooks/useUpload';
 import { Upload, HardDrive, Cpu, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Home() {
+  const { uploadFiles, error: uploadError, clearError } = useUpload();
   const documentRegistry = useAppStore((state) => state.documentRegistry);
   const localProgressQueue = useAppStore((state) => state.localProgressQueue);
   const clearRegistry = useAppStore((state) => state.clearDocumentRegistry);
@@ -104,7 +106,14 @@ export default function Home() {
                       </div>
                       <div className="overflow-hidden">
                         <p className="text-sm font-semibold text-foreground truncate">{doc.filename}</p>
-                        <p className="text-xs text-muted">{formatSize(doc.fileSizeBytes)}</p>
+                        {doc.status === 'failed' ? (
+                          <p className="text-xs text-rose-500 font-medium flex items-center gap-1 mt-0.5">
+                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>{doc.errorMessage || doc.errorCode || 'Upload failed'}</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted">{formatSize(doc.fileSizeBytes)}</p>
+                        )}
                       </div>
                     </div>
                     
@@ -143,7 +152,7 @@ export default function Home() {
         {/* Right Column: Upload Zone and Limits (1 col on lg screens) */}
         <div className="flex flex-col space-y-6">
           {/* Interactive Upload Zone */}
-          <UploadZone />
+          <UploadZone onFilesSelected={uploadFiles} />
 
           {/* Session Limit Tracker Panel */}
           <div className="glass-panel p-6 rounded-2xl flex flex-col space-y-5">
@@ -199,6 +208,29 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Concurrency / Quota Error Dialog Modal */}
+      {uploadError && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className="glass-panel p-6 rounded-2xl max-w-md w-full mx-4 border border-red-500/30 bg-red-950/20 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-red-500">
+              <AlertCircle className="w-6 h-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold tracking-tight">Upload Rejected</h3>
+            </div>
+            <p className="text-sm text-muted leading-relaxed">
+              {uploadError}
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={clearError}
+                className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 text-sm font-semibold tracking-wide transition-all cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

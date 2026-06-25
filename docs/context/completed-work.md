@@ -110,6 +110,13 @@ This document lists completed tasks and code files created.
   - Programmed local pre-flight checks validating file formats (only PDF and TXT allowed) and file sizes (1B - 5MB limit) before selection confirmation, utilizing the native Toast alert framework for direct warning notifications.
   - Implemented Zustand concurrency locking to automatically disable upload selection triggers, dim visual opacity, set `cursor-not-allowed` styles, and display a descriptive warning banner when the active processing queue equals or exceeds 5 items.
   - Integrated `UploadZone` within the dashboard homepage [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) in place of the static upload placeholder markup.
+- **Task F3.2 Batch Initialization & Queue Controller**:
+  - Implemented queue controller hook `useUpload.ts` and integrated it with `<UploadZone />` on the main dashboard (`page.tsx`).
+  - Configured batch initialization which groups all selected files in a single API call to `POST /api/documents`.
+  - Implemented client-side queue classification: direct rejected files with status `rejected` (along with their backend-supplied error code and message) to the document registry; ready files are queued in `localProgressQueue` for parallel uploads.
+  - Programmed concurrency pool limit logic executing up to 5 concurrent uploads in parallel and awaiting subsequent runs recursively.
+  - Implemented API confirm-upload route invocation on success of each S3 upload item and rollback logic on failure.
+  - Wired `useUpload` hook in `page.tsx` and implemented custom glassmorphic modal dialog to show concurrency limit or quota exceeded errors.
 
 ## Verification Records
 
@@ -133,3 +140,7 @@ This document lists completed tasks and code files created.
 - **Production UI Security & Navigation Isolation Verification**: Verified that building the frontend application under `process.env.NODE_ENV === 'production'` dynamically strips the "Sandbox UI" tab and the "Swagger API Docs" links from the sidebar navigation. Also verified that client-side routers correctly return inline 404 views when accessing `/sandbox` directly in production, avoiding any pre-rendering errors.
 - **DevToolbar Theme-Aware Readability Verification**: Refactored the `DevToolbar` to utilize solid theme-aware background colors (`bg-card` and `border-card-border`) and HSL-mapped preset/action indicators, ensuring readability and preventing background page content from bleeding through and overlapping the controls.
 - **Task F3.1 Upload Picker Verification**: Verified clean build bundles (`npm run build:local`), ran drop simulation tests, and verified that dropping non-compliant formats (like PNG) or oversized files (like >5MB mock files) triggers native Toast error warnings immediately while valid files successfully trigger uploader selected handlers.
+- **Task F3.2 Concurrency & Hook Integration Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero TypeScript or compiling warnings.
+  - Verified concurrency limit checks by selecting 6 files: mock MSW interceptor returns HTTP 429 which triggers the custom glassmorphic error dialog modal on the dashboard page.
+  - Verified inline error reporting by selecting a mix of valid and invalid files: valid files successfully update progress to S3 and trigger confirm-upload, while invalid files show their error details inline on the document card list.
