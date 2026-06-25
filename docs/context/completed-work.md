@@ -93,6 +93,13 @@ This document lists completed tasks and code files created.
   - Built [app-shell.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/app-shell.tsx) to tie the layout widgets together, using dynamic `margin-left` transitions to prevent layout overlapping.
   - Configured the main App Router layout [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx) to wrap core children with the new layout shell.
   - Integrated custom AI generated RAG neural-document logo image asset (`/public/logo.png`) in both expanded and collapsed brand header layouts.
+- **Frontend Dashboard Homepage & Empty States (Task F2.3)**:
+  - Created the [EmptyState](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/empty-state.tsx) onboarding component containing guidance cards for session parameters (MIME, sizes, concurrency, and cumulative limits).
+  - Programmed the main index view [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) to query the Zustand registry and render onboarding cards when empty, or dynamic upload and processing feed lists when documents are present.
+  - Built a session limit tracker widget in `page.tsx` displaying live progress indicators for storage quota (MBs used vs 50 MB) and active uploads slots (used vs 5 max).
+  - Refactored text colors and sizes across the dashboard homepage, sidebar, and onboarding views to adhere to accessibility guidelines (W3C contrast minimums). Replaced all static slate colors (e.g., `text-slate-100`, `text-slate-200`) with dynamic HSL-mapped semantic classes (`text-foreground`, `text-muted`).
+  - Scaled up metadata and label sizes from `text-[10px]` to standard accessible `text-xs` or `text-sm` values across all dashboard modules.
+  - Resolved alignment issues on the "Welcome to the Document Intelligence Hub" card by setting start-alignment (`items-start` and `text-left`) to match adjacent page layout elements symmetrically, and completely eliminated the bouncing/floating visual animations.
 
 ## Verification Records
 
@@ -109,5 +116,5 @@ This document lists completed tasks and code files created.
 - **Environment Configuration & Build Isolation Verification**: Verified that building the project loader dynamically reads `.env.production` during execution and correctly injects compile-time blockages, routing `/sandbox` hits to the system 404 page in production.
 - **Task F2.1 Integration & Compilation Verification**: Verified clean linting checks (`npm run lint`) and flawless production Next.js builds (`npm run build`) incorporating the newly defined types, custom errors, uploader client logic, and interactive DevToolbar in the frontend application.
 - **Task F2.2 Layout & Verification**: Verified clean linting checks (`npm run lint`) and flawless production compilation (`npm run build`) incorporating the new `useAuth` hook, Zustand store integration, collapsible sidebar (with morphing logo-toggle buttons), header console, and margin transitions in the App Shell frame.
-
-
+- **Task F2.3 Dashboard & Onboarding Verification**: Verified clean linting checks (`npm run lint`) and flawless production compilation (`npm run build`) incorporating the new `EmptyState` component, session quota indicators, dynamic upload feed queues, and responsive column grid folding on the dashboard homepage.
+- **Accessibility & UI Refinement Verification**: Verified clean linting checks and successful optimized Next.js builds after adjusting font contrast and sizes across light and dark theme modes, aligning onboarding elements symmetrically, and removing floating/bouncing animations.

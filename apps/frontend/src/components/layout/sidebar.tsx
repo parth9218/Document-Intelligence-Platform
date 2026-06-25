@@ -64,7 +64,7 @@ export function Sidebar() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-sm font-bold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-indigo-400 font-sans whitespace-nowrap">
+              <span className="text-sm font-bold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-indigo-600 dark:from-cyan-400 dark:to-indigo-400 font-sans whitespace-nowrap">
                 DOCINTEL
               </span>
             </div>
@@ -92,14 +92,14 @@ export function Sidebar() {
                 sidebarCollapsed ? 'justify-center' : 'space-x-3'
               } ${
                 isActive
-                  ? 'bg-primary/10 text-cyan-400 border border-primary/20 shadow-sm'
+                  ? 'bg-primary/10 text-cyan-600 dark:text-cyan-400 border border-primary/20 shadow-sm'
                   : 'text-muted hover:text-foreground hover:bg-card-border/20 border border-transparent'
               }`}
             >
-              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-cyan-400' : 'text-muted group-hover:text-foreground'}`} />
+              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-muted group-hover:text-foreground'}`} />
               {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
               {sidebarCollapsed && (
-                <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-[11px] px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
+                <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-xs px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
                   {item.name}
                 </div>
               )}
@@ -119,7 +119,7 @@ export function Sidebar() {
           <ExternalLink className="w-5 h-5 flex-shrink-0 text-muted group-hover:text-foreground" />
           {!sidebarCollapsed && <span className="whitespace-nowrap">Swagger API Docs</span>}
           {sidebarCollapsed && (
-            <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-[11px] px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
+            <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-xs px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
               Swagger API Docs
             </div>
           )}

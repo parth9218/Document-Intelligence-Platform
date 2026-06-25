@@ -137,7 +137,7 @@ export function DevToolbar() {
                 <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800">
                   <button
                     onClick={() => handleModeChange(endpoint, 'api')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 rounded text-xs font-medium transition-all cursor-pointer ${
                       config[endpoint] === 'api'
                         ? 'bg-emerald-500 text-white shadow-sm'
                         : 'text-slate-500 hover:text-slate-300'
@@ -147,7 +147,7 @@ export function DevToolbar() {
                   </button>
                   <button
                     onClick={() => handleModeChange(endpoint, 'mock')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 rounded text-xs font-medium transition-all cursor-pointer ${
                       config[endpoint] === 'mock'
                         ? 'bg-purple-500 text-white shadow-sm'
                         : 'text-slate-500 hover:text-slate-300'
@@ -161,7 +161,7 @@ export function DevToolbar() {
           </div>
 
           {/* Footer Controls */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[10px]">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
             <button
               onClick={() => window.location.reload()}
               className="flex items-center space-x-1 px-2.5 py-1.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-900/40 transition-colors cursor-pointer"

@@ -39,17 +39,17 @@ export function Header() {
       <div className="flex items-center space-x-4">
         {/* Session Auth Status */}
         <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded-lg bg-background/50 border border-card-border/30 text-xs shadow-inner">
-          <Shield className="w-3.5 h-3.5 text-cyan-400" />
+          <Shield className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
           {loading ? (
-            <div className="flex items-center space-x-1.5 text-slate-400">
+            <div className="flex items-center space-x-1.5 text-muted">
               <RefreshCw className="w-3 h-3 animate-spin" />
               <span>Checking token...</span>
             </div>
           ) : error ? (
-            <span className="text-rose-400 font-medium font-sans">Error: Session Failed</span>
+            <span className="text-rose-600 dark:text-rose-400 font-medium font-sans">Error: Session Failed</span>
           ) : activeSession ? (
             <div className="flex items-center space-x-2">
-              <span className="font-mono text-cyan-400 font-semibold tracking-wide">
+              <span className="font-mono text-cyan-600 dark:text-cyan-400 font-semibold tracking-wide">
                 {truncateUuid(activeSession.id)}
               </span>
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
