@@ -38,7 +38,7 @@
 
 ## Frontend Phase 2: Application Shell, Session & API Layer
 * [x] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Complete*
-* [ ] **Task F2.2**: Session Verification & Auth Shell ── *Incomplete*
+* [x] **Task F2.2**: Session Verification & Auth Shell ── *Complete*
 * [ ] **Task F2.3**: Dashboard Homepage & Empty States ── *Incomplete*
 
 ## Frontend Phase 3: Batch Upload & S3 Ingestion Flow

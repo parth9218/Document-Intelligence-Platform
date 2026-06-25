@@ -86,6 +86,13 @@ This document lists completed tasks and code files created.
   - Configured [api-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/api-client.ts) to forward session cookies (`credentials: 'include'`) and parse custom error classes (`UnauthorizedError`, `StorageQuotaExceededError`, `RateLimitExceededError`, `ConcurrencyLimitExceededError`) inheriting from `ApiError`.
   - Built a floating, dev-only [DevToolbar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/dev-toolbar.tsx) to inspect and switch endpoints dynamically between `'api'` and `'mock'` routing modes.
   - Integrated `DevToolbar` within the global layout wrapper [providers.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/providers.tsx).
+- **Frontend Session Verification & Auth Shell (Task F2.2)**:
+  - Formulated the [useAuth](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useAuth.ts) session hook to query active session details, handle 401 Unauthorized status codes, trigger auto-creation by hitting a protected endpoint, and sync result attributes with Zustand.
+  - Built the global [useAppStore](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/store/useAppStore.ts) using Zustand to maintain current session, document registry state, and UI toggles.
+  - Implemented the layout widgets [sidebar.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/sidebar.tsx) (collapsible side navigation panel with CSS easing transitions) and [header.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/header.tsx) (displays truncated session UUID and houses the light/dark theme switcher).
+  - Built [app-shell.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/app-shell.tsx) to tie the layout widgets together, using dynamic `margin-left` transitions to prevent layout overlapping.
+  - Configured the main App Router layout [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx) to wrap core children with the new layout shell.
+  - Integrated custom AI generated RAG neural-document logo image asset (`/public/logo.png`) in both expanded and collapsed brand header layouts.
 
 ## Verification Records
 
@@ -101,4 +108,6 @@ This document lists completed tasks and code files created.
 - **Tailwind UI & Theme System Compilation Verification**: Verified clean build output with zero warnings, validating exact responsive rendering hooks and theme transitions.
 - **Environment Configuration & Build Isolation Verification**: Verified that building the project loader dynamically reads `.env.production` during execution and correctly injects compile-time blockages, routing `/sandbox` hits to the system 404 page in production.
 - **Task F2.1 Integration & Compilation Verification**: Verified clean linting checks (`npm run lint`) and flawless production Next.js builds (`npm run build`) incorporating the newly defined types, custom errors, uploader client logic, and interactive DevToolbar in the frontend application.
+- **Task F2.2 Layout & Verification**: Verified clean linting checks (`npm run lint`) and flawless production compilation (`npm run build`) incorporating the new `useAuth` hook, Zustand store integration, collapsible sidebar (with morphing logo-toggle buttons), header console, and margin transitions in the App Shell frame.
+
 

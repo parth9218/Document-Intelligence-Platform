@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useToast } from '@/components/ui/toast';
-import { Sun, Moon, Sparkles, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { Sparkles, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
 export default function SandboxPage() {
@@ -13,19 +13,8 @@ export default function SandboxPage() {
   if (process.env.NEXT_ENV === 'production') {
     notFound();
   }
-
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [progressVal, setProgressVal] = useState<number>(45);
   const { toast } = useToast();
-
-  // Apply theme to HTML node for styling updates
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300 p-8 flex flex-col items-center">
@@ -37,25 +26,6 @@ export default function SandboxPage() {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">UI Component Sandbox</h1>
             <p className="text-xs text-muted">Test liquid-glass components, theme changes, and toasts</p>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <span className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Current Theme: {theme}
-          </span>
-          <Button variant="glass" size="sm" onClick={toggleTheme} className="flex items-center space-x-2">
-            {theme === 'dark' ? (
-              <>
-                <Sun className="h-4 w-4 text-amber-400" />
-                <span>Switch to Light</span>
-              </>
-            ) : (
-              <>
-                <Moon className="h-4 w-4 text-indigo-400" />
-                <span>Switch to Dark</span>
-              </>
-            )}
-          </Button>
         </div>
       </header>
 

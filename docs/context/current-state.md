@@ -16,7 +16,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
 - **Backend Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, 105, and 106 are complete. Next is Task 104 (SQS Consumer Loop).
 - **Frontend Phase 1 (Foundation)**: Complete. Tasks F1.1, F1.2, and F1.3 are complete.
-- **Frontend Phase 2 (Application Shell & API)**: In Progress. Task F2.1 is complete. Next is Task F2.2 (Session Verification & Auth Shell).
+- **Frontend Phase 2 (Application Shell & API)**: In Progress. Tasks F2.1 and F2.2 are complete. Next is Task F2.3 (Dashboard Homepage & Empty States).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.
