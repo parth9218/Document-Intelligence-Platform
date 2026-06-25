@@ -1,4 +1,5 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
+import cors, { CorsOptions } from 'cors';
 import { getSession, sessionMiddleware } from './middlewares/session';
 import { sessionController } from './controllers/session.controller';
 import documentsRouter from './routes/documents.route';
@@ -8,6 +9,51 @@ import { swaggerSpec } from './config/swagger';
 import { config } from './config';
 
 const app = express();
+
+// ---------------------------------------------------------------------------
+// CORS — must be registered before all other middleware so that preflight
+// OPTIONS requests are resolved immediately (ADR-018).
+// ---------------------------------------------------------------------------
+const corsOptions: CorsOptions = {
+  // Allow credentials (session cookies) to be sent cross-origin.
+  credentials: true,
+
+  // Supported HTTP methods including OPTIONS for preflight.
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+
+  // Explicit allowed headers for credentialed requests.
+  allowedHeaders: ['Content-Type', 'Cookie', 'Authorization'],
+
+  // Cache preflight response for 24 hours to reduce network overhead.
+  maxAge: 86400,
+
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
+    // Requests with no Origin header (e.g. same-origin, curl, server-to-server)
+    // are always allowed — no cross-origin restriction applies.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (config.nodeEnv === 'production') {
+      // Production: strict whitelist — only the configured frontend origin is allowed.
+      if (origin === config.cors.allowedOrigin) {
+        callback(null, origin);
+      } else {
+        callback(new Error(`CORS: origin '${origin}' is not allowed`));
+      }
+    } else {
+      // Development / test: dynamically reflect the request Origin so all local
+      // ports work without manual configuration. Wildcard '*' cannot be used
+      // when credentials are enabled.
+      callback(null, origin);
+    }
+  },
+};
+
+app.use(cors(corsOptions));
+
+// Respond immediately to preflight OPTIONS requests after CORS headers are set.
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 

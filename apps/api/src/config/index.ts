@@ -49,6 +49,12 @@ export const config = {
     // 24 hours sliding window expiration
     maxAgeMs: 24 * 60 * 60 * 1000,
   },
+
+  cors: {
+    // Production: the exact frontend origin allowed to make credentialed requests.
+    // In development/test the request Origin is reflected dynamically — this value is ignored.
+    allowedOrigin: process.env.CORS_ALLOWED_ORIGIN || '',
+  },
 };
 
 // Simple configuration validation
@@ -58,5 +64,8 @@ if (config.nodeEnv === 'production') {
   }
   if (config.sessionSecret === 'dev-session-secret-key-change-in-production-12345') {
     console.warn('[Warning] Running in production with default SESSION_SECRET');
+  }
+  if (!config.cors.allowedOrigin) {
+    console.warn('[Warning] Running in production without CORS_ALLOWED_ORIGIN — all cross-origin requests will be blocked');
   }
 }

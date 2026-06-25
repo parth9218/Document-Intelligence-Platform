@@ -139,6 +139,17 @@ This document lists completed tasks and code files created.
   - Implemented a 3-second fallback polling cycle calling `GET /api/documents/status` if the SSE connection is lost (offline mode / network blocks) and automatically tearing it down when the SSE connection successfully re-establishes (`onopen`).
   - Added smart lifecycle management: EventSource connections are closed and polling loops are terminated once all active document status records are in terminal states (`completed`, `failed`, `expired`).
   - Wired `useIngestion()` hook into `page.tsx` to automatically trigger real-time updates when the dashboard is loaded.
+- **Express API CORS Configuration (Task 108 / ADR-018)**:
+  - Installed the `cors` npm package and `@types/cors` dev dependency into the Express API project.
+  - Extended [config/index.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/index.ts) with a `cors.allowedOrigin` field sourced from the `CORS_ALLOWED_ORIGIN` environment variable, and added a production startup warning when this variable is absent.
+  - Registered a globally-scoped `cors` middleware in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts) as the **first** middleware so that preflight `OPTIONS` requests are resolved before the session parser or any route handler executes.
+  - Implemented environment-driven origin policy inside the `CorsOptions.origin` callback:
+    - **Development / test**: dynamically reflects the request `Origin` header — all local ports are accepted without manual configuration.
+    - **Production**: strictly compares the request `Origin` against `config.cors.allowedOrigin`; non-matching origins receive no CORS headers, causing browsers to block the request.
+  - Wildcard `*` is never returned in `Access-Control-Allow-Origin` (enforced because `credentials: true` is always set).
+  - Registered a dedicated `app.options('*', cors(corsOptions))` handler to ensure preflight responses are served immediately with `Access-Control-Max-Age: 86400` (24 hours), reducing browser preflight round-trips.
+  - Written 10-case integration test suite [cors.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/cors.test.ts) covering: development dynamic-origin reflection, credentials header always present, wildcard-never guarantee, preflight `OPTIONS` response shape, allowed-methods listing, no-Origin pass-through, production whitelist accept, production origin block, production wildcard-never, production preflight block.
+
 
 ## Verification Records
 
