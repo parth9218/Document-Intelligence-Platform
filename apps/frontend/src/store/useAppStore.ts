@@ -81,6 +81,11 @@ export const useAppStore = create<AppState>((set) => ({
   // UI
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-  themeMode: 'dark',
-  setThemeMode: (mode) => set({ themeMode: mode }),
+  themeMode: 'system',
+  setThemeMode: (mode) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme-preference', mode);
+    }
+    set({ themeMode: mode });
+  },
 }));

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore, type ThemeMode } from '@/store/useAppStore';
 import { useAuth } from '@/hooks/useAuth';
 import { Sun, Moon, Monitor, Shield, RefreshCw } from 'lucide-react';
 
@@ -10,12 +10,32 @@ export function Header() {
   const themeMode = useAppStore((state) => state.themeMode);
   const setThemeMode = useAppStore((state) => state.setThemeMode);
 
-  // Sync theme to root html element
+  // Load initial theme from localStorage on mount (hydration safe)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('theme-preference') as ThemeMode | null;
+      if (stored) {
+        setThemeMode(stored);
+      }
+    }
+  }, [setThemeMode]);
+
+  // Sync theme to root html element and listen to system theme changes dynamically
   useEffect(() => {
     const root = window.document.documentElement;
     if (themeMode === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      root.setAttribute('data-theme', systemTheme);
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      
+      const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+        const activeTheme = e.matches ? 'dark' : 'light';
+        root.setAttribute('data-theme', activeTheme);
+      };
+      
+      handleChange(mediaQuery);
+      mediaQuery.addEventListener('change', handleChange);
+      return () => {
+        mediaQuery.removeEventListener('change', handleChange);
+      };
     } else {
       root.setAttribute('data-theme', themeMode);
     }

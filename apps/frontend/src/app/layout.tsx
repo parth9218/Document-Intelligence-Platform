@@ -27,9 +27,24 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="dark" // Sleek dark mode by default
       className={`${outfit.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const preference = localStorage.getItem('theme-preference') || 'system';
+                let theme = preference;
+                if (preference === 'system') {
+                  theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full bg-background text-foreground flex flex-col font-sans">
         <Providers>
           <AppShell>{children}</AppShell>
