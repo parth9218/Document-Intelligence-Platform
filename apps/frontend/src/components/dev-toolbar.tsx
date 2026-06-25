@@ -81,7 +81,7 @@ export function DevToolbar() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center justify-center p-3 rounded-full bg-slate-900/90 border border-slate-700/50 text-cyan-400 hover:text-cyan-300 hover:scale-105 transition-all shadow-lg backdrop-blur-md cursor-pointer"
+          className="flex items-center justify-center p-3 rounded-full bg-card border border-card-border text-cyan-600 dark:text-cyan-400 hover:scale-105 transition-all shadow-lg cursor-pointer"
           title="Developer Routing Controls"
         >
           <Database className="w-5 h-5 animate-pulse" />
@@ -90,18 +90,18 @@ export function DevToolbar() {
 
       {/* Expanded Control Panel */}
       {isOpen && (
-        <div className="w-80 p-4 rounded-xl bg-slate-950/95 border border-cyan-500/30 text-white shadow-2xl backdrop-blur-lg flex flex-col space-y-4">
+        <div className="w-80 p-4 rounded-xl bg-card border border-card-border/80 text-foreground shadow-2xl flex flex-col space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="flex items-center justify-between border-b border-card-border/40 pb-2">
             <div className="flex items-center space-x-2">
-              <Terminal className="w-4 h-4 text-cyan-400" />
-              <span className="text-sm font-semibold tracking-wide uppercase text-slate-200">
+              <Terminal className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+              <span className="text-sm font-semibold tracking-wide uppercase text-foreground">
                 Gateway Router
               </span>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="text-muted hover:text-foreground transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -109,17 +109,17 @@ export function DevToolbar() {
 
           {/* Quick Presets */}
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Presets:</span>
+            <span className="text-muted">Presets:</span>
             <div className="flex space-x-2">
               <button
                 onClick={() => handleSetAll('api')}
-                className="px-2 py-1 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-900/40 transition-colors cursor-pointer"
+                className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25 transition-colors cursor-pointer"
               >
                 All API
               </button>
               <button
                 onClick={() => handleSetAll('mock')}
-                className="px-2 py-1 rounded bg-purple-950/40 text-purple-400 border border-purple-500/20 hover:bg-purple-900/40 transition-colors cursor-pointer"
+                className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors cursor-pointer"
               >
                 All Mock
               </button>
@@ -131,16 +131,16 @@ export function DevToolbar() {
             {(Object.keys(config) as Array<keyof ApiRoutingConfig>).map((endpoint) => (
               <div
                 key={endpoint}
-                className="flex items-center justify-between bg-slate-900/40 p-2 rounded border border-slate-800/60"
+                className="flex items-center justify-between bg-background/40 p-2 rounded border border-card-border/30"
               >
-                <span className="text-xs font-mono text-slate-300 capitalize">{endpoint}</span>
-                <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800">
+                <span className="text-xs font-mono text-muted capitalize">{endpoint}</span>
+                <div className="flex bg-background/80 rounded p-0.5 border border-card-border/40">
                   <button
                     onClick={() => handleModeChange(endpoint, 'api')}
                     className={`px-2 py-0.5 rounded text-xs font-medium transition-all cursor-pointer ${
                       config[endpoint] === 'api'
                         ? 'bg-emerald-500 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-300'
+                        : 'text-muted hover:text-foreground'
                     }`}
                   >
                     API
@@ -149,8 +149,8 @@ export function DevToolbar() {
                     onClick={() => handleModeChange(endpoint, 'mock')}
                     className={`px-2 py-0.5 rounded text-xs font-medium transition-all cursor-pointer ${
                       config[endpoint] === 'mock'
-                        ? 'bg-purple-500 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-300'
+                        ? 'bg-indigo-500 text-white shadow-sm'
+                        : 'text-muted hover:text-foreground'
                     }`}
                   >
                     MOCK
@@ -161,10 +161,10 @@ export function DevToolbar() {
           </div>
 
           {/* Footer Controls */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+          <div className="flex items-center justify-between pt-2 border-t border-card-border/40 text-xs">
             <button
               onClick={() => window.location.reload()}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-900/40 transition-colors cursor-pointer"
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/25 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3 h-3" />
               <span>Apply & Reload</span>
@@ -172,7 +172,7 @@ export function DevToolbar() {
             {hasChanges() && (
               <button
                 onClick={handleReset}
-                className="px-2.5 py-1.5 rounded bg-rose-950/40 text-rose-400 border border-rose-500/20 hover:bg-rose-900/40 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/25 transition-colors cursor-pointer"
               >
                 Reset Default
               </button>

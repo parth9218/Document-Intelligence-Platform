@@ -6,12 +6,15 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useToast } from '@/components/ui/toast';
 import { Sparkles, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
-import { notFound } from 'next/navigation';
-
 export default function SandboxPage() {
   // Lock sandbox access to development environments only (404 in production)
   if (process.env.NODE_ENV === 'production') {
-    notFound();
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-center font-sans">
+        <h1 className="text-4xl font-extrabold text-foreground">404</h1>
+        <p className="text-muted mt-2 text-sm">This page could not be found.</p>
+      </div>
+    );
   }
   const [progressVal, setProgressVal] = useState<number>(45);
   const { toast } = useToast();
