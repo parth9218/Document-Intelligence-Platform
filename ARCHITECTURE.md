@@ -3,7 +3,7 @@
 This file details the structural specifications of the platform, outlining boundaries, components, data flows, and real-time synchronization mechanisms.
 
 ## 1. Component Boundaries & Responsibilities
-* **React SPA (Frontend)**: Served from CloudFront + S3. Responsible for cookie session creation, direct multipart upload to S3 (tracking browser-side upload progress), listening to Server-Sent Events (SSE) for document ingestion status and streaming query answers, and rendering interactive markdown with page citations.
+* **React SPA (Frontend)**: Served from CloudFront + S3. Responsible for session cookie handling/maintenance, direct multipart upload to S3 (tracking browser-side upload progress), listening to Server-Sent Events (SSE) for document ingestion status and streaming query answers, and rendering interactive markdown with page citations.
 * **API Service (Node.js/TypeScript)**: Express server in Kubernetes. Handles session HMAC signature validation, rate limits, storage quotas, S3 presigned URL generation, Bedrock query embedding, similarity querying against pgvector (using Prisma client), prompt rendering, Bedrock Claude integration, SSE streaming for query responses, and real-time ingestion progress push (via PG LISTEN/NOTIFY or status API polling).
 * **Worker Service (Python)**: Standalone boto3 polling script. Receives SQS events, downloads PDFs, Sniffs magic numbers, parses text via PyMuPDF, chunks paragraphs, calls Titan Embeddings V2, commits vectors to Postgres (using SQLAlchemy), and updates granular progress state in the database.
 * **Amazon SQS & DLQ**: Intermediate broker for ingestion jobs. DLQ alerts on message depth > 0 after 3 attempts.

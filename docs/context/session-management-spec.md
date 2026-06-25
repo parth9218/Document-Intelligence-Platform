@@ -13,13 +13,13 @@ sequenceDiagram
     participant API as Express API Server
     participant DB as PostgreSQL Database
     
-    Note over Client, API: Scenario A: Initial Load / No Cookie
-    Client->>API: GET /health (No Cookie)
+    Note over Client, API: Scenario A: Initial Load / No Cookie (Auto-Initialization)
+    Client->>API: GET /api/session (No Cookie)
     API->>API: Detect missing session cookie
     API->>API: Generate random token & signed token (HMAC-SHA256)
     API->>DB: INSERT into sessions table (session_token, expires_at)
     DB-->>API: Session created (UUID id)
-    API->>Client: 200 OK + Set-Cookie (session_token=signedToken; httpOnly; Secure; SameSite=Lax)
+    API->>Client: 200 OK + Set-Cookie (session_token=signedToken; httpOnly; Secure; SameSite=Lax) + Session JSON Payload
 
     Note over Client, API: Scenario B: Subsequent Load / Valid Cookie
     Client->>API: GET /api/session (Cookie: session_token=signedToken)
@@ -30,7 +30,7 @@ sequenceDiagram
     DB-->>API: Session updated
     API->>Client: 200 OK + Set-Cookie (session_token=signedToken; sliding expiration)
 
-    Note over Client, API: Scenario C: Security Violation / Tampered Cookie
+    Note over Client, API: Scenario C: Security Violation / Tampered Cookie (401 Error)
     Client->>API: GET /api/session (Cookie: session_token=tamperedToken)
     API->>API: URL-decode and verify signature (HMAC matching)
     API->>API: Signature Verification FAILS (timingSafeEqual is false)

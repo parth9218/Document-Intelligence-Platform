@@ -12,7 +12,7 @@ const swaggerDefinition = {
 All protected endpoints verify session tenancy via a signed cookie named \`session_token\`.
 - If a client makes a request to \`/api/documents\` or any sub-route without a valid \`session_token\` cookie, the backend automatically generates a new cryptographically signed session, creates a record in the \`sessions\` table, and returns the cookie.
 - Subsequent requests will slide the session expiration by 24 hours.
-- If a request is made to \`/api/session\` without a valid cookie, it returns a \`401 Unauthorized\` response without creating a new session.
+- If a request is made to \`/api/session\` without a cookie, the server automatically initializes a new cryptographically signed session, registers it, and returns the newly created session. A \`401 Unauthorized\` is only returned if a session cookie is present but carries an invalid or tampered signature.
 
 ### Ingestion Progress Stream (SSE)
 The \`/api/documents/progress\` endpoint utilizes Server-Sent Events (SSE) to deliver real-time progress updates for document processing.

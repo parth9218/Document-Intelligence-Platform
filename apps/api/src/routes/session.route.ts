@@ -8,12 +8,12 @@ const router = Router();
  * /api/session:
  *   get:
  *     summary: Retrieve Active Session Info
- *     description: Fetches metadata of the currently active session. Does not auto-create a session if no cookie is present.
+ *     description: Fetches metadata of the currently active session. If no session cookie is present, automatically initializes and returns a new session.
  *     security:
  *       - CookieAuth: []
  *     responses:
  *       200:
- *         description: Active session details retrieved successfully.
+ *         description: Active or newly initialized session details retrieved successfully.
  *         content:
  *           application/json:
  *             schema:
@@ -34,7 +34,7 @@ const router = Router();
  *                   type: string
  *                   format: date-time
  *       401:
- *         description: Session is missing, expired, or signature is invalid.
+ *         description: Session cookie has a tampered or invalid signature.
  *         content:
  *           application/json:
  *             schema:
