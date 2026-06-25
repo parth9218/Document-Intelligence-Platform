@@ -15,7 +15,8 @@ This document records the exact state of code modules and active tasks. Update i
 - **Ingestion Flow Brainstorm & Pre-Implementation Review**: Completed. Full ingestion pipeline reviewed and corrections applied. See `docs/context/ingestion-flow-decisions.md`.
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
 - **Backend Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, 105, and 106 are complete. Next is Task 104 (SQS Consumer Loop).
-- **Frontend Phase 1 (Foundation)**: Complete. Tasks F1.1, F1.2, and F1.3 are complete. Milestone F1 is active. Next is Frontend Phase 2 (Task F2.1).
+- **Frontend Phase 1 (Foundation)**: Complete. Tasks F1.1, F1.2, and F1.3 are complete.
+- **Frontend Phase 2 (Application Shell & API)**: In Progress. Task F2.1 is complete. Next is Task F2.2 (Session Verification & Auth Shell).
 - **Phase 2 (Ingestion)**: Pending.
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.

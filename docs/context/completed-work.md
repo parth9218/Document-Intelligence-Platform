@@ -81,6 +81,11 @@ This document lists completed tasks and code files created.
   - Built core reusable visual UI widgets: [Button](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/button.tsx), [Card](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/card.tsx), [ProgressBar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/progress-bar.tsx), and [Toast](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/toast.tsx) alerts context managers.
   - Setup environment variable configuration loader structure (with separate settings for `.env.development` and `.env.production` alongside a `.env.example` template reference).
   - Restricted the sandbox component visualization page to development-only environments by implementing runtime and compile-time router blockages.
+- **Frontend API Integration Client & Error Schema Adapter (Task F2.1)**:
+  - Created [api.d.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/types/api.d.ts) to define frontend type interfaces matching the Express backend schemas (`ErrorResponse`, `DocumentStatusObject`, `SessionResponse`, `BatchUploadInitRequest`, `BatchUploadInitResponse`, `ConfirmUploadResponse`).
+  - Configured [api-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/api-client.ts) to forward session cookies (`credentials: 'include'`) and parse custom error classes (`UnauthorizedError`, `StorageQuotaExceededError`, `RateLimitExceededError`, `ConcurrencyLimitExceededError`) inheriting from `ApiError`.
+  - Built a floating, dev-only [DevToolbar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/dev-toolbar.tsx) to inspect and switch endpoints dynamically between `'api'` and `'mock'` routing modes.
+  - Integrated `DevToolbar` within the global layout wrapper [providers.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/providers.tsx).
 
 ## Verification Records
 
@@ -95,3 +100,5 @@ This document lists completed tasks and code files created.
 - **MSW Configuration and Route Switcher Verification**: Executed mock server boots inside dev builds, confirming custom interceptors intercept and mock HTTP requests correctly based on `api-routing.ts` environment flags, and verified compiled build bundles.
 - **Tailwind UI & Theme System Compilation Verification**: Verified clean build output with zero warnings, validating exact responsive rendering hooks and theme transitions.
 - **Environment Configuration & Build Isolation Verification**: Verified that building the project loader dynamically reads `.env.production` during execution and correctly injects compile-time blockages, routing `/sandbox` hits to the system 404 page in production.
+- **Task F2.1 Integration & Compilation Verification**: Verified clean linting checks (`npm run lint`) and flawless production Next.js builds (`npm run build`) incorporating the newly defined types, custom errors, uploader client logic, and interactive DevToolbar in the frontend application.
+

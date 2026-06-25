@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiRouting } from '@/config/api-routing';
 import { ToastProvider } from '@/components/ui/toast';
+import { DevToolbar } from './dev-toolbar';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [mswReady, setMswReady] = useState(false);
@@ -45,5 +46,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <ToastProvider>{children}</ToastProvider>;
+  return (
+    <ToastProvider>
+      {children}
+      <DevToolbar />
+    </ToastProvider>
+  );
 }

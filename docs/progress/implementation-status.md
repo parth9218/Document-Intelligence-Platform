@@ -37,7 +37,7 @@
 * [x] **Task F1.3**: Reusable Tailwind UI & Theme System ── *Complete*
 
 ## Frontend Phase 2: Application Shell, Session & API Layer
-* [ ] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Incomplete*
+* [x] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Complete*
 * [ ] **Task F2.2**: Session Verification & Auth Shell ── *Incomplete*
 * [ ] **Task F2.3**: Dashboard Homepage & Empty States ── *Incomplete*
 
