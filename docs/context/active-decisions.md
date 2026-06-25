@@ -45,3 +45,13 @@ Error states: `failed`, `cancelled`, `expired`. See `docs/context/ingestion-flow
 ## DLQ & Orphan Cleanup
 * **DLQ bridge**: Secondary loop in worker polls DLQ every 30s; sets `status = 'failed'` with `error_code = 'max_retries_exceeded'`.
 * **Orphan cleanup**: API service scheduled job (every 5 min) sets `expired` for un-uploaded records >30 min old and `failed` for stuck `uploaded` records >10 min with no worker pickup.
+
+## CORS Configuration Strategy
+* **Environment-driven origin validation**:
+  - In **development/test** (`NODE_ENV=development` or `NODE_ENV=test`), dynamically allow any request origin by mirroring the incoming request `Origin` header in the `Access-Control-Allow-Origin` response header.
+  - In **production** (`NODE_ENV=production`), restrict requests to the single origin specified by the `CORS_ALLOWED_ORIGIN` environment variable.
+* **Credentials Support**: Enforce `Access-Control-Allow-Credentials: true` across all environments to allow HTTP cookie-based session tracking. Wildcard `Access-Control-Allow-Origin: *` must not be used as it conflicts with credentialed requests.
+* **HTTP Method Scope**: Allow all required API methods: `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS` (for preflight checks).
+* **Preflight Caching**: Configure `Access-Control-Max-Age: 86400` (24 hours) for preflight caching to reduce network overhead.
+* **Header Scope**: Define explicit allowed headers: `Content-Type`, `Authorization`, `Cookie`, etc.
+

@@ -14,7 +14,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Refined Architecture & Diagrams**: Completed. Specifications added for Retrieval Q&A, SSE streams, PG LISTEN/NOTIFY, and UI progress bars.
 - **Ingestion Flow Brainstorm & Pre-Implementation Review**: Completed. Full ingestion pipeline reviewed and corrections applied. See `docs/context/ingestion-flow-decisions.md`.
 - **Task Specifications Updated (Phase 1 & 2)**: Completed. Tasks 101, 103, 104, 201, 202, 203 updated with implementation-level detail.
-- **Backend Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, 105, 106, and 107 are complete. Next is Task 104 (SQS Consumer Loop).
+- **Backend Phase 1 (Foundation)**: In Progress. Tasks 101, 102, 103, 105, 106, and 107 are complete; Task 108 (CORS Configuration) is planned. Next is Task 104 (SQS Consumer Loop).
 - **Frontend Phase 1 (Foundation)**: Complete. Tasks F1.1, F1.2, and F1.3 are complete.
 - **Frontend Phase 2 (Application Shell & API)**: Complete. Tasks F2.1, F2.2, and F2.3 are complete.
 - **Frontend Phase 3 (Batch Upload & Ingestion)**: Complete. Tasks F3.1, F3.2, and F3.3 are complete.

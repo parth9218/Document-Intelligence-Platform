@@ -8,6 +8,8 @@
 * [x] **Task 105**: SSE Architecture Refactor ── *Complete*
 * [x] **Task 106**: Automated API Specification Generation ── *Complete*
 * [x] **Task 107**: Session Auto-Initialization Refactor ── *Complete*
+* [ ] **Task 108**: Express API CORS Configuration ── *Incomplete*
+
 
 ## Backend Phase 2: Ingestion Pipeline
 * [ ] **Task 201**: Worker Document Extraction ── *Incomplete*

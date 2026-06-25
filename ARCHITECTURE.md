@@ -132,3 +132,18 @@ To reduce cloud costs and enable offline development, the system supports a loca
 * **Local LLM & Embeddings (Ollama & Offline Transformers)**:
   - **Ollama**: Emulates text generation models locally (e.g., Llama3/Mistral APIs mapped to Bedrock interfaces).
   - **Sentence-Transformers**: Provides offline local embeddings (mapping to Titan Embeddings V2 1024-dimension space) during offline testing.
+
+---
+
+## 6. Secure Cross-Origin Request Policy (CORS)
+
+Since the frontend React client and the backend Express API reside in decoupled runtime environments (served from S3/CloudFront and running in EKS respectively), the system implements a strict, environment-driven Cross-Origin Resource Sharing (CORS) policy:
+
+* **Credentials Enforcements**: The system tracks user sessions using a signed secure HTTP cookie (`session_token`). Browsers restrict the sharing of cross-origin cookies unless the server explicitly returns:
+  - `Access-Control-Allow-Credentials: true`
+  - An explicit, non-wildcard origin in `Access-Control-Allow-Origin` matching the request's origin. Specifying `*` is forbidden by browsers when credentials are enabled.
+* **Environment-Driven Configuration**:
+  - **Development/Test**: The API server dynamically reflects the incoming request's `Origin` header in the `Access-Control-Allow-Origin` response header, supporting all required HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`) to simplify local development without manually updating host configurations.
+  - **Production**: The API server enforces a strict whitelist, matching the `Origin` header against the `CORS_ALLOWED_ORIGIN` environment variable. If they do not match, the CORS headers are omitted and browser-side cross-origin fetches are blocked.
+* **Preflight Optimization**: The CORS middleware responds to preflight `OPTIONS` requests with a caching TTL (`Access-Control-Max-Age: 86400` / 24 hours), reducing network overhead by caching CORS policy checks on the browser client.
+

@@ -147,7 +147,8 @@ The implementation roadmap is broken into 5 parallel delivery phases. Detailed t
    - *Mitigation*: Implement standard validation tests verifying that `s3-uploader.ts` appends each key from `uploadFields` in exact structural order, placing the raw file (`file`) as the final parameter.
 3. **CORS / Cookie Policy Blockages**:
    - *Risk*: If the frontend and backend are hosted on separate domains, browser cookie rules (e.g. Third-Party Cookie Deprecation) might drop the `session_token` cookie.
-   - *Mitigation*: Set up a Next.js rewrite rule in `next.config.js` to proxy `/api/*` to the backend server, maintaining a single-origin architecture for local development.
+   - *Mitigation*: Configure environment-driven CORS handlers on the Express API (CORS middleware with `Access-Control-Allow-Credentials: true` and dynamic origin mirroring in development, restricted to `CORS_ALLOWED_ORIGIN` in production). Additionally, client-side rewrites or reverse proxies (like Next.js proxy rules) can be configured to maintain single-origin behaviors where necessary.
+
 
 ### Assumptions
 * **Single Session Tenancy**: Users only need access to documents uploaded in their current session. Expiry of the session token drops database access rights automatically.

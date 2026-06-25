@@ -122,6 +122,10 @@ This document lists completed tasks and code files created.
   - Enforced strict FormData compliance: appended all pre-signed POST fields in the exact order received, and appended the file payload as the final parameter.
   - Linked the S3 upload module into the concurrent queue hook (`useUpload.ts`) to replace the simulated timer progress loop.
   - Added full post-upload confirmation integration calling `POST /api/documents/:id/confirm-upload` on successful completion of each file upload and updating document registry statuses.
+- **Task 108 CORS Configuration Architecture & Planning**:
+  - Formulated architectural decision ADR-018 in [DECISIONS.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/DECISIONS.md) and [active-decisions.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/active-decisions.md) defining environment-driven CORS validation.
+  - Formulated full task worksheet [task-108-api-cors-config.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-108-api-cors-config.md) outlining Goal, Scope, Dependencies, and Acceptance Criteria.
+  - Documented `CORS_ALLOWED_ORIGIN` configuration template in [apps/api/.env.example](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/.env.example) and [apps/api/.env](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/.env).
 - **Task F4.2 Document Processing Feed & Progress Indicators**:
   - Added `removeDocument` action to the Zustand store in [useAppStore.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/store/useAppStore.ts) to support removing individual document items from the registry.
   - Created [document-card.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/document-card.tsx) which renders document status tags mapping to the processing lifecycle (Downloading, Validating, Extracting, Chunking, Embedding, Completed, etc.).

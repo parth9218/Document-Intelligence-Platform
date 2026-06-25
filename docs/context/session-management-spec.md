@@ -76,3 +76,14 @@ Sessions carry a **24-hour sliding window**:
 1. On each valid request, `expires_at` is updated to `NOW + 24 hours` in the database.
 2. The `Set-Cookie` header is returned with the updated expiration date.
 3. This ensures active sessions remain logged in indefinitely, while idle sessions are automatically pruned/invalidated after 24 hours.
+
+---
+
+## 5. CORS Credentials & SameSite Compatibility
+
+Since session tracking relies entirely on HTTP cookies (`session_token`), the CORS policy and cookie configurations must be aligned to prevent browser blocks:
+* **CORS Header Integration**: The Express API must explicitly append `Access-Control-Allow-Credentials: true` to all CORS-authorized preflight and standard responses.
+* **SameSite Cookie Settings**: 
+  - If the frontend and backend are hosted on different subdomains under the same parent domain (e.g. `app.docintel.com` and `api.docintel.com`), the cookie safety configuration `SameSite=Lax; Secure` is sufficient to allow AJAX transfers.
+  - If the frontend and backend are hosted on entirely separate domains (cross-site), the session cookie must be issued with `SameSite=None; Secure` to allow browsers to include it in cross-origin requests.
+

@@ -138,3 +138,14 @@ This log tracks the rationale, decisions, and tradeoffs for the platform's core 
 * **Removed Endpoints**: `GET /api/documents/:id/progress` and `GET /api/documents/:id/status` are removed entirely. `POST /api/documents/:id/confirm-upload` retains its dynamic `:id` parameter (unaffected).
 * **Migration Required**: The existing `notify_progress_channel()` trigger function (from the initial migration) must be overwritten via a new Prisma migration using `CREATE OR REPLACE FUNCTION`. The new function uses the session-scoped channel name. See Task 105.
 * **Rationale**: One SSE connection per session eliminates the N-connection scaling problem. Session-scoped PG NOTIFY channels provide tenant isolation at the PostgreSQL routing layer with zero Express-side filtering overhead. Named SSE events provide unambiguous semantics for the frontend without shape-inference heuristics.
+
+## ADR-018: CORS Configuration Strategy
+* **Status**: Approved
+* **Context**: The frontend and backend run on different domains/ports in both development and production. We use secure cookies (`credentials: 'include'`) for session authentication. Browser security models require strict CORS configuration to allow credentialed cross-origin requests.
+* **Decision**: Implement environment-driven CORS configuration in the Express API:
+  - **Development/Test**: Allow requests from any origin dynamically by mirroring the request `Origin` header in the `Access-Control-Allow-Origin` response header. Wildcard `*` cannot be used since `credentials` are enabled. Support standard API methods (`GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`).
+  - **Production**: Allow requests only from the production frontend origin configured in the `CORS_ALLOWED_ORIGIN` environment variable. If the request `Origin` does not match, reject the request or omit the CORS headers.
+  - **Credentials**: Set `Access-Control-Allow-Credentials: true` in all configurations.
+  - **Preflight Caching**: Set `Access-Control-Max-Age: 86400` (24 hours) to reduce preflight flight overhead.
+* **Rationale**: Mirroring the origin dynamically during development simplifies local developer execution where ports might change, while explicitly configuring the allowed origin in production secures the backend API and restricts cross-origin access to authorized clients.
+
