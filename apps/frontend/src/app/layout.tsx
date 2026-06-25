@@ -27,6 +27,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${outfit.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
@@ -45,7 +46,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full bg-background text-foreground flex flex-col font-sans">
+      <body suppressHydrationWarning className="min-h-full bg-background text-foreground flex flex-col font-sans">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>
