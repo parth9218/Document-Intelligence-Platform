@@ -73,3 +73,26 @@ Browsers restrict parallel connections to the same host (typically capped at 6 c
 To prevent this connection starvation:
 - **Tear-Down**: The `useIngestion` hook monitors active background processes and local upload queues. Once all documents in the registry are in terminal states (`completed`, `failed`, `expired`) and no local uploads are active, the effect runs its cleanup: closing the `EventSource` connection and terminating any active polling loops.
 - **Wake-Up**: If the user drops new files, `localProgressQueue` transitions to having active items, resetting `shouldConnect` to `true`. The hook instantly establishes a new `EventSource` connection to capture subsequent updates.
+
+---
+
+## 5. UI Ingestion Feed & Card Components
+
+To translate real-time state changes into visual indicators, the frontend refactors the dashboard's document list into two specialized UI components:
+
+### Processing Feed Container (`processing-feed.tsx`)
+- Maps local uploads (files writing directly to S3) and database-tracked documents into a single unified scrolling list.
+- Dynamically reads the Zustand store's `localProgressQueue` and `documentRegistry` states to ensure render cycles are synchronized instantly upon state updates.
+
+### Document Status Card (`document-card.tsx`)
+- Represents a single document's processing record.
+- **Stage Tagging**: Renders colored labels mapping directly to the ingestion state machine (Downloading, Validating, Extracting, Chunking, Embedding, Completed, etc.).
+- **Sub-stage Progress Details**: For granular stages, custom sub-messages are rendered dynamically:
+  - `chunking`: displays progress based on `processedChunks` and `totalChunks` (e.g. "Chunking (4 of 8 chunks)...").
+  - `embedding`: displays progress percentages (e.g. "Embedding (50% complete)...").
+- **Orphan Ingestion Interceptor**: 
+  - If a document's status is updated to `failed`, `expired`, or `cancelled` (for example, if flagged by the SQS failure daemon or API orphan cleanup job), the card applies an amber/red border warning glow.
+  - Displays the detailed backend error message and code.
+  - Renders action buttons:
+    - **Dismiss**: Invokes `removeDocument(id)` to delete the failed card from the Zustand store.
+    - **Retry**: Removes the failed card and triggers a user notification explaining how to re-select and drop the file again.

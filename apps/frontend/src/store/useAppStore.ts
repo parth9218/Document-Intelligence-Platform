@@ -20,6 +20,7 @@ interface AppState {
   setDocumentRegistry: (registry: Record<string, DocumentStatusObject>) => void;
   updateDocumentStatus: (documentId: string, statusObj: DocumentStatusObject) => void;
   clearDocumentRegistry: () => void;
+  removeDocument: (documentId: string) => void;
 
   // Uploads State
   localProgressQueue: Record<string, LocalProgressState>;
@@ -51,6 +52,12 @@ export const useAppStore = create<AppState>((set) => ({
       },
     })),
   clearDocumentRegistry: () => set({ documentRegistry: {} }),
+  removeDocument: (documentId) =>
+    set((state) => {
+      const next = { ...state.documentRegistry };
+      delete next[documentId];
+      return { documentRegistry: next };
+    }),
 
   // Uploads
   localProgressQueue: {},

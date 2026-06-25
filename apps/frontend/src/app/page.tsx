@@ -4,9 +4,10 @@ import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { EmptyState } from '@/components/documents/empty-state';
 import { UploadZone } from '@/components/upload/upload-zone';
+import { ProcessingFeed } from '@/components/documents/processing-feed';
 import { useUpload } from '@/hooks/useUpload';
 import { useIngestion } from '@/hooks/useIngestion';
-import { Upload, HardDrive, Cpu, FileText, AlertCircle, RefreshCw } from 'lucide-react';
+import { HardDrive, Cpu, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Home() {
   const { uploadFiles, error: uploadError, clearError } = useUpload();
@@ -67,88 +68,7 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 items-start">
         {/* Left Column: List Feed / Empty Onboarding (takes 2 cols on lg screens) */}
         <div className="lg:col-span-2 flex flex-col h-full min-h-[400px]">
-          {!hasDocuments ? (
-            <EmptyState />
-          ) : (
-            <div className="glass-panel p-6 rounded-2xl flex-1 flex flex-col space-y-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted select-none">
-                Processing Queue & Documents ({documentList.length + localUploadList.length})
-              </h2>
-              
-              {/* Document Feed Board */}
-              <div className="flex flex-col space-y-3 max-h-[550px] overflow-y-auto pr-1">
-                {localUploadList.map((upload, idx) => (
-                  <div
-                    key={`upload-${idx}`}
-                    className="p-4 rounded-xl border border-card-border/40 bg-card/40 flex items-center justify-between"
-                  >
-                    <div className="flex items-center space-x-3 overflow-hidden">
-                      <div className="p-2 rounded-lg bg-cyan-500/10 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
-                        <Upload className="w-4 h-4" />
-                      </div>
-                      <div className="overflow-hidden">
-                        <p className="text-sm font-semibold text-foreground truncate">{upload.filename}</p>
-                        <p className="text-xs text-cyan-600 dark:text-cyan-400 font-medium capitalize">{upload.status}...</p>
-                      </div>
-                    </div>
-                    <div className="text-right text-sm font-mono text-cyan-600 dark:text-cyan-400 font-semibold">
-                      {upload.progressPct}%
-                    </div>
-                  </div>
-                ))}
-
-                {documentList.map((doc) => (
-                  <div
-                    key={doc.documentId}
-                    className="p-4 rounded-xl border border-card-border/40 bg-card/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                  >
-                    <div className="flex items-center space-x-3 overflow-hidden">
-                      <div className="p-2 rounded-lg bg-indigo-500/10 dark:bg-slate-900/60 text-indigo-600 dark:text-indigo-400 border border-card-border/30">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div className="overflow-hidden">
-                        <p className="text-sm font-semibold text-foreground truncate">{doc.filename}</p>
-                        {doc.status === 'failed' ? (
-                          <p className="text-xs text-rose-500 font-medium flex items-center gap-1 mt-0.5">
-                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span>{doc.errorMessage || doc.errorCode || 'Upload failed'}</span>
-                          </p>
-                        ) : (
-                          <p className="text-xs text-muted">{formatSize(doc.fileSizeBytes)}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between sm:justify-end gap-4">
-                      {/* Status Tag */}
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
-                        doc.status === 'completed'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                          : doc.status === 'failed' || doc.status === 'expired'
-                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                          : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
-                      }`}>
-                        {doc.status}
-                      </span>
-                      
-                      {/* Linear Progress */}
-                      {['downloading', 'validating', 'extracting', 'chunking', 'embedding'].includes(doc.status) && (
-                        <div className="flex items-center space-x-2 min-w-[80px]">
-                          <div className="w-16 bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 overflow-hidden border border-card-border/20">
-                            <div
-                              className="bg-cyan-500 h-1.5 rounded-full transition-all duration-300"
-                              style={{ width: `${doc.progressPct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-mono text-cyan-600 dark:text-cyan-400">{doc.progressPct}%</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {!hasDocuments ? <EmptyState /> : <ProcessingFeed />}
         </div>
 
         {/* Right Column: Upload Zone and Limits (1 col on lg screens) */}

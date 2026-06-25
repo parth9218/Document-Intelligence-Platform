@@ -122,6 +122,13 @@ This document lists completed tasks and code files created.
   - Enforced strict FormData compliance: appended all pre-signed POST fields in the exact order received, and appended the file payload as the final parameter.
   - Linked the S3 upload module into the concurrent queue hook (`useUpload.ts`) to replace the simulated timer progress loop.
   - Added full post-upload confirmation integration calling `POST /api/documents/:id/confirm-upload` on successful completion of each file upload and updating document registry statuses.
+- **Task F4.2 Document Processing Feed & Progress Indicators**:
+  - Added `removeDocument` action to the Zustand store in [useAppStore.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/store/useAppStore.ts) to support removing individual document items from the registry.
+  - Created [document-card.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/document-card.tsx) which renders document status tags mapping to the processing lifecycle (Downloading, Validating, Extracting, Chunking, Embedding, Completed, etc.).
+  - Configured granular sub-stage progress monitoring: displaying chunk counts for chunking (e.g. "Chunking (4 of 8 chunks)...") and percentage for embedding (e.g. "Embedding (50% complete)...").
+  - Implemented the Orphan Ingestion Interceptor: if status is `failed` or `expired`, it applies a red/amber warning glow border, displays the detailed backend error, and renders "Dismiss" (deletes document card) and "Retry" (dismisses card and prompts user to re-drop) action buttons.
+  - Created [processing-feed.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/processing-feed.tsx) to act as a unified list feed container for local uploads and backend document processing items.
+  - Refactored the dashboard [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) to replace the inline lists logic with the clean, modular `<ProcessingFeed />` component.
 - **Task F4.1 SSE Client & Polling Fallback Hook**:
   - Built [sse-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/sse-client.ts) implementing a wrapper around standard browser `EventSource` listening to named events `snapshot` (emits all active session documents) and `update` (emits individual document progress/status changes).
   - Developed custom hook [useIngestion.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useIngestion.ts) which establishes the SSE EventSource connection to track real-time progress.
@@ -164,3 +171,8 @@ This document lists completed tasks and code files created.
   - Verified network connections: confirmed EventSource connection to `/api/documents/progress` is active when ingestion starts.
   - Verified polling fallback: simulated connection loss (EventSource error event) and asserted that the client immediately falls back to polling `/api/documents/status` every 3 seconds.
   - Verified reconnection: bringing the network connection back online successfully resumes the EventSource connection and terminates the fallback polling loops automatically.
+- **Task F4.2 Ingestion Feed & Card Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified active status transitions: processing documents display correct stage tags (Downloading, Validating, etc.) and progress percentages/chunk numbers.
+  - Verified failed and expired visual states: manually setting status to `failed` or `expired` updates card border styles to warning glows and reveals detailed error logs, and dismissing/retrying updates the store registry and removes the cards.
+

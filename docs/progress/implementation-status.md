@@ -49,7 +49,7 @@
 
 ## Frontend Phase 4: Real-Time Processing & Progress Visualizer
 * [x] **Task F4.1**: SSE Client & Polling Fallback Hook ── *Complete*
-* [ ] **Task F4.2**: Document Processing Feed & Progress Indicators ── *Incomplete*
+* [x] **Task F4.2**: Document Processing Feed & Progress Indicators ── *Complete*
 
 ## Frontend Phase 5: Query Interface & Streaming Q&A
 * [ ] **Task F5.1**: Chat Layout & SSE Query Stream Hook ── *Incomplete*
