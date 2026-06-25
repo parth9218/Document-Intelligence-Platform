@@ -1,0 +1,525 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Document Intelligence Platform - API Specification",
+    "version": "1.0.0",
+    "description": "API contract for the Retrieval-Augmented Generation (RAG) Document Intelligence Platform.\n\n### Authentication & Session Management\nAll protected endpoints verify session tenancy via a signed cookie named `session_token`.\n- If a client makes a request to `/api/documents` or any sub-route without a valid `session_token` cookie, the backend automatically generates a new cryptographically signed session, creates a record in the `sessions` table, and returns the cookie.\n- Subsequent requests will slide the session expiration by 24 hours.\n- If a request is made to `/api/session` without a valid cookie, it returns a `401 Unauthorized` response without creating a new session.\n\n### Ingestion Progress Stream (SSE)\nThe `/api/documents/progress` endpoint utilizes Server-Sent Events (SSE) to deliver real-time progress updates for document processing.\n\nThe stream uses two typed events (via the standard SSE `event:` field):\n1. **`snapshot`**: Emitted once on connection with an array of all active documents.\n2. **`update`**: Emitted on database updates (via PG NOTIFY) with a single enriched status object."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "CookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session_token",
+        "description": "Signed session token cookie."
+      }
+    },
+    "schemas": {
+      "DocumentStatusObject": {
+        "type": "object",
+        "required": [
+          "documentId",
+          "filename",
+          "mimeType",
+          "fileSizeBytes",
+          "status",
+          "progressPct",
+          "processedChunks",
+          "totalChunks",
+          "errorCode",
+          "errorMessage",
+          "createdAt"
+        ],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "6c8cf7ee-1250-48c6-a67b-234b68e0d6dc"
+          },
+          "filename": {
+            "type": "string",
+            "example": "invoice.pdf"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "application/pdf"
+          },
+          "fileSizeBytes": {
+            "type": "integer",
+            "example": 1048576
+          },
+          "status": {
+            "type": "string",
+            "example": "chunking"
+          },
+          "progressPct": {
+            "type": "integer",
+            "example": 50
+          },
+          "processedChunks": {
+            "type": "integer",
+            "example": 5
+          },
+          "totalChunks": {
+            "type": "integer",
+            "nullable": true,
+            "example": 10
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-06-24T13:16:09.000Z"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "unauthorized"
+          },
+          "message": {
+            "type": "string",
+            "example": "Unauthorized access"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/session": {
+      "get": {
+        "summary": "Retrieve Active Session Info",
+        "description": "Fetches metadata of the currently active session. Does not auto-create a session if no cookie is present.",
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active session details retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "expires_at",
+                    "created_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "5e636494-48bf-44d2-90c3-33d9db0a5837"
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session is missing, expired, or signature is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "unauthorized"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized access"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents": {
+      "post": {
+        "summary": "Initialize Batch Document Upload",
+        "description": "Validates each file, checks concurrency/storage quotas, and generates S3 presigned POST fields. Automatically creates a session and sets the `session_token` cookie if not already active.",
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "documents"
+                ],
+                "properties": {
+                  "documents": {
+                    "type": "array",
+                    "description": "List of documents to initialize for upload.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "filename",
+                        "mimeType",
+                        "fileSizeBytes"
+                      ],
+                      "properties": {
+                        "filename": {
+                          "type": "string",
+                          "example": "invoice.pdf"
+                        },
+                        "mimeType": {
+                          "type": "string",
+                          "example": "application/pdf"
+                        },
+                        "fileSizeBytes": {
+                          "type": "integer",
+                          "example": 1048576
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch initialization results. Note that individual files can be rejected without failing the whole request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "filename",
+                          "status"
+                        ],
+                        "properties": {
+                          "filename": {
+                            "type": "string",
+                            "example": "invoice.pdf"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ready",
+                              "rejected"
+                            ],
+                            "example": "ready"
+                          },
+                          "documentId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "example": "6c8cf7ee-1250-48c6-a67b-234b68e0d6dc"
+                          },
+                          "uploadUrl": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "https://dip-uploads.s3.amazonaws.com/"
+                          },
+                          "uploadFields": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "example": {
+                              "key": "sessions/5e636494-48bf-44d2-90c3-33d9db0a5837/documents/6c8cf7ee-1250-48c6-a67b-234b68e0d6dc/original",
+                              "AWSAccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                              "policy": "eyJleHBpcmF0aW9uIjoiMjAyNi0wNi0yNFQxOTo0MzoxM1oiLCJjb25kaXRpb25zIjpbWyJlcSIsIiRrZXkiLCJzZXNzaW9ucy81ZTYzNjQ5NC00OGJmLTQ0ZDItOTBjMy0zM2Q5ZGIwYTU4MzcvZG9jdW1lbnRzLzZjOGNmN2VlLTEyNTAtNDhjNi1hNjdiLTIzNGI2OGUwZDZkYy9vcmlnaW5hbCJdXX0=",
+                              "signature": "URIsign893475example="
+                            }
+                          },
+                          "s3Key": {
+                            "type": "string",
+                            "example": "sessions/5e636494-48bf-44d2-90c3-33d9db0a5837/documents/6c8cf7ee-1250-48c6-a67b-234b68e0d6dc/original"
+                          },
+                          "error": {
+                            "type": "string",
+                            "example": "invalid_mime_type"
+                          },
+                          "message": {
+                            "type": "string",
+                            "example": "Unsupported file type."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (e.g. invalid request format) or storage quota exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized. Invalid session signature or expired session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit or concurrency limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}/confirm-upload": {
+      "post": {
+        "summary": "Confirm Upload Complete",
+        "description": "Informs the backend that the client has successfully uploaded the file to S3. Transitions status to `uploaded`.",
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The unique ID of the document."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document upload successfully confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "uploaded"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized. Session token missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found or does not belong to active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. The upload for this document has already been confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/status": {
+      "get": {
+        "summary": "Get Session Documents Status (Polling Fallback)",
+        "description": "Retrieves the processing status of all documents uploaded in the active session.",
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of documents with their current processing status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "documents"
+                  ],
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DocumentStatusObject"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized. Session token missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/progress": {
+      "get": {
+        "summary": "Real-Time Ingestion Progress Stream (SSE)",
+        "description": "Establishes a Server-Sent Events (SSE) connection to stream real-time document ingestion updates.\n\nUpon establishing connection, the stream immediately sends a `snapshot` event containing an array of all active documents.\nAs ingestion progress updates occur, the stream broadcasts `update` events containing the updated DocumentStatusObject.\n",
+        "security": [
+          {
+            "CookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connection established successfully. Streams EventSource events.",
+            "headers": {
+              "Content-Type": {
+                "schema": {
+                  "type": "string",
+                  "example": "text/event-stream"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-cache"
+                }
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string",
+                  "example": "keep-alive"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE stream content with `event: snapshot` and `event: update` rows."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized. Session token missing or invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns the status of the API server.",
+        "responses": {
+          "200": {
+            "description": "Server is up and running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": []
+}

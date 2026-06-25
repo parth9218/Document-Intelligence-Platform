@@ -324,8 +324,17 @@ describe('Document Upload & Tracking API Tests', () => {
     });
   });
 
-  describe('GET /api/documents/:id/status - Polling fallback', () => {
-    it('should return full status information for owned document', async () => {
+  describe('GET /api/documents/status - Session status polling fallback', () => {
+    it('should return empty list when session has no documents', async () => {
+      const response = await request(app)
+        .get('/api/documents/status')
+        .set('Cookie', authCookie);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ documents: [] });
+    });
+
+    it('should return list of all documents for session with correct schemas', async () => {
       const docId = crypto.randomUUID();
       await prisma.document.create({
         data: {
@@ -352,40 +361,29 @@ describe('Document Upload & Tracking API Tests', () => {
       });
 
       const response = await request(app)
-        .get(`/api/documents/${docId}/status`)
+        .get('/api/documents/status')
         .set('Cookie', authCookie);
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
-        documentId: docId,
-        status: 'embedding',
-        progressPct: 60,
-        processedChunks: 6,
-        totalChunks: 10,
-        errorCode: null,
-        errorMessage: null,
-      });
-    });
-
-    it('should return HTTP 404 for unowned or nonexistent document', async () => {
-      const response = await request(app)
-        .get(`/api/documents/${crypto.randomUUID()}/status`)
-        .set('Cookie', authCookie);
-
-      expect(response.status).toBe(404);
+      expect(response.body.documents).toHaveLength(1);
+      
+      const docStatus = response.body.documents[0];
+      expect(docStatus.documentId).toBe(docId);
+      expect(docStatus.filename).toBe('status.pdf');
+      expect(docStatus.mimeType).toBe('application/pdf');
+      expect(docStatus.fileSizeBytes).toBe(100);
+      expect(docStatus.status).toBe('embedding');
+      expect(docStatus.progressPct).toBe(60);
+      expect(docStatus.processedChunks).toBe(6);
+      expect(docStatus.totalChunks).toBe(10);
+      expect(docStatus.errorCode).toBeNull();
+      expect(docStatus.errorMessage).toBeNull();
+      expect(docStatus.createdAt).toBeDefined();
     });
   });
 
-  describe('GET /api/documents/:id/progress - SSE stream', () => {
-    it('should return HTTP 404 for unowned or nonexistent document', async () => {
-      const response = await request(app)
-        .get(`/api/documents/${crypto.randomUUID()}/progress`)
-        .set('Cookie', authCookie);
-
-      expect(response.status).toBe(404);
-    });
-
-    it('should establish SSE and send initial state data frame on connect', async () => {
+  describe('GET /api/documents/progress - Session SSE stream progress update tracking', () => {
+    it('should establish SSE, send event: snapshot, and stream event: update on DB notify', async () => {
       const docId = crypto.randomUUID();
       await prisma.document.create({
         data: {
@@ -398,11 +396,14 @@ describe('Document Upload & Tracking API Tests', () => {
           status: 'downloading',
         },
       });
-      await prisma.processingJob.create({
+      const job = await prisma.processingJob.create({
         data: {
           document_id: docId,
           session_id: sessionId,
           status: 'downloading',
+          progress_pct: 10,
+          processed_chunks: 1,
+          total_chunks: 10,
         },
       });
 
@@ -424,17 +425,33 @@ describe('Document Upload & Tracking API Tests', () => {
           {
             hostname: '127.0.0.1',
             port: port,
-            path: `/api/documents/${docId}/progress`,
+            path: '/api/documents/progress',
             headers: {
               Cookie: authCookie,
               Accept: 'text/event-stream',
             },
           },
-          (res: any) => {
+          async (res: any) => {
             responseHeaders = res.headers;
-            res.on('data', (chunk: any) => {
+
+            res.on('data', async (chunk: any) => {
               responseText += chunk.toString();
-              if (responseText.includes('data:')) {
+              
+              // Once we receive the initial snapshot event, trigger the DB update to cause a NOTIFY
+              if (responseText.includes('event: snapshot') && !responseText.includes('event: update')) {
+                // Update processing job status to trigger PG NOTIFY
+                prisma.processingJob.update({
+                  where: { id: job.id },
+                  data: {
+                    status: 'extracting',
+                    progress_pct: 50,
+                    processed_chunks: 5,
+                  },
+                }).catch((err) => reject(err));
+              }
+
+              // Resolve once both snapshot and update event frames have been received
+              if (responseText.includes('event: snapshot') && responseText.includes('event: update')) {
                 req.destroy();
                 server.close(() => {
                   resolve();
@@ -444,7 +461,7 @@ describe('Document Upload & Tracking API Tests', () => {
           }
         );
 
-        req.on('error', () => {
+        req.on('error', (err: any) => {
           // Ignore error from aborting socket
           server.close(() => {
             resolve();
@@ -454,22 +471,23 @@ describe('Document Upload & Tracking API Tests', () => {
         setTimeout(() => {
           req.destroy();
           server.close(() => {
-            reject(new Error('SSE connection timed out waiting for data frame'));
+            reject(new Error('SSE connection timed out waiting for data frames'));
           });
-        }, 3000);
+        }, 5000);
       });
 
       expect(responseHeaders).toBeDefined();
       expect(responseHeaders['content-type']).toContain('text/event-stream');
-      expect(responseText).toContain(`data: ${JSON.stringify({
-        documentId: docId,
-        status: 'downloading',
-        progressPct: 0,
-        processedChunks: 0,
-        totalChunks: null,
-        errorCode: null,
-        errorMessage: null,
-      })}`);
+      
+      // Verify snapshot frame content
+      expect(responseText).toContain('event: snapshot');
+      expect(responseText).toContain('progress.pdf');
+
+      // Verify update frame content with payload enrichment from cache
+      expect(responseText).toContain('event: update');
+      expect(responseText).toContain('extracting');
+      expect(responseText).toContain('progress.pdf');
+      expect(responseText).toContain('"fileSizeBytes":100');
     });
   });
 
