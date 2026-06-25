@@ -5,10 +5,12 @@ import { useAppStore } from '@/store/useAppStore';
 import { EmptyState } from '@/components/documents/empty-state';
 import { UploadZone } from '@/components/upload/upload-zone';
 import { useUpload } from '@/hooks/useUpload';
+import { useIngestion } from '@/hooks/useIngestion';
 import { Upload, HardDrive, Cpu, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Home() {
   const { uploadFiles, error: uploadError, clearError } = useUpload();
+  useIngestion(); // Initialize real-time ingestion progress monitoring
   const documentRegistry = useAppStore((state) => state.documentRegistry);
   const localProgressQueue = useAppStore((state) => state.localProgressQueue);
   const clearRegistry = useAppStore((state) => state.clearDocumentRegistry);

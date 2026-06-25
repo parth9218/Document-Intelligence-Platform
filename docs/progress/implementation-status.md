@@ -48,7 +48,7 @@
 * [x] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── *Complete*
 
 ## Frontend Phase 4: Real-Time Processing & Progress Visualizer
-* [ ] **Task F4.1**: SSE Client & Polling Fallback Hook ── *Incomplete*
+* [x] **Task F4.1**: SSE Client & Polling Fallback Hook ── *Complete*
 * [ ] **Task F4.2**: Document Processing Feed & Progress Indicators ── *Incomplete*
 
 ## Frontend Phase 5: Query Interface & Streaming Q&A

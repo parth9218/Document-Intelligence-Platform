@@ -122,6 +122,12 @@ This document lists completed tasks and code files created.
   - Enforced strict FormData compliance: appended all pre-signed POST fields in the exact order received, and appended the file payload as the final parameter.
   - Linked the S3 upload module into the concurrent queue hook (`useUpload.ts`) to replace the simulated timer progress loop.
   - Added full post-upload confirmation integration calling `POST /api/documents/:id/confirm-upload` on successful completion of each file upload and updating document registry statuses.
+- **Task F4.1 SSE Client & Polling Fallback Hook**:
+  - Built [sse-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/sse-client.ts) implementing a wrapper around standard browser `EventSource` listening to named events `snapshot` (emits all active session documents) and `update` (emits individual document progress/status changes).
+  - Developed custom hook [useIngestion.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useIngestion.ts) which establishes the SSE EventSource connection to track real-time progress.
+  - Implemented a 3-second fallback polling cycle calling `GET /api/documents/status` if the SSE connection is lost (offline mode / network blocks) and automatically tearing it down when the SSE connection successfully re-establishes (`onopen`).
+  - Added smart lifecycle management: EventSource connections are closed and polling loops are terminated once all active document status records are in terminal states (`completed`, `failed`, `expired`).
+  - Wired `useIngestion()` hook into `page.tsx` to automatically trigger real-time updates when the dashboard is loaded.
 
 ## Verification Records
 
@@ -153,3 +159,8 @@ This document lists completed tasks and code files created.
   - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
   - Verified upload progress tracking: XMLHttpRequests trigger smooth progress bar updates during simulation.
   - Verified confirm-upload triggers: network logs assert `POST /api/documents/:id/confirm-upload` is called right after S3 returns 204 No Content.
+- **Task F4.1 SSE Client & Polling Fallback Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified network connections: confirmed EventSource connection to `/api/documents/progress` is active when ingestion starts.
+  - Verified polling fallback: simulated connection loss (EventSource error event) and asserted that the client immediately falls back to polling `/api/documents/status` every 3 seconds.
+  - Verified reconnection: bringing the network connection back online successfully resumes the EventSource connection and terminates the fallback polling loops automatically.
