@@ -22,11 +22,15 @@ export function Sidebar() {
       href: '/',
       icon: LayoutDashboard,
     },
-    {
-      name: 'Sandbox UI',
-      href: '/sandbox',
-      icon: Cpu,
-    },
+    ...(process.env.NODE_ENV !== 'production'
+      ? [
+          {
+            name: 'Sandbox UI',
+            href: '/sandbox',
+            icon: Cpu,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -108,22 +112,24 @@ export function Sidebar() {
         })}
 
         {/* External API Docs Link */}
-        <a
-          href="http://localhost:3000/api-docs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`flex items-center p-2.5 rounded-lg text-sm font-medium transition-all group relative text-muted hover:text-foreground hover:bg-card-border/20 border border-transparent cursor-pointer ${
-            sidebarCollapsed ? 'justify-center' : 'space-x-3'
-          }`}
-        >
-          <ExternalLink className="w-5 h-5 flex-shrink-0 text-muted group-hover:text-foreground" />
-          {!sidebarCollapsed && <span className="whitespace-nowrap">Swagger API Docs</span>}
-          {sidebarCollapsed && (
-            <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-xs px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
-              Swagger API Docs
-            </div>
-          )}
-        </a>
+        {process.env.NODE_ENV !== 'production' && (
+          <a
+            href="http://localhost:3000/api-docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center p-2.5 rounded-lg text-sm font-medium transition-all group relative text-muted hover:text-foreground hover:bg-card-border/20 border border-transparent cursor-pointer ${
+              sidebarCollapsed ? 'justify-center' : 'space-x-3'
+            }`}
+          >
+            <ExternalLink className="w-5 h-5 flex-shrink-0 text-muted group-hover:text-foreground" />
+            {!sidebarCollapsed && <span className="whitespace-nowrap">Swagger API Docs</span>}
+            {sidebarCollapsed && (
+              <div className="absolute left-14 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/95 border border-card-border/50 text-white text-xs px-2.5 py-1.5 rounded shadow-xl whitespace-nowrap z-50">
+                Swagger API Docs
+              </div>
+            )}
+          </a>
+        )}
       </nav>
     </aside>
   );

@@ -10,7 +10,7 @@ import { notFound } from 'next/navigation';
 
 export default function SandboxPage() {
   // Lock sandbox access to development environments only (404 in production)
-  if (process.env.NEXT_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production') {
     notFound();
   }
   const [progressVal, setProgressVal] = useState<number>(45);

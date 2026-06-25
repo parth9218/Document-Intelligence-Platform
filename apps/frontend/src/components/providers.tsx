@@ -13,7 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       // Check if any route mode is set to mock
       const hasMock = Object.values(apiRouting).some((mode) => mode === 'mock');
       
-      if (process.env.NEXT_ENV === 'development' && hasMock) {
+      if (process.env.NODE_ENV === 'development' && hasMock) {
         try {
           const { worker } = await import('@/mocks/browser');
           await worker.start({
