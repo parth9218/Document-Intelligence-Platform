@@ -9,6 +9,7 @@
     "dev": "nodemon src/index.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
+    "api:docs:generate": "ts-node src/scripts/generate-openapi.ts",
     "test": "jest",
     "test:trigger": "ts-node src/tests/test-trigger.ts"
   },
@@ -18,7 +19,9 @@
     "@prisma/client": "^5.14.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -26,6 +29,8 @@
     "@types/node": "^20.12.12",
     "@types/pg": "^8.11.6",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "jest": "^30.4.2",
     "nodemon": "^3.1.0",
     "prisma": "^5.14.0",

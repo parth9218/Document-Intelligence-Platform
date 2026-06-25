@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+:root {
+  /* HSL Colors for Light Mode */
+  --background-hsl: 220 20% 97%;
+  --foreground-hsl: 224 71.4% 4.1%;
+  
+  --card-hsl: 0 0% 100%;
+  --card-border-hsl: 220 15% 90%;
+  
+  --primary-hsl: 221.2 83.2% 53.3%;
+  --primary-glow-hsl: 221.2 83.2% 70%;
+  --secondary-hsl: 262.1 83.3% 57.8%;
+  --accent-hsl: 190 90% 45%;
+  
+  --muted-hsl: 220 10% 40%;
+  --border-hsl: 220 13% 91%;
+  
+  /* Glass overlays for light mode */
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] {
+  /* HSL Colors for Dark Mode (Sleek Dark Mode First) */
+  --background-hsl: 224 71% 4%;
+  --foreground-hsl: 210 20% 98%;
+  
+  --card-hsl: 224 71% 7%;
+  --card-border-hsl: 224 71% 15%;
+  
+  --primary-hsl: 217.2 91.2% 59.8%;
+  --primary-glow-hsl: 217.2 91.2% 80%;
+  --secondary-hsl: 263.4 70% 50.4%;
+  --accent-hsl: 191.6 91.4% 45%;
+  
+  --muted-hsl: 215.4 16.3% 56.9%;
+  --border-hsl: 217.2 32.6% 17.5%;
+  
+  /* Glass overlays for dark mode */
+  --glass-bg: rgba(15, 23, 42, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shadow: rgba(0, 0, 0, 0.35);
+}
+
+@theme {
+  /* Colors mapping HSL Hues */
+  --color-background: hsl(var(--background-hsl));
+  --color-foreground: hsl(var(--foreground-hsl));
+  --color-card: hsl(var(--card-hsl));
+  --color-card-border: hsl(var(--card-border-hsl));
+  --color-primary: hsl(var(--primary-hsl));
+  --color-primary-glow: hsl(var(--primary-glow-hsl));
+  --color-secondary: hsl(var(--secondary-hsl));
+  --color-accent: hsl(var(--accent-hsl));
+  --color-muted: hsl(var(--muted-hsl));
+  --color-border: hsl(var(--border-hsl));
+  
+  /* Custom border glows and shadow utilities */
+  --shadow-glass: 0 8px 32px 0 var(--glass-shadow);
+  
+  /* Custom font families */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Custom Animations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+  --animate-shimmer: shimmer 2s linear infinite;
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes glow {
+    from { box-shadow: 0 0 10px rgba(6, 182, 212, 0.15), 0 0 20px rgba(99, 102, 241, 0.05); }
+    to { box-shadow: 0 0 20px rgba(6, 182, 212, 0.45), 0 0 40px rgba(99, 102, 241, 0.25); }
+  }
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+}
+
+/* Custom base styles */
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom Liquid Glass utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.glass-panel-interactive {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-interactive:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 10px 40px 0 rgba(6, 182, 212, 0.15);
+  transform: translateY(-2px);
+}
+
+[data-theme="dark"] .glass-panel-interactive:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 10px 40px 0 rgba(6, 182, 212, 0.25);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

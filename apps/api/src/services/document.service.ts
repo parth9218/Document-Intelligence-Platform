@@ -246,60 +246,87 @@ class DocumentService {
   }
 
   /**
-   * Fetches document processing details and chunk counters.
+   * Fetches processing details and metadata for all documents in a session.
    */
-  public async getDocumentStatus(sessionId: string, documentId: string) {
-    const doc = await prisma.document.findUnique({
-      where: { id: documentId },
+  public async getSessionDocumentsStatus(sessionId: string): Promise<{ documents: DocumentStatusObject[] }> {
+    const docs = await prisma.document.findMany({
+      where: { session_id: sessionId },
       include: { processing_job: true },
+      orderBy: { created_at: 'asc' },
     });
 
-    if (!doc || doc.session_id !== sessionId) {
-      throw new NotFoundError('Document not found');
-    }
-
-    const job = doc.processing_job;
-
-    return {
+    const statusObjects = docs.map((doc) => ({
       documentId: doc.id,
-      status: job ? job.status : doc.status,
-      progressPct: job ? job.progress_pct : 0,
-      processedChunks: job ? job.processed_chunks : 0,
-      totalChunks: job ? job.total_chunks : null,
-      errorCode: job ? job.error_code : null,
-      errorMessage: job ? job.error_message : null,
-    };
+      filename: doc.filename,
+      mimeType: doc.mime_type,
+      fileSizeBytes: Number(doc.file_size_bytes),
+      status: doc.processing_job ? doc.processing_job.status : doc.status,
+      progressPct: doc.processing_job ? doc.processing_job.progress_pct : 0,
+      processedChunks: doc.processing_job ? doc.processing_job.processed_chunks : 0,
+      totalChunks: doc.processing_job ? doc.processing_job.total_chunks : null,
+      errorCode: doc.processing_job ? doc.processing_job.error_code : null,
+      errorMessage: doc.processing_job ? doc.processing_job.error_message : null,
+      createdAt: doc.created_at,
+    }));
+
+    return { documents: statusObjects };
   }
 
   /**
-   * Prepares a raw PG client, executes LISTEN, and hooks up the notification callback.
+   * Prepares a raw PG client, executes LISTEN on a session-scoped channel, and hooks up the notification callback.
+   * Returns the initial snapshot of document statuses, a metadata cache map, and a cleanup function.
    */
   public async connectProgressStream(
     sessionId: string,
-    documentId: string,
-    onNotification: (payload: any) => void,
-    onClose: (cleanup: () => Promise<void>) => void
-  ): Promise<any> {
-    const doc = await prisma.document.findUnique({
-      where: { id: documentId },
+    onNotification: (payload: any) => void
+  ): Promise<{
+    snapshot: DocumentStatusObject[];
+    metadataCache: Map<string, { filename: string; mimeType: string; fileSizeBytes: number; createdAt: Date }>;
+    cleanup: () => Promise<void>;
+  }> {
+    // 1. Fetch all documents in the session to form the initial snapshot and metadata cache
+    const docs = await prisma.document.findMany({
+      where: { session_id: sessionId },
       include: { processing_job: true },
+      orderBy: { created_at: 'asc' },
     });
 
-    if (!doc || doc.session_id !== sessionId) {
-      throw new NotFoundError('Document not found');
-    }
+    const metadataCache = new Map<string, { filename: string; mimeType: string; fileSizeBytes: number; createdAt: Date }>();
+    const snapshot: DocumentStatusObject[] = docs.map((doc) => {
+      const meta = {
+        filename: doc.filename,
+        mimeType: doc.mime_type,
+        fileSizeBytes: Number(doc.file_size_bytes),
+        createdAt: doc.created_at,
+      };
+      metadataCache.set(doc.id, meta);
 
+      return {
+        documentId: doc.id,
+        filename: doc.filename,
+        mimeType: doc.mime_type,
+        fileSizeBytes: meta.fileSizeBytes,
+        status: doc.processing_job ? doc.processing_job.status : doc.status,
+        progressPct: doc.processing_job ? doc.processing_job.progress_pct : 0,
+        processedChunks: doc.processing_job ? doc.processing_job.processed_chunks : 0,
+        totalChunks: doc.processing_job ? doc.processing_job.total_chunks : null,
+        errorCode: doc.processing_job ? doc.processing_job.error_code : null,
+        errorMessage: doc.processing_job ? doc.processing_job.error_message : null,
+        createdAt: doc.created_at,
+      };
+    });
+
+    // 2. Connect raw pg client and LISTEN to session-scoped channel
     const client: PoolClient = await pgPool.connect();
-    
-    await client.query('LISTEN progress_channel');
+    const channelName = `progress_${sessionId.replace(/-/g, '_')}`;
+
+    await client.query(`LISTEN ${channelName}`);
 
     const handleNotification = (msg: any) => {
-      if (msg.channel === 'progress_channel') {
+      if (msg.channel === channelName) {
         try {
           const payload = JSON.parse(msg.payload || '{}');
-          if (payload.document_id === documentId) {
-            onNotification(payload);
-          }
+          onNotification(payload);
         } catch (parseErr) {
           logger.error('Error parsing pg notification payload inside stream:', parseErr);
         }
@@ -311,26 +338,35 @@ class DocumentService {
     const cleanup = async () => {
       client.off('notification', handleNotification);
       try {
-        await client.query('UNLISTEN progress_channel');
+        await client.query(`UNLISTEN ${channelName}`);
       } catch (err) {
-        logger.error('Error on progress stream UNLISTEN:', err);
+        logger.error(`Error on progress stream UNLISTEN for channel ${channelName}:`, err);
       } finally {
         client.release();
       }
     };
 
-    onClose(cleanup);
-
     return {
-      documentId: doc.id,
-      status: doc.processing_job?.status || doc.status,
-      progressPct: doc.processing_job?.progress_pct || 0,
-      processedChunks: doc.processing_job?.processed_chunks || 0,
-      totalChunks: doc.processing_job?.total_chunks || null,
-      errorCode: doc.processing_job?.error_code || null,
-      errorMessage: doc.processing_job?.error_message || null,
+      snapshot,
+      metadataCache,
+      cleanup,
     };
   }
 }
 
+export interface DocumentStatusObject {
+  documentId: string;
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  status: string;
+  progressPct: number;
+  processedChunks: number;
+  totalChunks: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+}
+
 export const documentService = new DocumentService();
+
