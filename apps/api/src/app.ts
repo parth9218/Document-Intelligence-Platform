@@ -42,11 +42,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Mount active session details fetch (runs getSession only - no auto-creation)
-app.get('/api/session', getSession, (req, res, next) => sessionController.getActiveSession(req, res, next));
-
 // Apply session creation/verification middleware globally to subsequent routes & fallbacks
 app.use(sessionMiddleware);
+
+// Mount active session details fetch (auto-creates session if missing)
+app.get('/api/session', (req, res, next) => sessionController.getActiveSession(req, res, next));
 
 // Mount protected document tracking routes
 app.use('/api/documents', documentsRouter);

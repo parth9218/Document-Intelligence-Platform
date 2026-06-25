@@ -5,11 +5,11 @@ services:
     image: pgvector/pgvector:pg16
     container_name: docintel-db
     ports:
-      - "5432:5432"
+      - ${DB_PORT:-5432}:5432
     environment:
-      POSTGRES_DB: docintel
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-docintel}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,10 +22,16 @@ services:
     image: localstack/localstack:latest
     container_name: docintel-localstack
     ports:
-      - "4566:4566"
+      - ${LOCALSTACK_PORT}:4566
     environment:
-      - SERVICES=s3,sqs
-      - AWS_DEFAULT_REGION=us-east-1
+      SERVICES: ${SERVICES}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN}
+    healthcheck:
+      test: [ "CMD", "curl -s http://localhost:${LOCALSTACK_PORT}/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - localstack_data:/var/lib/localstack
 

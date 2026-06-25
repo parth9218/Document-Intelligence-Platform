@@ -78,21 +78,35 @@ describe('API Session Management & Middleware Integration Tests', () => {
   });
 
   describe('Session Route Integrations', () => {
+    it('should automatically initialize a new session if no cookie is present', async () => {
+      const response = await request(app).get('/api/session');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body).toHaveProperty('expires_at');
+      expect(response.body).toHaveProperty('created_at');
+
+      const sessionId = response.body.id;
+      createdSessionIds.push(sessionId);
+
+      // Verify Set-Cookie header contains session_token matching the DB record
+      const setCookieHeader = response.headers['set-cookie'];
+      expect(setCookieHeader).toBeDefined();
+      expect(setCookieHeader[0]).toContain(`${COOKIE_NAME}=`);
+    });
+
     it('should authenticate and slide the session expiration if a valid cookie is present', async () => {
       // 1. Establish a new session first
-      const failedRouteResponse = await request(app).get('/failed_route').catch(() => {});
-      const setCookieHeader = failedRouteResponse?.headers['set-cookie']?.[0];
-      expect(setCookieHeader).toBeDefined();
-      const cookieValue = setCookieHeader!.split(';')[0].split('=')[1];
-
-      const sessionResponse = await request(app)
-        .get('/api/session')
-        .set('Cookie', `${COOKIE_NAME}=${cookieValue}`);
+      const sessionResponse = await request(app).get('/api/session');
 
       const sessionId = sessionResponse.body.id;
       if (sessionId) {
         createdSessionIds.push(sessionId);
       }
+
+      const setCookieHeader = sessionResponse.headers['set-cookie']?.[0];
+      expect(setCookieHeader).toBeDefined();
+      const cookieValue = setCookieHeader!.split(';')[0].split('=')[1];
 
       const initialDbSession = await prisma.session.findUnique({
         where: { id: sessionId },
