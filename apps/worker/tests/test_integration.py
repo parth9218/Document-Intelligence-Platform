@@ -11,8 +11,9 @@ from unittest.mock import patch, MagicMock
 
 from app.config.settings import settings
 from app.models.db import get_db
-from app.models import Document, ProcessingJob
+from app.models import Document, ProcessingJob, DocumentChunk
 from app.models.generated_models import Sessions
+
 from app.repositories.job_repository import JobRepository
 from app.services.extractor import ExtractorService
 from app.services.document_service import DocumentService
@@ -62,10 +63,12 @@ class TestIntegrationTask201(unittest.TestCase):
             for job_id in self.created_jobs:
                 db.query(ProcessingJob).filter(ProcessingJob.id == job_id).delete()
             for doc_id in self.created_documents:
+                db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
                 db.query(Document).filter(Document.id == doc_id).delete()
             for sess_id in self.created_sessions:
                 db.query(Sessions).filter(Sessions.id == sess_id).delete()
             db.commit()
+
 
         # 3. Drain SQS to clean up messages
         self._drain_queue()
@@ -229,6 +232,22 @@ class TestIntegrationTask201(unittest.TestCase):
             self.assertEqual(job.progress_pct, 100)
             self.assertIsNotNone(job.completed_at)
 
+            # Verify chunks are persisted in the DB
+            chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == str(document_id)).order_by(DocumentChunk.chunk_index).all()
+            self.assertEqual(len(chunks), 2)
+            self.assertEqual(chunks[0].chunk_index, 0)
+            self.assertEqual(chunks[0].page_number, 1)
+            self.assertEqual(chunks[0].content, "Hello World PDF Integration Test Page 1")
+            self.assertEqual(chunks[0].model_version, "titan-embed-text-v2")
+            self.assertEqual(len(chunks[0].embedding), 1024)
+
+            self.assertEqual(chunks[1].chunk_index, 1)
+            self.assertEqual(chunks[1].page_number, 2)
+            self.assertEqual(chunks[1].content, "Hello World PDF Integration Test Page 2")
+            self.assertEqual(chunks[1].model_version, "titan-embed-text-v2")
+            self.assertEqual(len(chunks[1].embedding), 1024)
+
+
         # Verify temp file was cleaned up (Step 9)
         self.assertEqual(len(temp_paths_recorded), 1)
         self.assertFalse(os.path.exists(temp_paths_recorded[0]))
@@ -282,6 +301,16 @@ class TestIntegrationTask201(unittest.TestCase):
             doc = JobRepository.get_document_by_id(db, str(document_id))
             self.assertEqual(job.status, "completed")
             self.assertEqual(doc.status, "completed")
+
+            # Verify chunks are persisted in the DB
+            chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == str(document_id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertEqual(chunks[0].chunk_index, 0)
+            self.assertEqual(chunks[0].page_number, 1)
+            self.assertEqual(chunks[0].content, "This is a plain text file for testing extraction.")
+            self.assertEqual(chunks[0].model_version, "titan-embed-text-v2")
+            self.assertEqual(len(chunks[0].embedding), 1024)
+
 
     def test_validation_step_4_file_not_found(self):
         """

@@ -97,11 +97,50 @@ class DocumentService:
                 for chunk in batch:
                     chunk.embedding = embeddings_provider.embed_chunk(chunk.content)
 
+                # Map chunks to db values
+                chunks_data = []
+                for chunk in batch:
+                    chunks_data.append({
+                        "document_id": chunk.document_id,
+                        "session_id": chunk.session_id,
+                        "chunk_index": chunk.chunk_index,
+                        "content": chunk.content,
+                        "token_count": chunk.token_count,
+                        "page_number": chunk.page_number,
+                        "embedding": chunk.embedding,
+                        "model_version": "titan-embed-text-v2"
+                    })
+
+
+                # Idempotently persist the batch
+                try:
+                    JobRepository.upsert_chunks(db, chunks_data)
+                except Exception as db_err:
+                    logger.error(
+                        f"[Service] Database persistence failed for batch {batch_idx}: {db_err}",
+                        extra={"document_id": document_id}
+                    )
+                    raise PermanentFailure("persistence_failed", str(db_err))
+
+                # Update progress in DB
+                processed = (batch_idx + 1) * 50
+                progress = int((processed / len(chunks)) * 100)
+                JobRepository.update_job_status(
+                    db,
+                    document_id,
+                    "embedding",
+                    processed_chunks=min(processed, len(chunks)),
+                    progress_pct=min(progress, 99),  # Reserve 100% for final completion
+                    checkpoint_index=batch_idx
+                )
+                db.commit()
+
             logger.info(
                 f"[Service] Processing document workflow completed chunking and embedding", 
                 extra={"document_id": document_id, "session_id": session_id, "total_chunks": len(chunks)}
             )
             return batches
+
 
         finally:
             # 5. Clean up temporary files immediately

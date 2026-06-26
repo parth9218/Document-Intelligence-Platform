@@ -6,6 +6,7 @@ from sqlalchemy import BigInteger, DateTime, ForeignKeyConstraint, Index, Intege
 from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
+from pgvector.sqlalchemy import Vector
 
 class Base(DeclarativeBase):
     type_annotation_map = {
@@ -126,7 +127,8 @@ class DocumentChunks(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(True), nullable=False, server_default=text('CURRENT_TIMESTAMP'))
     page_number: Mapped[Optional[int]] = mapped_column(Integer)
     token_count: Mapped[Optional[int]] = mapped_column(Integer)
-    embedding: Mapped[Optional[Any]] = mapped_column(NullType)
+    embedding: Mapped[Optional[Any]] = mapped_column(Vector(1024))
+
 
     document: Mapped['Documents'] = relationship('Documents', back_populates='document_chunks')
 

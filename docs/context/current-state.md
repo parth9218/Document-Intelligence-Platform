@@ -19,10 +19,11 @@ This document records the exact state of code modules and active tasks. Update i
 - **Frontend Phase 2 (Application Shell & API)**: Complete. Tasks F2.1, F2.2, and F2.3 are complete.
 - **Frontend Phase 3 (Batch Upload & Ingestion)**: Complete. Tasks F3.1, F3.2, and F3.3 are complete.
 - **Frontend Phase 4 (Real-Time Ingestion Progress)**: Complete. Tasks F4.1 and F4.2 are complete.
-- **Phase 2 (Ingestion)**: **In Progress**. Tasks 201 (Worker Document Extraction) and 202 (Chunking & Embedding) are complete, verified, and unit/integration tested. Next is Task 203 (Vector Storage).
+- **Phase 2 (Ingestion)**: **Complete**. All three tasks (201, 202, and 203) are complete, verified, and unit/integration tested. Next is Phase 3 (Query Engine).
 - **Phase 3 (Query Engine)**: Pending.
 - **Phase 4 (Observability)**: Pending.
 - **Phase 5 (Platform)**: Pending.
+
 
 ## Operational Warnings
 

@@ -214,4 +214,12 @@ This document lists completed tasks and code files created.
   - Wired chunker and embedding stages into the main document ingestion service pipeline `app/services/document_service.py` to transition statuses to `chunking` and `embedding`, set `total_chunks` count, and execute embedding calls in batches of 50 chunks.
   - Developed and successfully verified unit test suites [test_chunker.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_chunker.py) and [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py).
   - Executed the full worker test suite discover discover, passing all 43 tests including end-to-end integration tests using LocalStack and local pgvector database parity.
+- **Worker Vector Storage & Job Progress Updates (Task 203)**:
+  - Created idempotent chunk upsert mechanism `upsert_chunks()` in `JobRepository` using PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` to safely permit retries.
+  - Configured `DocumentChunk.embedding` attribute to use the custom `pgvector` SQL Alchemy type `Vector(1024)`.
+  - Implemented per-batch transactional progress checkpointing: updates `processed_chunks`, `progress_pct` (capped at 99%), and `checkpoint_index` after writing each 50-chunk batch to the database.
+  - Supported resume-on-retry: calculates `resume_batch_index` from `checkpoint_index + 1` at start to skip already-persisted batches.
+  - Implemented final completion transition: atomically updates `processing_jobs.status = 'completed'` and `documents.status = 'completed'` with progress at 100% and completed timestamp inside a single transaction.
+  - Added new integration test assertions verifying that chunks are correctly persisted, structured, and carry the correct page numbers, content, and 1024-dimension float embedding vectors. All tests pass successfully.
+
 
