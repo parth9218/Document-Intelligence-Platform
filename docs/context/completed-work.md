@@ -149,6 +149,13 @@ This document lists completed tasks and code files created.
   - Wildcard `*` is never returned in `Access-Control-Allow-Origin` (enforced because `credentials: true` is always set).
   - Registered a dedicated `app.options('*', cors(corsOptions))` handler to ensure preflight responses are served immediately with `Access-Control-Max-Age: 86400` (24 hours), reducing browser preflight round-trips.
   - Written 10-case integration test suite [cors.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/cors.test.ts) covering: development dynamic-origin reflection, credentials header always present, wildcard-never guarantee, preflight `OPTIONS` response shape, allowed-methods listing, no-Origin pass-through, production whitelist accept, production origin block, production wildcard-never, production preflight block.
+- **Worker SQS Consumer Loop (Task 104)**:
+  - Structured the worker service using a modular, decoupled layout with separate layers for settings/config, logging, SQLAlchemy models, SQS client, database repositories, document service pipeline, and job execution/consuming handlers.
+  - Implemented SQS Client using boto3 with dynamic support for LocalStack redirects/mock keys and custom long-polling parameters (`WaitTimeSeconds=20`, `MaxNumberOfMessages=1`, `VisibilityTimeout=600`).
+  - Created SQS Consumer loop that fetches S3 event records, extracts `sessionId` and `documentId` from S3 object keys, delegates job handling to JobHandler, and ensures message deletion on success/permanent failure or visibility timeout expiration on transient failure.
+  - Programmed Job Handler to orchestrate job state transitions (`downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`) using SQLAlchemy ORM context managers.
+  - Implemented a DLQ bridge poller running as a secondary daemon thread every 30 seconds to catch messages routed to DLQ and mark them as `failed` with code `max_retries_exceeded` in the DB.
+  - Designed graceful shutdown logic intercepting SIGINT/SIGTERM to set a shutdown flag, complete the current polling/processing cycle, and safely exit without leaving half-processed messages un-acknowledged in SQS.
 
 
 ## Verification Records
@@ -190,4 +197,7 @@ This document lists completed tasks and code files created.
   - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
   - Verified active status transitions: processing documents display correct stage tags (Downloading, Validating, etc.) and progress percentages/chunk numbers.
   - Verified failed and expired visual states: manually setting status to `failed` or `expired` updates card border styles to warning glows and reveals detailed error logs, and dismissing/retrying updates the store registry and removes the cards.
+- **Worker SQS Consumer Loop Verification (Task 104)**:
+  - Formulated 17 unit/integration test cases under `apps/worker/tests/test_worker.py` covering all consumer/poller functionality, SQS message routing, job handler state machine transitions, DLQ failure updates, and signal handling.
+  - Executed tests using the virtual environment python interpreter, passing successfully in 0.017 seconds.
 
