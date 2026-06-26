@@ -1,8 +1,8 @@
 # Master Roadmap Progress Tracker
 
 ## Milestone 1: Core API & DB Skeleton (Backend Phase 1)
-* **Status**: In Progress
-* **Key Tasks**: Task 101 - 106
+* **Status**: Complete
+* **Key Tasks**: Task 101 - 108
 
 ## Milestone 2: File Ingestion Flow (Backend Phase 2)
 * **Status**: Planned
@@ -27,15 +27,15 @@
 * **Key Tasks**: Task F1.1 - F1.3
 
 ## Milestone F2: Global Shell, Auth & Empty Dashboard (Frontend Phase 2)
-* **Status**: Planned
+* **Status**: Complete
 * **Key Tasks**: Task F2.1 - F2.3
 
 ## Milestone F3: Batch Upload & Multipart S3 Connector (Frontend Phase 3)
-* **Status**: Planned
+* **Status**: Complete
 * **Key Tasks**: Task F3.1 - F3.3
 
 ## Milestone F4: Real-Time Ingestion Feed & SSE Synchronization (Frontend Phase 4)
-* **Status**: Planned
+* **Status**: Complete
 * **Key Tasks**: Task F4.1 - F4.2
 
 ## Milestone F5: Interactive Chat Panel & Citation Popovers (Frontend Phase 5)
