@@ -156,7 +156,13 @@ This document lists completed tasks and code files created.
   - Programmed Job Handler to orchestrate job state transitions (`downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`) using SQLAlchemy ORM context managers.
   - Implemented a DLQ bridge poller running as a secondary daemon thread every 30 seconds to catch messages routed to DLQ and mark them as `failed` with code `max_retries_exceeded` in the DB.
   - Designed graceful shutdown logic intercepting SIGINT/SIGTERM to set a shutdown flag, complete the current polling/processing cycle, and safely exit without leaving half-processed messages un-acknowledged in SQS.
-
+- **Worker Document Extraction (Task 201)**:
+  - Implemented a complete S3 downloading verification pipeline in `ExtractorService` executing existence, size matching, and content-type checks before downloading objects.
+  - Programmed magic byte validation for PDFs (`%PDF` magic bytes checking) and encoding validation for plain text files (UTF-8 decode compliance checking), avoiding spoofed Content-Type trust.
+  - Integrated PyMuPDF (fitz) text parsing library to extract page-by-page text native elements and clean trailing whitespace.
+  - Mapped the extraction pipeline to job status transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) with atomic PostgreSQL commits.
+  - Updated worker setup to resolve Kubernetes HOSTNAME pod matching fallback with UUID suffixing.
+  - Formulated a 7-case integration test suite `test_integration.py` executing the 9 validation steps against LocalStack S3/SQS and real PostgreSQL database schemas.
 
 ## Verification Records
 
@@ -200,4 +206,6 @@ This document lists completed tasks and code files created.
 - **Worker SQS Consumer Loop Verification (Task 104)**:
   - Formulated 17 unit/integration test cases under `apps/worker/tests/test_worker.py` covering all consumer/poller functionality, SQS message routing, job handler state machine transitions, DLQ failure updates, and signal handling.
   - Executed tests using the virtual environment python interpreter, passing successfully in 0.017 seconds.
-
+- **Worker Document Ingestion Integration Verification (Task 201)**:
+  - Formulated and successfully executed integration test suite [test_integration.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_integration.py) verifying all 9 validation steps in the task spec against LocalStack S3/SQS and real PostgreSQL database schemas.
+  - Verified correct status flow transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) and correct SQS visibility timeout/message deletion behaviors for all success, mismatch, magic byte, and corrupt PDF file scenarios.

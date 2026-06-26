@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import NoResultFound
 from app.models.db import get_db
@@ -6,22 +7,19 @@ from app.repositories.job_repository import JobRepository
 from app.services.document_service import DocumentService
 from app.utils.logger import logger
 
-class PermanentFailure(Exception):
-    """Exception raised for unrecoverable errors in document processing."""
-    def __init__(self, error_code: str, message: str):
-        self.error_code = error_code
-        self.message = message
-        super().__init__(message)
-
-class TransientFailure(Exception):
-    """Exception raised for temporary failures where processing should be retried."""
-    pass
+from app.errors import PermanentFailure, TransientFailure
 
 class JobHandler:
     def __init__(self, worker_id: str):
         self.worker_id = worker_id
 
-    def process_job(self, document_id: str, session_id: str, s3_key: str) -> None:
+    def process_job(
+        self, 
+        document_id: str, 
+        session_id: str, 
+        s3_key: str, 
+        s3_bucket: Optional[str] = None
+    ) -> None:
         """Coordinate the job execution, state transitions, and error routing."""
         logger.info(
             f"[Handler] Beginning job orchestration", 
@@ -66,7 +64,7 @@ class JobHandler:
         # 2. Delegate processing to service layer
         try:
             with get_db() as db:
-                DocumentService.process_document(db, document_id, session_id, s3_key)
+                DocumentService.process_document(db, document_id, session_id, s3_key, s3_bucket)
                 
                 # 3. Mark completed on success
                 JobRepository.mark_job_completed(db, document_id)

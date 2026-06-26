@@ -1,57 +1,75 @@
-import time
-import logging
-from typing import Optional
+import os
+from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
+
+from app.config.settings import settings
 from app.repositories.job_repository import JobRepository
+from app.services.extractor import ExtractorService
+from app.errors import PermanentFailure
 from app.utils.logger import logger
 
 class DocumentService:
     @staticmethod
-    def process_document(db: Session, document_id: str, session_id: str, s3_key: str) -> None:
-        """Execute text extraction, chunking, and embedding workflows.
-        
-        Currently stubbed for Phase 1. In Phase 2, this will coordinate:
-        1. Downloading file from S3.
-        2. Validating format.
-        3. Parsing text page-by-page.
-        4. Chunking paragraphs.
-        5. Generating embeddings and storing them in pgvector.
-        """
+    def process_document(
+        db: Session, 
+        document_id: str, 
+        session_id: str, 
+        s3_key: str, 
+        s3_bucket: Optional[str] = None
+    ) -> List[Tuple[int, str]]:
+        """Coordinate document downloading, validation, and text extraction."""
         logger.info(
             f"[Service] Processing document workflow started", 
             extra={"document_id": document_id, "session_id": session_id}
         )
 
-        # Simulating state transition: downloading -> validating
-        JobRepository.update_job_status(db, document_id, "validating")
-        db.commit()
-
-        # Simulating state transition: validating -> extracting
-        JobRepository.update_job_status(db, document_id, "extracting")
-        db.commit()
-
-        # Simulating state transition: extracting -> chunking
-        total_chunks = 4
-        JobRepository.update_job_status(db, document_id, "chunking", total_chunks=total_chunks)
-        db.commit()
-
-        # Simulating state transition: chunking -> embedding progress loop
-        JobRepository.update_job_status(db, document_id, "embedding", processed_chunks=0, progress_pct=0)
-        db.commit()
-
-        for pct in [25, 50, 75, 99]:
-            processed = int(total_chunks * (pct / 100))
-            JobRepository.update_job_status(
-                db, 
-                document_id, 
-                "embedding", 
-                processed_chunks=processed, 
-                progress_pct=pct
+        # 1. Fetch document metadata from DB
+        doc = JobRepository.get_document_by_id(db, document_id)
+        if not doc:
+            raise PermanentFailure(
+                "document_not_found", 
+                f"Document record not found for ID: {document_id}"
             )
-            db.commit()
-            time.sleep(0.5)  # Pause to simulate processing time
 
-        logger.info(
-            f"[Service] Processing document workflow completed", 
-            extra={"document_id": document_id, "session_id": session_id}
-        )
+        # Fallback to configured S3 bucket if none passed from event
+        bucket_name = s3_bucket or settings.S3_BUCKET_NAME
+
+        extractor = ExtractorService()
+        temp_path = None
+
+        try:
+            # 2. Download from S3 (performs head check first)
+            # Job status was transitioned to 'downloading' at JobHandler entry.
+            temp_path = extractor.download_document(
+                bucket=bucket_name,
+                s3_key=s3_key,
+                expected_size=doc.file_size_bytes,
+                expected_mime=doc.mime_type
+            )
+
+            # 3. Transition to 'validating' and verify content
+            JobRepository.update_job_status(db, document_id, "validating")
+            db.commit()
+            
+            extractor.validate_document(temp_path, doc.mime_type)
+
+            # 4. Transition to 'extracting' and parse text
+            JobRepository.update_job_status(db, document_id, "extracting")
+            db.commit()
+            
+            pages = extractor.extract_text(temp_path, doc.mime_type)
+
+            logger.info(
+                f"[Service] Processing document workflow completed extraction", 
+                extra={"document_id": document_id, "session_id": session_id, "pages_count": len(pages)}
+            )
+            return pages
+
+        finally:
+            # 5. Clean up temporary files immediately
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                    logger.info(f"[Service] Cleaned up temporary file: {temp_path}")
+                except Exception as cleanup_err:
+                    logger.error(f"[Service] Failed to delete temp file {temp_path}: {cleanup_err}")

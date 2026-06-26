@@ -5,6 +5,11 @@ from app.models import Document, ProcessingJob
 
 class JobRepository:
     @staticmethod
+    def get_document_by_id(db: Session, document_id: str) -> Optional[Document]:
+        """Fetch the document record associated with the given ID."""
+        return db.query(Document).filter(Document.id == document_id).first()
+
+    @staticmethod
     def get_job_by_document_id(db: Session, document_id: str) -> Optional[ProcessingJob]:
         """Fetch the processing job associated with the given document ID."""
         return db.query(ProcessingJob).filter(ProcessingJob.document_id == document_id).first()

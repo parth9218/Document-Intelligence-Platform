@@ -18,7 +18,7 @@ from app.handlers.job_handler import JobHandler
 from app.consumers.sqs_consumer import SqsConsumer
 
 # Generate a unique worker ID
-WORKER_ID = f"worker-pod-{uuid.uuid4().hex[:8]}"
+WORKER_ID = os.environ.get("HOSTNAME") or f"worker-pod-{uuid.uuid4().hex[:8]}"
 
 # Global shutdown flag
 shutdown_requested = False

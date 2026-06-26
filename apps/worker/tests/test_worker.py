@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.clients.sqs_client import SqsClient
 from app.consumers.sqs_consumer import SqsConsumer
-from app.handlers.job_handler import JobHandler, PermanentFailure, TransientFailure
+from app.handlers.job_handler import JobHandler
+from app.errors import PermanentFailure, TransientFailure
 from app.repositories.job_repository import JobRepository
 from app.models import Document, ProcessingJob
 from app.services.document_service import DocumentService
@@ -94,7 +95,7 @@ class TestSqsConsumer(unittest.TestCase):
     def test_process_single_message_success(self):
         self.consumer.process_single_message(self.mock_message, self.queue_url)
         self.mock_handler.process_job.assert_called_once_with(
-            "doc-456", "sess-123", "sessions/sess-123/documents/doc-456/original"
+            "doc-456", "sess-123", "sessions/sess-123/documents/doc-456/original", "documents-bucket"
         )
         self.mock_client.delete_message.assert_called_once_with(self.queue_url, "receipt-123")
 
@@ -177,8 +178,13 @@ class TestJobHandler(unittest.TestCase):
         self.s3_key = "sessions/sess-123/documents/doc-456/original"
 
     @patch('app.handlers.job_handler.get_db')
-    @patch('app.services.document_service.time.sleep') # to bypass sleep in pipeline
-    def test_process_job_success(self, mock_sleep, mock_get_db):
+    @patch('app.services.document_service.ExtractorService')
+    def test_process_job_success(self, mock_extractor_class, mock_get_db):
+        mock_extractor = MagicMock()
+        mock_extractor.download_document.return_value = "/tmp/mock-path"
+        mock_extractor.extract_text.return_value = [(1, "page 1 text")]
+        mock_extractor_class.return_value = mock_extractor
+
         mock_db = MagicMock()
         mock_get_db.return_value.__enter__.return_value = mock_db
         
