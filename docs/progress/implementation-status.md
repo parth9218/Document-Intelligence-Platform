@@ -13,7 +13,7 @@
 
 ## Backend Phase 2: Ingestion Pipeline
 * [x] **Task 201**: Worker Document Extraction ── *Complete*
-* [ ] **Task 202**: Worker Chunking & Embedding ── *Incomplete*
+* [x] **Task 202**: Worker Chunking & Embedding ── *Complete*
 * [ ] **Task 203**: Worker Vector Storage & Status Updates ── *Incomplete*
 
 ## Backend Phase 3: Query Engine

@@ -209,3 +209,9 @@ This document lists completed tasks and code files created.
 - **Worker Document Ingestion Integration Verification (Task 201)**:
   - Formulated and successfully executed integration test suite [test_integration.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_integration.py) verifying all 9 validation steps in the task spec against LocalStack S3/SQS and real PostgreSQL database schemas.
   - Verified correct status flow transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) and correct SQS visibility timeout/message deletion behaviors for all success, mismatch, magic byte, and corrupt PDF file scenarios.
+- **Worker Chunking & Embedding Generation (Task 202)**:
+  - Implemented the paragraph-based sliding window document chunker `app/services/chunker.py` and the embeddings generation service `app/services/embeddings.py` (which supports Amazon Bedrock Titan Embeddings V2 with exponential backoff retries and local Sentence-Transformers E5 model fallback).
+  - Wired chunker and embedding stages into the main document ingestion service pipeline `app/services/document_service.py` to transition statuses to `chunking` and `embedding`, set `total_chunks` count, and execute embedding calls in batches of 50 chunks.
+  - Developed and successfully verified unit test suites [test_chunker.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_chunker.py) and [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py).
+  - Executed the full worker test suite discover discover, passing all 43 tests including end-to-end integration tests using LocalStack and local pgvector database parity.
+

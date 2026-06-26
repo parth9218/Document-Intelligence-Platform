@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app.repositories.job_repository import JobRepository
 from app.services.extractor import ExtractorService
 from app.services.storage_service import get_storage_provider
+from app.services.chunker import ChunkerService, Chunk
+from app.services.embeddings import get_embedding_provider
 from app.errors import PermanentFailure
 from app.utils.logger import logger
 
@@ -58,7 +60,48 @@ class DocumentService:
                 f"[Service] Processing document workflow completed extraction", 
                 extra={"document_id": document_id, "session_id": session_id, "pages_count": len(pages)}
             )
-            return pages
+
+            # 5. Transition to 'chunking' and partition text
+            JobRepository.update_job_status(db, document_id, "chunking")
+            db.commit()
+
+            chunker = ChunkerService()
+            chunks = chunker.chunk_document(document_id, session_id, pages)
+
+            JobRepository.update_job_status(db, document_id, "chunking", total_chunks=len(chunks))
+            db.commit()
+
+            # 6. Retrieve resume batch index and transition to 'embedding'
+            job = JobRepository.get_job_by_document_id(db, document_id)
+            resume_batch_index = job.checkpoint_index + 1 if (job and job.checkpoint_index is not None) else 0
+
+            JobRepository.update_job_status(db, document_id, "embedding")
+            db.commit()
+
+            # 7. Batch chunks in groups of 50 and generate embeddings
+            batches = [chunks[i:i + 50] for i in range(0, len(chunks), 50)]
+            embeddings_provider = get_embedding_provider()
+
+            for batch_idx, batch in enumerate(batches):
+                if batch_idx < resume_batch_index:
+                    logger.info(
+                        f"[Service] Skipping embedding for batch index {batch_idx} (checkpoint resume is {resume_batch_index})",
+                        extra={"document_id": document_id}
+                    )
+                    continue
+
+                logger.info(
+                    f"[Service] Generating embeddings for batch {batch_idx + 1}/{len(batches)} (size: {len(batch)})",
+                    extra={"document_id": document_id}
+                )
+                for chunk in batch:
+                    chunk.embedding = embeddings_provider.embed_chunk(chunk.content)
+
+            logger.info(
+                f"[Service] Processing document workflow completed chunking and embedding", 
+                extra={"document_id": document_id, "session_id": session_id, "total_chunks": len(chunks)}
+            )
+            return batches
 
         finally:
             # 5. Clean up temporary files immediately
