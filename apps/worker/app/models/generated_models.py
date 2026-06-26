@@ -2,8 +2,8 @@ from typing import Any, Optional
 import datetime
 import uuid
 
-from sqlalchemy import ARRAY, BigInteger, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, SmallInteger, String, Text, Uuid, text
-from sqlalchemy.dialects.postgresql import INET, JSONB
+from sqlalchemy import BigInteger, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, SmallInteger, String, Text, Uuid, text
+from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
 
@@ -112,7 +112,7 @@ class DocumentChunks(Base):
         ForeignKeyConstraint(['document_id'], ['documents.id'], ondelete='CASCADE', onupdate='CASCADE', name='document_chunks_document_id_fkey'),
         PrimaryKeyConstraint('id', name='document_chunks_pkey'),
         Index('document_chunks_document_id_chunk_index_key', 'document_id', 'chunk_index', unique=True),
-        Index('document_chunks_embedding_hnsw_idx', 'embedding'),
+        Index('document_chunks_embedding_hnsw_idx', 'embedding', postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_using='hnsw', postgresql_with={'m': '16', 'ef_construction': '64'}),
         Index('document_chunks_session_id_idx', 'session_id')
     )
 

@@ -37,7 +37,7 @@ def setup_logging():
     handler = logging.StreamHandler(sys.stdout)
     
     # Check if we are running in production
-    env = os.getenv("PYTHON_ENV", os.getenv("NODE_ENV", "development"))
+    env = os.getenv("PYTHON_ENV")
     if env == "production":
         formatter = JsonFormatter()
     else:
