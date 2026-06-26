@@ -16,6 +16,7 @@ from app.models.generated_models import Sessions
 from app.repositories.job_repository import JobRepository
 from app.services.extractor import ExtractorService
 from app.services.document_service import DocumentService
+from app.services.storage_service import S3StorageProvider
 from app.handlers.job_handler import JobHandler
 from app.consumers.sqs_consumer import SqsConsumer
 from app.clients.sqs_client import SqsClient
@@ -180,14 +181,14 @@ class TestIntegrationTask201(unittest.TestCase):
         # Intercept extractor methods to:
         # A) Verify DB transitions on the fly (Step 2)
         # B) Track temp file path to ensure it is deleted (Step 9)
-        original_download = ExtractorService.download_document
+        original_download = S3StorageProvider.download_file
         original_validate = ExtractorService.validate_document
         original_extract = ExtractorService.extract_text
         
         temp_paths_recorded = []
 
-        def wrapped_download(inst, bucket, s3_key, expected_size, expected_mime):
-            path = original_download(inst, bucket, s3_key, expected_size, expected_mime)
+        def wrapped_download(inst, remote_path, expected_size, expected_mime):
+            path = original_download(inst, remote_path, expected_size, expected_mime)
             temp_paths_recorded.append(path)
             self.temp_files_to_check.append(path)
             # Verify DB is currently in 'downloading' state
@@ -212,7 +213,7 @@ class TestIntegrationTask201(unittest.TestCase):
                 self.assertEqual(job.status, "extracting")
             return original_extract(inst, temp_path, mime_type)
 
-        with patch.object(ExtractorService, 'download_document', wrapped_download), \
+        with patch.object(S3StorageProvider, 'download_file', wrapped_download), \
              patch.object(ExtractorService, 'validate_document', wrapped_validate), \
              patch.object(ExtractorService, 'extract_text', wrapped_extract):
             
@@ -453,14 +454,14 @@ class TestIntegrationTask201(unittest.TestCase):
 
         # Record temp paths to check Step 9 on failure path too
         temp_paths_recorded = []
-        original_download = ExtractorService.download_document
-        def wrapped_download(inst, bucket, s3_key, expected_size, expected_mime):
-            path = original_download(inst, bucket, s3_key, expected_size, expected_mime)
+        original_download = S3StorageProvider.download_file
+        def wrapped_download(inst, remote_path, expected_size, expected_mime):
+            path = original_download(inst, remote_path, expected_size, expected_mime)
             temp_paths_recorded.append(path)
             self.temp_files_to_check.append(path)
             return path
 
-        with patch.object(ExtractorService, 'download_document', wrapped_download):
+        with patch.object(S3StorageProvider, 'download_file', wrapped_download):
             self.consumer.process_single_message(msg, settings.QUEUE_URL)
 
         # Verify failed with invalid_file_type
@@ -511,14 +512,14 @@ class TestIntegrationTask201(unittest.TestCase):
 
         # Record temp paths to check Step 9 on failure path too
         temp_paths_recorded = []
-        original_download = ExtractorService.download_document
-        def wrapped_download(inst, bucket, s3_key, expected_size, expected_mime):
-            path = original_download(inst, bucket, s3_key, expected_size, expected_mime)
+        original_download = S3StorageProvider.download_file
+        def wrapped_download(inst, remote_path, expected_size, expected_mime):
+            path = original_download(inst, remote_path, expected_size, expected_mime)
             temp_paths_recorded.append(path)
             self.temp_files_to_check.append(path)
             return path
 
-        with patch.object(ExtractorService, 'download_document', wrapped_download):
+        with patch.object(S3StorageProvider, 'download_file', wrapped_download):
             self.consumer.process_single_message(msg, settings.QUEUE_URL)
 
         # Verify failed with extraction_failed

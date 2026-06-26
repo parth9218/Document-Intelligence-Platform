@@ -1,68 +1,13 @@
 import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import os
-from botocore.exceptions import ClientError
 
 from app.services.extractor import ExtractorService
 from app.errors import PermanentFailure
 
 class TestExtractorService(unittest.TestCase):
     def setUp(self):
-        self.mock_s3 = MagicMock()
-        self.service = ExtractorService(s3_client=self.mock_s3)
-        self.bucket = "test-bucket"
-        self.s3_key = "sessions/sess-123/documents/doc-456/original"
-
-    def test_download_document_success(self):
-        # Mock head_object metadata response
-        self.mock_s3.head_object.return_value = {
-            "ContentLength": 100,
-            "ContentType": "application/pdf"
-        }
-        
-        with patch('app.services.extractor.tempfile.NamedTemporaryFile') as mock_temp:
-            mock_file = MagicMock()
-            mock_temp.return_value = mock_file
-            mock_file.name = "/tmp/test-file.pdf"
-            
-            path = self.service.download_document(self.bucket, self.s3_key, 100, "application/pdf")
-            
-            self.assertEqual(path, "/tmp/test-file.pdf")
-            self.mock_s3.head_object.assert_called_once_with(self.bucket, self.s3_key)
-            self.mock_s3.download_fileobj.assert_called_once_with(self.bucket, self.s3_key, mock_file)
-            mock_file.close.assert_called_once()
-
-    def test_download_document_file_not_found(self):
-        # Mock ClientError with 404 code
-        error_response = {"Error": {"Code": "404", "Message": "Not Found"}}
-        self.mock_s3.head_object.side_effect = ClientError(error_response, "head_object")
-        
-        with self.assertRaises(PermanentFailure) as context:
-            self.service.download_document(self.bucket, self.s3_key, 100, "application/pdf")
-            
-        self.assertEqual(context.exception.error_code, "file_not_found")
-
-    def test_download_document_size_mismatch(self):
-        self.mock_s3.head_object.return_value = {
-            "ContentLength": 200,  # Mismatch (expected 100)
-            "ContentType": "application/pdf"
-        }
-        
-        with self.assertRaises(PermanentFailure) as context:
-            self.service.download_document(self.bucket, self.s3_key, 100, "application/pdf")
-            
-        self.assertEqual(context.exception.error_code, "size_mismatch")
-
-    def test_download_document_mime_mismatch(self):
-        self.mock_s3.head_object.return_value = {
-            "ContentLength": 100,
-            "ContentType": "image/png"  # Mismatch (expected application/pdf)
-        }
-        
-        with self.assertRaises(PermanentFailure) as context:
-            self.service.download_document(self.bucket, self.s3_key, 100, "application/pdf")
-            
-        self.assertEqual(context.exception.error_code, "content_type_mismatch")
+        self.service = ExtractorService()
 
     def test_validate_document_pdf_success(self):
         # Open mock file and return valid PDF header

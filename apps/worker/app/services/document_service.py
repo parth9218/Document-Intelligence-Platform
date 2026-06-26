@@ -1,10 +1,10 @@
 import os
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 from sqlalchemy.orm import Session
 
-from app.config.settings import settings
 from app.repositories.job_repository import JobRepository
 from app.services.extractor import ExtractorService
+from app.services.storage_service import get_storage_provider
 from app.errors import PermanentFailure
 from app.utils.logger import logger
 
@@ -13,9 +13,7 @@ class DocumentService:
     def process_document(
         db: Session, 
         document_id: str, 
-        session_id: str, 
-        s3_key: str, 
-        s3_bucket: Optional[str] = None
+        session_id: str
     ) -> List[Tuple[int, str]]:
         """Coordinate document downloading, validation, and text extraction."""
         logger.info(
@@ -31,18 +29,15 @@ class DocumentService:
                 f"Document record not found for ID: {document_id}"
             )
 
-        # Fallback to configured S3 bucket if none passed from event
-        bucket_name = s3_bucket or settings.S3_BUCKET_NAME
-
+        storage = get_storage_provider()
         extractor = ExtractorService()
         temp_path = None
 
         try:
-            # 2. Download from S3 (performs head check first)
+            # 2. Download from remote storage provider (performs head check first)
             # Job status was transitioned to 'downloading' at JobHandler entry.
-            temp_path = extractor.download_document(
-                bucket=bucket_name,
-                s3_key=s3_key,
+            temp_path = storage.download_file(
+                remote_path=doc.s3_key,
                 expected_size=doc.file_size_bytes,
                 expected_mime=doc.mime_type
             )

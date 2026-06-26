@@ -1,73 +1,13 @@
 import os
-import tempfile
 from typing import List, Tuple
 import fitz  # PyMuPDF
-from botocore.exceptions import ClientError
 
-from app.clients.s3_client import S3Client
 from app.errors import PermanentFailure
 from app.utils.logger import logger
 
 class ExtractorService:
-    def __init__(self, s3_client: S3Client = None):
-        self.s3_client = s3_client or S3Client()
-
-    def download_document(
-        self, 
-        bucket: str, 
-        s3_key: str, 
-        expected_size: int, 
-        expected_mime: str
-    ) -> str:
-        """Verify object metadata in S3 and download it to a local temporary file."""
-        logger.info(f"[Extractor] Starting metadata verification for: s3://{bucket}/{s3_key}")
-        
-        # 1. Verify object metadata using head_object
-        try:
-            metadata = self.s3_client.head_object(bucket, s3_key)
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            if error_code in ("404", "NoSuchKey"):
-                raise PermanentFailure(
-                    "file_not_found", 
-                    f"Document S3 object not found: s3://{bucket}/{s3_key}"
-                )
-            # Re-raise other S3 client errors as transient (retried)
-            raise e
-
-        # Assert ContentLength matching
-        actual_size = metadata.get("ContentLength", 0)
-        if actual_size != expected_size:
-            raise PermanentFailure(
-                "size_mismatch",
-                f"S3 Object size {actual_size} bytes does not match DB expected size {expected_size} bytes."
-            )
-
-        # Assert ContentType matching (optional or fallback)
-        actual_mime = metadata.get("ContentType", "")
-        if actual_mime != expected_mime:
-            raise PermanentFailure(
-                "content_type_mismatch",
-                f"S3 Object MIME type '{actual_mime}' does not match DB expected MIME type '{expected_mime}'."
-            )
-
-        # 2. Download object to a NamedTemporaryFile
-        logger.info(f"[Extractor] Downloading s3://{bucket}/{s3_key} to local temp file.")
-        
-        # We use delete=False to keep the file path active after closing the handle,
-        # permitting PyMuPDF/fitz to open it by path. We clean it up manually.
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        try:
-            self.s3_client.download_fileobj(bucket, s3_key, temp_file)
-            temp_file.close()
-            return temp_file.name
-        except Exception as e:
-            # Clean up temp file immediately on download failure
-            temp_file.close()
-            if os.path.exists(temp_file.name):
-                os.remove(temp_file.name)
-            logger.error(f"[Extractor] Failed to download S3 file: {e}")
-            raise e
+    def __init__(self):
+        pass
 
     def validate_document(self, temp_path: str, expected_mime: str) -> None:
         """Inspect file content (magic number or decode validation) matching the expected MIME type."""

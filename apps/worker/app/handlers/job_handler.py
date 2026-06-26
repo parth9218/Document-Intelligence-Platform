@@ -16,9 +16,7 @@ class JobHandler:
     def process_job(
         self, 
         document_id: str, 
-        session_id: str, 
-        s3_key: str, 
-        s3_bucket: Optional[str] = None
+        session_id: str
     ) -> None:
         """Coordinate the job execution, state transitions, and error routing."""
         logger.info(
@@ -64,7 +62,7 @@ class JobHandler:
         # 2. Delegate processing to service layer
         try:
             with get_db() as db:
-                DocumentService.process_document(db, document_id, session_id, s3_key, s3_bucket)
+                DocumentService.process_document(db, document_id, session_id)
                 
                 # 3. Mark completed on success
                 JobRepository.mark_job_completed(db, document_id)

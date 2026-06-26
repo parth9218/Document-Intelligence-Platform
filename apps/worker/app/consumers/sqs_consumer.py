@@ -50,7 +50,7 @@ class SqsConsumer:
 
             # Delegate to handler
             try:
-                self.handler.process_job(document_id, session_id, object_key, bucket_name)
+                self.handler.process_job(document_id, session_id)
                 # Success -> Delete from SQS
                 self.client.delete_message(queue_url, receipt_handle)
             except PermanentFailure as pf:

@@ -13,46 +13,49 @@ The worker processes raw file ingestion sequentially through three distinct proc
 ```mermaid
 sequenceDiagram
     autonumber
-    participant LocalStack S3
+    participant Storage Event
     participant SQS Queue
     participant SqsConsumer
     participant JobHandler
     participant DocumentService
-    participant ExtractorService
     participant Postgres DB
+    participant StorageProvider
+    participant ExtractorService
 
-    LocalStack S3->>SQS Queue: S3 ObjectCreated Event (via bucket notification)
+    Storage Event->>SQS Queue: ObjectCreated Event
     SqsConsumer->>SQS Queue: Poll message (receive_messages)
     SQS Queue-->>SqsConsumer: Message Envelope
-    SqsConsumer->>JobHandler: process_job(document_id, session_id, s3_key, bucket)
-
+    SqsConsumer->>JobHandler: process_job(document_id, session_id)
+    
     rect rgb(240, 245, 255)
         note right of JobHandler: Stage 1: Downloading
         JobHandler->>Postgres DB: Update status to 'downloading', set worker_id & started_at
-        JobHandler->>DocumentService: process_document()
-        DocumentService->>ExtractorService: download_document()
-        ExtractorService->>LocalStack S3: head_object(bucket, s3_key)
-        LocalStack S3-->>ExtractorService: Metadata (ContentLength, ContentType)
-        note over ExtractorService: Verify existence, size matches DB, type matches DB
-        ExtractorService->>LocalStack S3: download_fileobj() to NamedTemporaryFile
+        JobHandler->>DocumentService: process_document(document_id, session_id)
+        DocumentService->>Postgres DB: get_document_by_id(document_id)
+        Postgres DB-->>DocumentService: Document Record (remote_path, expected_size, expected_mime)
+        note over DocumentService: Resolve StorageProvider via get_storage_provider()
+        DocumentService->>StorageProvider: download_file(remote_path, expected_size, expected_mime)
+        StorageProvider->>StorageProvider: head_object() / Verify Metadata
+        StorageProvider->>StorageProvider: Download stream to NamedTemporaryFile
+        StorageProvider-->>DocumentService: temp_path
     end
 
     rect rgb(255, 245, 240)
         note right of DocumentService: Stage 2: Validating
         DocumentService->>Postgres DB: Update status to 'validating'
-        DocumentService->>ExtractorService: validate_document(temp_path, mime_type)
+        DocumentService->>ExtractorService: validate_document(temp_path, expected_mime)
         note over ExtractorService: Read first 16 bytes: check magic prefix (%PDF / UTF-8 decode)
     end
 
     rect rgb(240, 255, 240)
         note right of DocumentService: Stage 3: Extracting
         DocumentService->>Postgres DB: Update status to 'extracting'
-        DocumentService->>ExtractorService: extract_text(temp_path, mime_type)
+        DocumentService->>ExtractorService: extract_text(temp_path, expected_mime)
         ExtractorService-->>DocumentService: List of (page_number, text)
     end
 
     DocumentService-->>JobHandler: Pages List
-    JobHandler->>Postgres DB: Update job status & document status to 'completed' (Task 201 placeholder)
+    JobHandler->>Postgres DB: Update job status & document status to 'completed'
     JobHandler->>SqsConsumer: Success ACK
     SqsConsumer->>SQS Queue: Delete message (delete_message)
 ```
@@ -64,11 +67,12 @@ sequenceDiagram
 ### Stage 1: Downloading
 
 1. **Status Update**: Transitions `processing_jobs.status` to `downloading` and sets `worker_id` to the Pod Hostname (`os.environ.get("HOSTNAME")`) or a randomized UUID fallback, along with `started_at` to `now()`.
-2. **Pre-download S3 Object Verification**: Issues `head_object` to the S3 bucket to verify:
-   - **Existence**: If a `ClientError` with `404` or `NoSuchKey` is returned, status is transitioned to `failed`, `error_code` set to `file_not_found`, and the message is deleted.
-   - **Size**: If `ContentLength` in S3 does not match `file_size_bytes` stored in the DB, status transitions to `failed`, `error_code` set to `size_mismatch`, and the message is deleted.
-   - **Content Type**: If S3 `ContentType` does not match `mime_type` stored in the DB, status transitions to `failed`, `error_code` set to `content_type_mismatch`, and the message is deleted.
-3. **Local Stream Download**: Uses `tempfile.NamedTemporaryFile(delete=False)` to save the downloaded stream locally by path.
+2. **Storage Provider Resolution**: The `DocumentService` calls `get_storage_provider()` to dynamically resolve the active `StorageProvider` implementation (e.g. `S3StorageProvider`).
+3. **Pre-download Object Verification**: The storage provider queries object metadata (using `head_object` for S3) to verify:
+   - **Existence**: If object not found, status is transitioned to `failed`, `error_code` set to `file_not_found`, and SQS message is deleted.
+   - **Size**: If remote object size does not match the database expected size, status transitions to `failed`, `error_code` set to `size_mismatch`, and SQS message is deleted.
+   - **Content Type**: If remote Content-Type does not match the database expected MIME type, status transitions to `failed`, `error_code` set to `content_type_mismatch`, and SQS message is deleted.
+4. **Local Stream Download**: Storage provider downloads the remote file to a local `tempfile.NamedTemporaryFile(delete=False)` and returns the local path to the caller.
 
 ### Stage 2: Validating
 
@@ -107,6 +111,10 @@ sequenceDiagram
 - **Stream-Based Downloading**: Stream-based chunk writes to disk avoid loading large documents into memory all at once.
 - **Aggressive Cleanup**: Local temporary files are aggressively deleted within the request-response lifecycle inside a `finally` block, ensuring no stale file handles or leaked files consume disk space.
 - **No Database Polling**: State transitions trigger `PG NOTIFY` commands that update progress streams immediately.
+
+### Architectural Decoupling (StorageProvider Interface)
+- **Dependency Inversion Principle**: The core orchestration layers (`SqsConsumer`, `JobHandler`, `DocumentService`) no longer accept or process S3-specific parameters (e.g. S3 keys, S3 buckets). Instead, they operate on abstract `document_id` and `session_id` parameters, loading details from the DB and passing remote file path parameters into the abstract `StorageProvider` interface.
+- **Factory Pattern**: The factory `get_storage_provider()` resolves the concrete `StorageProvider` implementation (currently `S3StorageProvider`) from configurations at runtime, allowing seamless future migrations (e.g., to Google Cloud Storage or Azure Blob Storage) with zero changes to job handler or extraction pipelines.
 
 ---
 

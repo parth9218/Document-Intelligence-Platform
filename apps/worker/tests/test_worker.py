@@ -95,7 +95,7 @@ class TestSqsConsumer(unittest.TestCase):
     def test_process_single_message_success(self):
         self.consumer.process_single_message(self.mock_message, self.queue_url)
         self.mock_handler.process_job.assert_called_once_with(
-            "doc-456", "sess-123", "sessions/sess-123/documents/doc-456/original", "documents-bucket"
+            "doc-456", "sess-123"
         )
         self.mock_client.delete_message.assert_called_once_with(self.queue_url, "receipt-123")
 
@@ -179,9 +179,13 @@ class TestJobHandler(unittest.TestCase):
 
     @patch('app.handlers.job_handler.get_db')
     @patch('app.services.document_service.ExtractorService')
-    def test_process_job_success(self, mock_extractor_class, mock_get_db):
+    @patch('app.services.document_service.get_storage_provider')
+    def test_process_job_success(self, mock_get_storage, mock_extractor_class, mock_get_db):
+        mock_storage = MagicMock()
+        mock_storage.download_file.return_value = "/tmp/mock-path"
+        mock_get_storage.return_value = mock_storage
+
         mock_extractor = MagicMock()
-        mock_extractor.download_document.return_value = "/tmp/mock-path"
         mock_extractor.extract_text.return_value = [(1, "page 1 text")]
         mock_extractor_class.return_value = mock_extractor
 
@@ -216,7 +220,7 @@ class TestJobHandler(unittest.TestCase):
 
         mock_db.query.side_effect = mock_query
 
-        self.handler.process_job(self.doc_id, self.sess_id, self.s3_key)
+        self.handler.process_job(self.doc_id, self.sess_id)
 
         # Assert job state transitions ended at completed
         self.assertEqual(mock_job.status, "completed")
@@ -232,7 +236,7 @@ class TestJobHandler(unittest.TestCase):
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         with self.assertRaises(PermanentFailure):
-            self.handler.process_job(self.doc_id, self.sess_id, self.s3_key)
+            self.handler.process_job(self.doc_id, self.sess_id)
 
     @patch('app.handlers.job_handler.get_db')
     def test_process_job_completed_skipped(self, mock_get_db):
@@ -248,7 +252,7 @@ class TestJobHandler(unittest.TestCase):
         mock_db.query.return_value.filter.return_value.first.return_value = mock_job
 
         with patch('app.handlers.job_handler.JobRepository.update_job_status') as mock_update:
-            self.handler.process_job(self.doc_id, self.sess_id, self.s3_key)
+            self.handler.process_job(self.doc_id, self.sess_id)
             mock_update.assert_not_called()
 
     @patch('app.handlers.job_handler.get_db')
