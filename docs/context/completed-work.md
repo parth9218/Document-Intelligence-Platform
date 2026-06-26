@@ -221,5 +221,11 @@ This document lists completed tasks and code files created.
   - Supported resume-on-retry: calculates `resume_batch_index` from `checkpoint_index + 1` at start to skip already-persisted batches.
   - Implemented final completion transition: atomically updates `processing_jobs.status = 'completed'` and `documents.status = 'completed'` with progress at 100% and completed timestamp inside a single transaction.
   - Added new integration test assertions verifying that chunks are correctly persisted, structured, and carry the correct page numbers, content, and 1024-dimension float embedding vectors. All tests pass successfully.
+- **Worker AWS Bedrock Client Isolation**:
+  - Isolated the AWS Bedrock Runtime SDK interactions from the service layer into a standalone wrapper class `BedrockClient` in [bedrock_client.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/clients/bedrock_client.py).
+  - Modified [embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/services/embeddings.py) to import `BedrockClient` and utilize it in the `BedrockEmbeddingProvider` class via lazy initialization, also supporting optional constructor dependency injection for testability.
+  - Refactored [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py) to test `BedrockClient` initialization/delegation directly and updated `TestEmbeddingsService` to assert against mocked `BedrockClient` wrappers using constructor dependency injection.
+  - Cleaned up orphan background worker processes from the local environment and ran the full worker test suite, successfully verifying all 47 unit and integration tests.
+
 
 

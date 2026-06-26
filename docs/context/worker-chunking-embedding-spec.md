@@ -77,12 +77,18 @@ The chunker splits the text of each page individually to keep page boundaries al
 To prevent tight coupling between core worker orchestration logic and specific vector model client SDKs, generating vector embeddings is decoupled behind the `EmbeddingProvider` interface:
 
 * **`EmbeddingProvider(ABC)`**: The abstract base class that defines the contract: `embed_chunk(self, text: str) -> List[float]`.
-* **`BedrockEmbeddingProvider`**: The Amazon Bedrock Titan Embeddings V2 client implementation, utilizing exponential backoff retry parameters and boto3 clients.
+* **`BedrockEmbeddingProvider`**: The Amazon Bedrock Titan Embeddings V2 client implementation, utilizing exponential backoff retry parameters and a decoupled `BedrockClient` wrapper class.
 * **`LocalEmbeddingProvider`**: The local `sentence-transformers` client implementation, utilizing the `intfloat/e5-large-v2` model and E5-specific query/passage prefix styling.
 * **`get_embedding_provider()`**: Factory function checking the `settings.EMBEDDING_PROVIDER` configuration to return the active concrete provider instance.
 
-### Boto3 Bedrock Runtime Client
-- Connects to the AWS Bedrock service using the model ID `amazon.titan-embed-text-v2:0`.
+### Bedrock Client Wrapper
+The AWS Bedrock client SDK logic is fully isolated into the `BedrockClient` class (located in [bedrock_client.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/clients/bedrock_client.py)):
+- **Lazy Initialization**: Instantiated inside `BedrockEmbeddingProvider._get_bedrock_client()`, or injected via constructor dependency injection for cleaner unit testing.
+- **Dynamic Endpoint and Credentials**: Automatically checks `settings.LOCALSTACK_URL` and redirects to local endpoints for development/testing, while seamlessly resolving standard IAM IRSA container roles natively in AWS production.
+- **Encapsulated Call**: Exposes `invoke_model(**kwargs)` to perform raw runtime requests, fully shielding the service logic from the underlying `boto3` client object.
+
+### Model Parameters
+- The provider connects to the AWS Bedrock service using the model ID `amazon.titan-embed-text-v2:0`.
 - Configured to produce normalized 1024-dimension vectors:
   ```json
   {

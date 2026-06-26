@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 from typing import List
 import json
 import time
-import boto3
 from botocore.exceptions import ClientError
 
 from app.config.settings import settings
 from app.utils.logger import logger
+from app.clients.bedrock_client import BedrockClient
 
 class EmbeddingProvider(ABC):
     @abstractmethod
@@ -20,15 +20,7 @@ class BedrockEmbeddingProvider(EmbeddingProvider):
 
     def _get_bedrock_client(self):
         if self._bedrock_client is None:
-            logger.info("[Embeddings] Initializing Bedrock Runtime client")
-            client_kwargs = {
-                "region_name": settings.AWS_REGION or "us-east-1"
-            }
-            if settings.LOCALSTACK_URL:
-                client_kwargs["endpoint_url"] = settings.LOCALSTACK_URL
-                client_kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
-                client_kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
-            self._bedrock_client = boto3.client("bedrock-runtime", **client_kwargs)
+            self._bedrock_client = BedrockClient()
         return self._bedrock_client
 
     def embed_chunk(self, text: str) -> List[float]:
