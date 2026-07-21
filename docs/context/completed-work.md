@@ -200,4 +200,9 @@ This document lists completed tasks and code files created.
 - **Worker SQS Consumer Loop Verification (Task 104)**:
   - Formulated 17 unit/integration test cases under `apps/worker/tests/test_worker.py` covering all consumer/poller functionality, SQS message routing, job handler state machine transitions, DLQ failure updates, and signal handling.
   - Executed tests using the virtual environment python interpreter, passing successfully in 0.017 seconds.
+- **Resolution of /confirm-upload Race Condition**:
+  - Modified the upload confirmation endpoint (`POST /api/documents/:id/confirm-upload`) in [document.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/document.service.ts) to be fully idempotent.
+  - If a background worker consumes the S3/SQS event notification and transitions the document's state to `downloading` (or any subsequent processing/terminal state) before the frontend's API call arrives, the endpoint now logs the event and responds with `200 OK` rather than throwing a `409 Conflict` error.
+  - Updated unit and integration tests in [documents.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/documents.test.ts) to verify HTTP 200 is returned and that database states are not overwritten when the upload is already confirmed or processing.
+
 

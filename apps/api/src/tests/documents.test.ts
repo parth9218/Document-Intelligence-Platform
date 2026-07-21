@@ -294,7 +294,7 @@ describe('Document Upload & Tracking API Tests', () => {
       expect(res2.status).toBe(404);
     });
 
-    it('should return HTTP 409 conflict if document upload is already confirmed', async () => {
+    it('should return HTTP 200 and be idempotent if document upload is already confirmed or processing', async () => {
       const docId = crypto.randomUUID();
       await prisma.document.create({
         data: {
@@ -304,14 +304,14 @@ describe('Document Upload & Tracking API Tests', () => {
           mime_type: 'application/pdf',
           file_size_bytes: 100,
           s3_key: `sessions/${sessionId}/documents/${docId}/original`,
-          status: 'uploaded',
+          status: 'downloading',
         },
       });
       await prisma.processingJob.create({
         data: {
           document_id: docId,
           session_id: sessionId,
-          status: 'uploaded',
+          status: 'downloading',
         },
       });
 
@@ -319,8 +319,74 @@ describe('Document Upload & Tracking API Tests', () => {
         .post(`/api/documents/${docId}/confirm-upload`)
         .set('Cookie', authCookie);
 
-      expect(response.status).toBe(409);
-      expect(response.body.error).toBe('already_confirmed');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'uploaded' });
+
+      // Verify db changes - should NOT reset to 'uploaded' but stay 'downloading'
+      const docInDb = await prisma.document.findUnique({
+        where: { id: docId },
+        include: { processing_job: true },
+      });
+      expect(docInDb?.status).toBe('downloading');
+      expect(docInDb?.processing_job?.status).toBe('downloading');
+    });
+
+    it('should return HTTP 409 Conflict if document is in an invalid state like expired or cancelled', async () => {
+      // 1. Expired document
+      const expiredDocId = crypto.randomUUID();
+      await prisma.document.create({
+        data: {
+          id: expiredDocId,
+          session_id: sessionId,
+          filename: 'expired.pdf',
+          mime_type: 'application/pdf',
+          file_size_bytes: 100,
+          s3_key: `sessions/${sessionId}/documents/${expiredDocId}/original`,
+          status: 'expired',
+        },
+      });
+      await prisma.processingJob.create({
+        data: {
+          document_id: expiredDocId,
+          session_id: sessionId,
+          status: 'expired',
+        },
+      });
+
+      const resExpired = await request(app)
+        .post(`/api/documents/${expiredDocId}/confirm-upload`)
+        .set('Cookie', authCookie);
+
+      expect(resExpired.status).toBe(409);
+      expect(resExpired.body.error).toBe('already_confirmed');
+
+      // 2. Cancelled document
+      const cancelledDocId = crypto.randomUUID();
+      await prisma.document.create({
+        data: {
+          id: cancelledDocId,
+          session_id: sessionId,
+          filename: 'cancelled.pdf',
+          mime_type: 'application/pdf',
+          file_size_bytes: 100,
+          s3_key: `sessions/${sessionId}/documents/${cancelledDocId}/original`,
+          status: 'cancelled',
+        },
+      });
+      await prisma.processingJob.create({
+        data: {
+          document_id: cancelledDocId,
+          session_id: sessionId,
+          status: 'cancelled',
+        },
+      });
+
+      const resCancelled = await request(app)
+        .post(`/api/documents/${cancelledDocId}/confirm-upload`)
+        .set('Cookie', authCookie);
+
+      expect(resCancelled.status).toBe(409);
+      expect(resCancelled.body.error).toBe('already_confirmed');
     });
   });
 

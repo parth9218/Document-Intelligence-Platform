@@ -226,7 +226,26 @@ class DocumentService {
     // idempotency guard
     const currentStatus = doc.processing_job?.status || doc.status;
     if (currentStatus !== 'pending_upload') {
-      logger.warn('Document confirm-upload failed: already confirmed', { sessionId, documentId, currentStatus });
+      const validTransitionedStatuses = [
+        'uploaded',
+        'downloading',
+        'validating',
+        'extracting',
+        'chunking',
+        'embedding',
+        'completed',
+        'failed',
+      ];
+      if (validTransitionedStatuses.includes(currentStatus)) {
+        logger.info('Document confirm-upload ignored: already confirmed or processing', {
+          sessionId,
+          documentId,
+          currentStatus,
+        });
+        return;
+      }
+
+      logger.warn('Document confirm-upload failed: invalid state transition', { sessionId, documentId, currentStatus });
       throw new ConflictError('already_confirmed', 'already_confirmed');
     }
 
