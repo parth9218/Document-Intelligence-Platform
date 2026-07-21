@@ -22,11 +22,18 @@ class Settings:
     # AWS SQS Configuration
     AWS_REGION: str = os.getenv("AWS_REGION")
     LOCALSTACK_URL: str = os.getenv("LOCALSTACK_URL")
+    # AWS SQS Queue URLs
     QUEUE_URL: str = os.getenv("QUEUE_URL")
     DLQ_URL: str = os.getenv("DLQ_URL")
+    
+    # AWS S3 Configuration
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME")
     
     # AWS Credentials (optional, mock keys used for Localstack)
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+    # Embedding Provider Configuration (local or bedrock)
+    EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "local")
 
 settings = Settings()

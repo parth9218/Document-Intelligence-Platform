@@ -14,9 +14,10 @@
 * [ ] **Fix 103-A**: confirm-upload Idempotency Resolution ── *Incomplete*
 
 ## Backend Phase 2: Ingestion Pipeline
-* [ ] **Task 201**: Worker Document Extraction ── *Incomplete*
-* [ ] **Task 202**: Worker Chunking & Embedding ── *Incomplete*
-* [ ] **Task 203**: Worker Vector Storage & Status Updates ── *Incomplete*
+* [x] **Task 201**: Worker Document Extraction ── *Complete*
+* [x] **Task 202**: Worker Chunking & Embedding ── *Complete*
+* [x] **Task 203**: Worker Vector Storage & Status Updates ── *Complete*
+
 
 ## Backend Phase 3: Query Engine
 * [ ] **Task 301**: API Similarity Search ── *Incomplete*

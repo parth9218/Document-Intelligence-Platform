@@ -1,7 +1,8 @@
 import json
 from typing import Callable
 from app.clients.sqs_client import SqsClient
-from app.handlers.job_handler import JobHandler, PermanentFailure, TransientFailure
+from app.handlers.job_handler import JobHandler
+from app.errors import PermanentFailure, TransientFailure
 from app.utils.logger import logger
 
 class SqsConsumer:
@@ -49,7 +50,7 @@ class SqsConsumer:
 
             # Delegate to handler
             try:
-                self.handler.process_job(document_id, session_id, object_key)
+                self.handler.process_job(document_id, session_id)
                 # Success -> Delete from SQS
                 self.client.delete_message(queue_url, receipt_handle)
             except PermanentFailure as pf:

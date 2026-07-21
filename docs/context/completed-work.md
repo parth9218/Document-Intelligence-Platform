@@ -156,7 +156,13 @@ This document lists completed tasks and code files created.
   - Programmed Job Handler to orchestrate job state transitions (`downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`) using SQLAlchemy ORM context managers.
   - Implemented a DLQ bridge poller running as a secondary daemon thread every 30 seconds to catch messages routed to DLQ and mark them as `failed` with code `max_retries_exceeded` in the DB.
   - Designed graceful shutdown logic intercepting SIGINT/SIGTERM to set a shutdown flag, complete the current polling/processing cycle, and safely exit without leaving half-processed messages un-acknowledged in SQS.
-
+- **Worker Document Extraction (Task 201)**:
+  - Implemented a complete S3 downloading verification pipeline in `ExtractorService` executing existence, size matching, and content-type checks before downloading objects.
+  - Programmed magic byte validation for PDFs (`%PDF` magic bytes checking) and encoding validation for plain text files (UTF-8 decode compliance checking), avoiding spoofed Content-Type trust.
+  - Integrated PyMuPDF (fitz) text parsing library to extract page-by-page text native elements and clean trailing whitespace.
+  - Mapped the extraction pipeline to job status transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) with atomic PostgreSQL commits.
+  - Updated worker setup to resolve Kubernetes HOSTNAME pod matching fallback with UUID suffixing.
+  - Formulated a 7-case integration test suite `test_integration.py` executing the 9 validation steps against LocalStack S3/SQS and real PostgreSQL database schemas.
 
 ## Verification Records
 
@@ -204,5 +210,23 @@ This document lists completed tasks and code files created.
   - Modified the upload confirmation endpoint (`POST /api/documents/:id/confirm-upload`) in [document.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/document.service.ts) to be fully idempotent.
   - If a background worker consumes the S3/SQS event notification and transitions the document's state to `downloading` (or any subsequent processing/terminal state) before the frontend's API call arrives, the endpoint now logs the event and responds with `200 OK` rather than throwing a `409 Conflict` error.
   - Updated unit and integration tests in [documents.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/documents.test.ts) to verify HTTP 200 is returned and that database states are not overwritten when the upload is already confirmed or processing.
-
-
+- **Worker Document Ingestion Integration Verification (Task 201)**:
+  - Formulated and successfully executed integration test suite [test_integration.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_integration.py) verifying all 9 validation steps in the task spec against LocalStack S3/SQS and real PostgreSQL database schemas.
+  - Verified correct status flow transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) and correct SQS visibility timeout/message deletion behaviors for all success, mismatch, magic byte, and corrupt PDF file scenarios.
+- **Worker Chunking & Embedding Generation (Task 202)**:
+  - Implemented the paragraph-based sliding window document chunker `app/services/chunker.py` and the embeddings generation service `app/services/embeddings.py` (which supports Amazon Bedrock Titan Embeddings V2 with exponential backoff retries and local Sentence-Transformers E5 model fallback).
+  - Wired chunker and embedding stages into the main document ingestion service pipeline `app/services/document_service.py` to transition statuses to `chunking` and `embedding`, set `total_chunks` count, and execute embedding calls in batches of 50 chunks.
+  - Developed and successfully verified unit test suites [test_chunker.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_chunker.py) and [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py).
+  - Executed the full worker test suite discover discover, passing all 43 tests including end-to-end integration tests using LocalStack and local pgvector database parity.
+- **Worker Vector Storage & Job Progress Updates (Task 203)**:
+  - Created idempotent chunk upsert mechanism `upsert_chunks()` in `JobRepository` using PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` to safely permit retries.
+  - Configured `DocumentChunk.embedding` attribute to use the custom `pgvector` SQL Alchemy type `Vector(1024)`.
+  - Implemented per-batch transactional progress checkpointing: updates `processed_chunks`, `progress_pct` (capped at 99%), and `checkpoint_index` after writing each 50-chunk batch to the database.
+  - Supported resume-on-retry: calculates `resume_batch_index` from `checkpoint_index + 1` at start to skip already-persisted batches.
+  - Implemented final completion transition: atomically updates `processing_jobs.status = 'completed'` and `documents.status = 'completed'` with progress at 100% and completed timestamp inside a single transaction.
+  - Added new integration test assertions verifying that chunks are correctly persisted, structured, and carry the correct page numbers, content, and 1024-dimension float embedding vectors. All tests pass successfully.
+- **Worker AWS Bedrock Client Isolation**:
+  - Isolated the AWS Bedrock Runtime SDK interactions from the service layer into a standalone wrapper class `BedrockClient` in [bedrock_client.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/clients/bedrock_client.py).
+  - Modified [embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/services/embeddings.py) to import `BedrockClient` and utilize it in the `BedrockEmbeddingProvider` class via lazy initialization, also supporting optional constructor dependency injection for testability.
+  - Refactored [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py) to test `BedrockClient` initialization/delegation directly and updated `TestEmbeddingsService` to assert against mocked `BedrockClient` wrappers using constructor dependency injection.
+  - Cleaned up orphan background worker processes from the local environment and ran the full worker test suite, successfully verifying all 47 unit and integration tests.
