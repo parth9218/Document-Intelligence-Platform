@@ -10,6 +10,8 @@
 * [x] **Task 107**: Session Auto-Initialization Refactor ── *Complete*
 * [x] **Task 108**: Express API CORS Configuration ── *Complete*
 
+### Phase 1 Maintenance & Fixes
+* [ ] **Fix 103-A**: confirm-upload Idempotency Resolution ── *Incomplete*
 
 ## Backend Phase 2: Ingestion Pipeline
 * [ ] **Task 201**: Worker Document Extraction ── *Incomplete*

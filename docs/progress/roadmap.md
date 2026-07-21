@@ -2,7 +2,7 @@
 
 ## Milestone 1: Core API & DB Skeleton (Backend Phase 1)
 * **Status**: In Progress
-* **Key Tasks**: Task 101 - 106
+* **Key Tasks**: Task 101 - 108, Fix 103-A
 
 ## Milestone 2: File Ingestion Flow (Backend Phase 2)
 * **Status**: Planned
