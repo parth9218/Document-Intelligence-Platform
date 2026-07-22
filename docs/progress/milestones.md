@@ -2,7 +2,7 @@
 
 ## Backend Lifecycle Milestones
 - [x] **Milestone 1: Session & Upload Foundation** (Backend Phase 1 Complete)
-- [ ] **Milestone 2: SQS Ingestion Flow** (Backend Phase 2 Complete)
+- [x] **Milestone 2: SQS Ingestion Flow** (Backend Phase 2 Complete)
 - [ ] **Milestone 3: Streaming Q&A Ready** (Backend Phase 3 Complete)
 - [ ] **Milestone 4: Metrics & Traces Integrated** (Backend Phase 4 Complete)
 - [ ] **Milestone 5: Production Deployment Active** (Backend Phase 5 Complete)
