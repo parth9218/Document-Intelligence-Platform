@@ -32,7 +32,7 @@ This document maps out the phased execution plan for the platform, ensuring each
 ## Phase 3: Query & Citation Engine
 * **Goal**: Chat endpoint matching vector queries, streaming grounded answers, verifying citations, and rendering progress.
 * **Tasks**:
-  * **Task 3.1: API Similarity Search (Task 301)**: Call Bedrock Titan V2 to embed query, and query pgvector using cosine similarity (`<=>`) with strict session tenancy filter in Express API using Prisma client raw queries.
+  * **Task 3.1: API Similarity Search (Task 301)**: Embed query using configured provider (`EMBEDDING_PROVIDER` — Amazon Bedrock Titan V2 for cloud or local model for offline/local development matching the Python worker), and query pgvector using cosine similarity (`<=>`) with strict session tenancy filter in Express API using Prisma client raw queries.
   * **Task 3.2: API Answer Generation & Citation Verification (Task 302)**: Construct system prompt with retrieved context snippets. Invoke Bedrock Claude with streaming enabled. Scan response for citation brackets (`[1]..[n]`), verify they match retrieved context IDs, and stream verified citation metadata alongside Claude's text tokens via SSE using Express API.
   * **Task 3.3: Frontend Progress & Streaming Integration (Task 303)**: Update React SPA to track file upload progress (browser-side), poll/SSE `/api/documents/:id/status` to show chunking/embedding progress bars, and connect to `/api/query` streaming answer endpoint to render interactive, validated citation bubbles.
 * **Milestone**: Full interactive UI where files are uploaded with progress bars, processed, and users query documents to receive streamed answers with citations.

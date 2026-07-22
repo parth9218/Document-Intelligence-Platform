@@ -1,30 +1,43 @@
 # Task 301: API Similarity Search & Tenancy Enforcement (Prisma ORM)
 
 ## Goal
-Implement secure, session-isolated similarity searching of user questions against the vector store using TypeScript Express and Prisma Client raw parameterization.
+Implement secure, session-isolated similarity searching of user questions against the vector store using TypeScript Express and Prisma Client raw parameterization, supporting environment-driven embedding providers (Cloud Bedrock vs. Local model) matching the Python worker's configuration.
 
 ## Scope
-Update the Express API to embed user questions via Bedrock Titan V2 and run pgvector similarity queries using Prisma's `$queryRaw` interface.
+Update the Express API to dynamically switch embedding providers based on environment configuration (`EMBEDDING_PROVIDER`), embed user questions using the active provider (Amazon Bedrock Titan V2 for cloud, or local model for offline/local execution matching the Python worker's local embeddings), and execute pgvector similarity queries using Prisma's `$queryRaw` interface with strict session tenancy enforcement.
 
 ## Files Expected To Change
-* `apps/api/src/services/bedrock.ts`
-* `apps/api/src/services/search.ts`
-* `apps/api/src/routes/query.ts`
+* `apps/api/src/config/index.ts`
+* `apps/api/src/services/embedding.service.ts`
+* `apps/api/src/services/search.service.ts`
+* `apps/api/src/routes/query.route.ts`
+* `apps/api/src/controllers/query.controller.ts`
 
 ## Dependencies
 * Task 101 (Database Schema via Prisma ORM)
 * Task 203 (Worker Vector Storage & Status Updates)
 
 ## Acceptance Criteria
-* Embed user query into a 1024-dimension float vector using Bedrock Titan Embeddings V2.
-* Perform cosine distance query (`<=>`) against `document_chunks` table.
-  * Use Prisma's `$queryRaw` tagged template literal (which handles query parameters safely, preventing SQL injection) to execute the vector operations.
-* **Strict Tenancy Isolation**: Filter strictly by the current user's authenticated `session_id` using query parameter bindings (e.g. `WHERE "session_id" = ${sessionId}`). Do not permit inline string interpolation.
-* Filter out chunks with cosine distance > 0.5.
-* Retrieve top-5 nearest neighbor chunks sorted by distance in ascending order, including fields: `id`, `document_id`, `content`, `page_number`, and `doc_name`.
+* **Environment-Driven Embedding Provider Factory**:
+  * Read `EMBEDDING_PROVIDER` environment variable from API configuration (`bedrock` vs `local`, default `bedrock`).
+  * **Cloud Provider (`EMBEDDING_PROVIDER=bedrock`)**: Invoke Amazon Bedrock Titan Embeddings V2 (`amazon.titan-embed-text-v2:0`) via AWS SDK v3 `@aws-sdk/client-bedrock-runtime` to embed user questions into a normalized 1024-dimension float vector.
+  * **Local Provider (`EMBEDDING_PROVIDER=local`)**: Use a local embedding mechanism (e.g. `@xenova/transformers` with `intfloat/e5-large-v2` applying `"query: <text>"` prefix formatting) to generate a 1024-dimension float vector matching the exact embedding space used by the Python worker's `LocalEmbeddingProvider`.
+* **Vector Similarity Query (`$queryRaw`)**:
+  * Perform cosine distance calculation (`<=>`) against `document_chunks` table using Prisma's `$queryRaw` tagged template literal (preventing SQL injection).
+* **Strict Tenancy Isolation**:
+  * Filter strictly by the current user's authenticated `session_id` using query parameter bindings (e.g. `WHERE "session_id" = ${sessionId}::uuid`). Do not permit inline string interpolation.
+* **Distance Threshold & Top-K Results**:
+  * Filter out chunks with cosine distance > 0.5.
+  * Retrieve top-5 nearest neighbor chunks sorted by distance in ascending order (`ORDER BY embedding <=> ${queryVector}::vector ASC LIMIT 5`).
+  * Return fields: `id`, `document_id`, `content`, `page_number`, `distance`, and associated document `filename`.
 
 ## Validation Steps
-1. Seed database with vector chunks for session A and session B.
-2. Query API via POST with matching session A cookie.
-3. Assert that results only contain chunks belonging to session A, sorted by cosine distance in ascending order.
-4. Verify that requests with an invalid/modified session signature return 401 or 403.
+1. **Provider Switching Verification**:
+   * Verify that setting `EMBEDDING_PROVIDER=bedrock` routes query embedding calls to Bedrock Titan V2.
+   * Verify that setting `EMBEDDING_PROVIDER=local` routes query embedding calls to the local embedding engine without invoking AWS network calls.
+2. **Tenancy Isolation & Similarity Search Verification**:
+   * Seed database with document vector chunks for session A and session B under both provider modes.
+   * Query API via `POST /api/query` with matching session A cookie.
+   * Assert that search results only contain chunks belonging to session A, sorted by cosine distance in ascending order.
+   * Verify that queries from session B do not leak session A chunks.
+   * Verify that requests with invalid/missing session signatures return 401 Unauthorized.
