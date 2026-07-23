@@ -45,3 +45,15 @@ export class RateLimitError extends AppError {
     super(429, errorCode, message);
   }
 }
+
+export class InternalServerError extends AppError {
+  constructor(message: string = 'An unexpected error occurred', errorCode: string = 'internal_server_error') {
+    super(500, errorCode, message);
+  }
+}
+
+export class UnsupportedEmbeddingProviderError extends AppError {
+  constructor(provider: string) {
+    super(400, 'unsupported_embedding_provider', `Unsupported embedding provider: '${provider}'. Supported providers are 'bedrock' and 'local'.`);
+  }
+}

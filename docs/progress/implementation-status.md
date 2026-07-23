@@ -20,7 +20,7 @@
 
 
 ## Backend Phase 3: Query Engine
-* [ ] **Task 301**: API Similarity Search ── *Incomplete*
+* [x] **Task 301**: API Similarity Search ── *Complete*
 * [ ] **Task 302**: API Answer Generation & Citation Verification ── *Incomplete*
 * [ ] **Task 303**: Frontend Progress & Streaming Integration ── *Incomplete*
 

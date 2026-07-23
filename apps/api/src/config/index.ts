@@ -55,6 +55,16 @@ export const config = {
     // In development/test the request Origin is reflected dynamically — this value is ignored.
     allowedOrigin: process.env.CORS_ALLOWED_ORIGIN || '',
   },
+  similarity: {
+    topK: parseInt(process.env.TOP_K || '5', 10),
+    distanceThreshold: parseFloat(process.env.SIMILARITY_DISTANCE_THRESHOLD || '0.5'),
+  },
+  embeddings: {
+    // Provider selection: 'bedrock' (AWS Bedrock Titan V2) or 'local' (Local model via @xenova/transformers)
+    provider: process.env.EMBEDDING_PROVIDER || 'bedrock',
+    // Single EMBEDDING_MODEL variable used by the active provider
+    model: process.env.EMBEDDING_MODEL || (process.env.EMBEDDING_PROVIDER === 'local' ? 'Xenova/e5-large-v2' : 'amazon.titan-embed-text-v2:0'),
+  },
 };
 
 // Simple configuration validation

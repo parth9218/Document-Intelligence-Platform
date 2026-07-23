@@ -3,6 +3,7 @@ import cors, { CorsOptions } from 'cors';
 import { getSession, sessionMiddleware } from './middlewares/session';
 import { sessionController } from './controllers/session.controller';
 import documentsRouter from './routes/documents.route';
+import queryRouter from './routes/query.route';
 import { errorHandler } from './middlewares/error-handler';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
@@ -96,6 +97,9 @@ app.get('/api/session', (req, res, next) => sessionController.getActiveSession(r
 
 // Mount protected document tracking routes
 app.use('/api/documents', documentsRouter);
+
+// Mount protected similarity search query routes
+app.use('/api/query', queryRouter);
 
 // Mount centralized error handler middleware (registered last)
 app.use(errorHandler);
