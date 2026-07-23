@@ -57,3 +57,9 @@ export class UnsupportedEmbeddingProviderError extends AppError {
     super(400, 'unsupported_embedding_provider', `Unsupported embedding provider: '${provider}'. Supported providers are 'bedrock' and 'local'.`);
   }
 }
+
+export class UnsupportedLlmProviderError extends AppError {
+  constructor(provider: string) {
+    super(400, 'unsupported_llm_provider', `Unsupported LLM provider: '${provider}'. Supported providers are 'bedrock' and 'local'.`);
+  }
+}

@@ -65,6 +65,14 @@ export const config = {
     // Single EMBEDDING_MODEL variable used by the active provider
     model: process.env.EMBEDDING_MODEL || (process.env.EMBEDDING_PROVIDER === 'local' ? 'Xenova/e5-large-v2' : 'amazon.titan-embed-text-v2:0'),
   },
+  llm: {
+    // Provider selection: 'bedrock' (AWS Bedrock Claude) or 'local' (Ollama via Docker)
+    provider: process.env.LLM_PROVIDER || 'bedrock',
+    model: process.env.LLM_MODEL || (process.env.LLM_PROVIDER === "local" ? "llama3.2" : "anthropic.claude-3-5-sonnet-20241022-v1:0"),
+    endpoint: process.env.LLM_ENDPOINT || 'http://localhost:11434',
+    // Maximum output tokens for the LLM response
+    maxTokens: parseInt(process.env.LLM_MAX_TOKENS || '1024', 10),
+  },
 };
 
 // Simple configuration validation

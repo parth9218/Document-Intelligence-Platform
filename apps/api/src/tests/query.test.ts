@@ -4,6 +4,8 @@ import { prisma } from '../db';
 import { sign } from '../middlewares/session';
 import crypto from 'crypto';
 import { getEmbeddingProvider } from '../services/embedding.service';
+import { getLlmProvider, CitationValidator, buildPrompt } from '../services/llm.service';
+import type { SearchResultChunk } from '../services/search.service';
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret-key-change-in-production-12345';
 const COOKIE_NAME = 'session_token';
@@ -211,7 +213,113 @@ describe('Vector Similarity Search & Tenancy Enforcement API Tests (Task 301)', 
       expect(res.headers['content-type']).toContain('text/event-stream');
       expect(res.text).toContain('event: context');
       expect(res.text).toContain('event: token');
+      expect(res.text).toContain('event: citation');
       expect(res.text).toContain('event: done');
+
+      // Verify citation frame has correct shape (filename + pageNumber)
+      const citationMatch = res.text.match(/event: citation\ndata: (\{.*?\})/);
+      expect(citationMatch).not.toBeNull();
+      const citationData = JSON.parse(citationMatch![1]);
+      expect(citationData).toHaveProperty('index');
+      expect(citationData).toHaveProperty('filename');
+      expect(citationData).toHaveProperty('pageNumber');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 302: Grounded Generation, SSE Streaming & Citations
+// ---------------------------------------------------------------------------
+
+describe('LLM Provider & Citation Validation Tests (Task 302)', () => {
+  describe('LLM Provider Factory', () => {
+    it('should resolve LocalLlmProvider for provider=local', () => {
+      const provider = getLlmProvider('local');
+      expect(provider).toBeDefined();
+    });
+
+    it('should resolve BedrockLlmProvider for provider=bedrock', () => {
+      const provider = getLlmProvider('bedrock');
+      expect(provider).toBeDefined();
+    });
+
+    it('should throw UnsupportedLlmProviderError for unrecognised provider', () => {
+      expect(() => getLlmProvider('openai')).toThrow("Unsupported LLM provider: 'openai'");
+    });
+  });
+
+  describe('buildPrompt', () => {
+    const mockChunks: SearchResultChunk[] = [
+      { id: 'c1', documentId: 'd1', content: 'Architecture overview content.', pageNumber: 1, distance: 0.1, filename: 'design.pdf' },
+      { id: 'c2', documentId: 'd2', content: 'Database schema details.', pageNumber: 5, distance: 0.2, filename: 'schema.pdf' },
+    ];
+
+    it('should label each chunk with sequential bracket index', () => {
+      const { userMessage } = buildPrompt('What is the architecture?', mockChunks);
+      expect(userMessage).toContain('[1]');
+      expect(userMessage).toContain('[2]');
+      expect(userMessage).toContain('design.pdf');
+      expect(userMessage).toContain('schema.pdf');
+    });
+
+    it('should include the user query in the user message', () => {
+      const { userMessage } = buildPrompt('What is the architecture?', mockChunks);
+      expect(userMessage).toContain('What is the architecture?');
+    });
+
+    it('should instruct the model to cite sources in the system prompt', () => {
+      const { systemPrompt } = buildPrompt('Any question', mockChunks);
+      expect(systemPrompt.toLowerCase()).toContain('cite');
+      expect(systemPrompt.toLowerCase()).toContain('context');
+    });
+  });
+
+  describe('CitationValidator', () => {
+    const mockChunks: SearchResultChunk[] = [
+      { id: 'c1', documentId: 'd1', content: 'chunk 1', pageNumber: 2, distance: 0.1, filename: 'report.pdf' },
+      { id: 'c2', documentId: 'd2', content: 'chunk 2', pageNumber: 7, distance: 0.2, filename: 'design.pdf' },
+    ];
+
+    it('should extract a valid citation and return its metadata', () => {
+      const validator = new CitationValidator(mockChunks);
+      const { cleanToken, newCitations } = validator.extractAndValidate('According to [1] this is true.');
+      expect(cleanToken).toContain('[1]');
+      expect(newCitations).toHaveLength(1);
+      expect(newCitations[0]).toMatchObject({ index: 1, filename: 'report.pdf', pageNumber: 2 });
+    });
+
+    it('should extract multiple citations from a single token', () => {
+      const validator = new CitationValidator(mockChunks);
+      const { newCitations } = validator.extractAndValidate('[1] says one thing and [2] says another.');
+      expect(newCitations).toHaveLength(2);
+      expect(newCitations.map((c) => c.index)).toEqual([1, 2]);
+    });
+
+    it('should strip hallucinated citation indexes beyond chunk count', () => {
+      const validator = new CitationValidator(mockChunks);
+      const { cleanToken, newCitations } = validator.extractAndValidate('As stated in [99] some claim.');
+      expect(cleanToken).not.toContain('[99]');
+      expect(newCitations).toHaveLength(0);
+    });
+
+    it('should strip zero-index hallucinated citation', () => {
+      const validator = new CitationValidator(mockChunks);
+      const { cleanToken, newCitations } = validator.extractAndValidate('Claim [0] is invalid.');
+      expect(cleanToken).not.toContain('[0]');
+      expect(newCitations).toHaveLength(0);
+    });
+
+    it('should deduplicate citations emitted in previous calls', () => {
+      const validator = new CitationValidator(mockChunks);
+      validator.extractAndValidate('First mention [1].');
+      const { newCitations } = validator.extractAndValidate('Second mention [1] again.');
+      expect(newCitations).toHaveLength(0);
+    });
+
+    it('should pass through token text with valid citations unchanged', () => {
+      const validator = new CitationValidator(mockChunks);
+      const { cleanToken } = validator.extractAndValidate('Text with [1] reference.');
+      expect(cleanToken).toBe('Text with [1] reference.');
     });
   });
 });

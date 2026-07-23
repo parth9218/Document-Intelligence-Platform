@@ -20,7 +20,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Frontend Phase 3 (Batch Upload & Ingestion)**: Complete. Tasks F3.1, F3.2, and F3.3 are complete.
 - **Frontend Phase 4 (Real-Time Ingestion Progress)**: Complete. Tasks F4.1 and F4.2 are complete.
 - **Phase 2 (Ingestion)**: **Complete**. All three tasks (201, 202, and 203) are complete, verified, and unit/integration tested.
-- **Phase 3 (Query Engine)**: In Progress. Task 301 (API Similarity Search & Tenancy Enforcement) complete and verified with integration test suite (`query.test.ts`). Next is Task 302 (API Answer Generation & Citation Verification).
+- **Phase 3 (Query Engine)**: In Progress. Task 301 (API Similarity Search & Tenancy Enforcement) and Task 302 (API Answer Generation & Citation Verification) complete and verified with integration test suite (`query.test.ts`). LLM provider abstraction layer implemented (`BedrockLlmProvider` + `LocalLlmProvider`), `CitationValidator` added for inline `[n]` bracket validation, grounding prompt builder integrated, and SSE stream extended with `citation` and `error` frames. All 53 API tests passing. Next is Task 303 (Frontend Progress & Streaming Integration).
 - **Phase 4 (Observability)**: Pending.
 - **Phase 5 (Platform)**: Pending.
 
