@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { type DocumentStatusObject, type SessionResponse } from '../types/api';
+import { type DocumentStatusObject, type SessionResponse, type ChatMessage } from '../types/api';
 
 export interface LocalProgressState {
   filename: string;
@@ -28,6 +28,12 @@ interface AppState {
   updateLocalProgressPct: (fileId: string, progressPct: number) => void;
   clearLocalProgress: (fileId: string) => void;
   clearAllLocalProgress: () => void;
+
+  // Chat State
+  chatMessages: ChatMessage[];
+  addChatMessage: (msg: ChatMessage) => void;
+  updateChatMessage: (id: string, updater: (prev: ChatMessage) => ChatMessage) => void;
+  clearChatMessages: () => void;
 
   // UI State
   sidebarCollapsed: boolean;
@@ -84,6 +90,16 @@ export const useAppStore = create<AppState>((set) => ({
       return { localProgressQueue: nextQueue };
     }),
   clearAllLocalProgress: () => set({ localProgressQueue: {} }),
+
+  // Chat
+  chatMessages: [],
+  addChatMessage: (msg) =>
+    set((state) => ({ chatMessages: [...state.chatMessages, msg] })),
+  updateChatMessage: (id, updater) =>
+    set((state) => ({
+      chatMessages: state.chatMessages.map((msg) => (msg.id === id ? updater(msg) : msg)),
+    })),
+  clearChatMessages: () => set({ chatMessages: [] }),
 
   // UI
   sidebarCollapsed: false,

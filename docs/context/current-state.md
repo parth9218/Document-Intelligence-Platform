@@ -20,7 +20,7 @@ This document records the exact state of code modules and active tasks. Update i
 - **Frontend Phase 3 (Batch Upload & Ingestion)**: Complete. Tasks F3.1, F3.2, and F3.3 are complete.
 - **Frontend Phase 4 (Real-Time Ingestion Progress)**: Complete. Tasks F4.1 and F4.2 are complete.
 - **Phase 2 (Ingestion)**: **Complete**. All three tasks (201, 202, and 203) are complete, verified, and unit/integration tested.
-- **Phase 3 (Query Engine)**: In Progress. Task 301 (API Similarity Search & Tenancy Enforcement) and Task 302 (API Answer Generation & Citation Verification) complete and verified with integration test suite (`query.test.ts`). LLM provider abstraction layer implemented (`BedrockLlmProvider` + `LocalLlmProvider`), `CitationValidator` added for inline `[n]` bracket validation, grounding prompt builder integrated, and SSE stream extended with `citation` and `error` frames. All 53 API tests passing. Next is Frontend Phase 5 Chat (`tasks/frontend/phase-5-chat.md`).
+- **Frontend Phase 5 (Query Interface & Streaming Chat)**: **Complete**. Implemented `useQuery.ts` streaming hook (`POST /api/query/search` SSE reader), `ChatInterface` layout component, `ChatBubble` rendering user/assistant messages with streaming cursor, `CitationBadge` and `SourcePopover` displaying citation metadata/snippets, and `SourceAccordion` displaying retrieved context chunks. Next is Backend Phase 4 (Observability).
 - **Phase 4 (Observability)**: Pending.
 - **Phase 5 (Platform)**: Pending.
 

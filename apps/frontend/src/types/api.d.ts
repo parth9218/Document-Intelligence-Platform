@@ -57,3 +57,43 @@ export interface BatchUploadInitResponse {
 export interface ConfirmUploadResponse {
   status: 'uploaded';
 }
+
+// ---------------------------------------------------------------------------
+// Query Engine & Chat Interfaces
+// ---------------------------------------------------------------------------
+
+export interface SearchResultChunk {
+  id: string;
+  documentId: string;
+  filename: string;
+  pageNumber: number | null;
+  content: string;
+  distance: number;
+}
+
+export interface CitationMeta {
+  index: number;
+  filename: string;
+  pageNumber: number | null;
+}
+
+export interface QuerySearchRequest {
+  query: string;
+  stream?: boolean;
+}
+
+export interface QuerySearchResponse {
+  query: string;
+  results: SearchResultChunk[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  isStreaming?: boolean;
+  error?: string;
+  contextChunks?: SearchResultChunk[];
+  citations?: CitationMeta[];
+  createdAt: string;
+}

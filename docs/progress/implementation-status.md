@@ -56,6 +56,6 @@
 * [x] **Task F4.2**: Document Processing Feed & Progress Indicators ── *Complete*
 
 ## Frontend Phase 5: Query Interface & Streaming Q&A
-* [ ] **Task F5.1**: Chat Layout & SSE Query Stream Hook ── *Incomplete*
-* [ ] **Task F5.2**: Citation Parser & Source Popover UI ── *Incomplete*
-* [ ] **Task F5.3**: Chat Error Handling & Citations Validation ── *Incomplete*
+* [x] **Task F5.1**: Chat Layout & SSE Query Stream Hook ── *Complete*
+* [x] **Task F5.2**: Citation Parser & Source Popover UI ── *Complete*
+* [x] **Task F5.3**: Chat Error Handling & Citations Validation ── *Complete*

@@ -190,6 +190,89 @@ export const handlers = [
       }
     });
   }),
+  
+  http.post('/api/query/search', async ({ request }) => {
+    if (apiRouting.query !== 'mock') return;
+    
+    const body = (await request.json().catch(() => ({}))) as { query?: string; stream?: boolean };
+    const queryStr = body.query || 'Default query';
+
+    const mockChunks = [
+      {
+        id: 'mock-chunk-1',
+        documentId: 'doc-1',
+        filename: 'architecture_specifications.pdf',
+        pageNumber: 3,
+        content: 'The platform implements strict session-scoped multi-tenancy and pgvector cosine similarity search with dynamic thresholds.',
+        distance: 0.12,
+      },
+      {
+        id: 'mock-chunk-2',
+        documentId: 'doc-2',
+        filename: 'database_design.pdf',
+        pageNumber: 7,
+        content: 'PostgreSQL HNSW vector index (document_chunks_embedding_hnsw_idx) enables sub-second vector distance queries.',
+        distance: 0.24,
+      },
+    ];
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        // 1. Emit event: context
+        controller.enqueue(
+          encoder.encode(`event: context\ndata: ${JSON.stringify({ query: queryStr, results: mockChunks })}\n\n`)
+        );
+        await delay(200);
+
+        // 2. Stream tokens and citations
+        const tokens = [
+          'Based on ',
+          'the provided documents, ',
+          '[1] ',
+          'the platform enforces strict session-scoped tenancy ',
+          'and uses pgvector for similarity queries. ',
+          '[2] ',
+          'HNSW indexing ensures fast retrieval latencies.',
+        ];
+
+        for (const token of tokens) {
+          await delay(100);
+          controller.enqueue(
+            encoder.encode(`event: token\ndata: ${JSON.stringify({ token })}\n\n`)
+          );
+
+          if (token.includes('[1]')) {
+            controller.enqueue(
+              encoder.encode(
+                `event: citation\ndata: ${JSON.stringify({ index: 1, filename: 'architecture_specifications.pdf', pageNumber: 3 })}\n\n`
+              )
+            );
+          }
+          if (token.includes('[2]')) {
+            controller.enqueue(
+              encoder.encode(
+                `event: citation\ndata: ${JSON.stringify({ index: 2, filename: 'database_design.pdf', pageNumber: 7 })}\n\n`
+              )
+            );
+          }
+        }
+
+        // 3. Emit event: done
+        await delay(100);
+        controller.enqueue(encoder.encode(`event: done\ndata: [DONE]\n\n`));
+        controller.close();
+      },
+    });
+
+    return new HttpResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  }),
 ];
 
 function triggerMockProcessing(docId: string) {

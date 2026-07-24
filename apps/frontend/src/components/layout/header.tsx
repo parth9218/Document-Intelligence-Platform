@@ -27,8 +27,13 @@ export function Header() {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       
       const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
-        const activeTheme = e.matches ? 'dark' : 'light';
-        root.setAttribute('data-theme', activeTheme);
+        const isDark = e.matches;
+        root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        if (isDark) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
       };
       
       handleChange(mediaQuery);
@@ -38,6 +43,11 @@ export function Header() {
       };
     } else {
       root.setAttribute('data-theme', themeMode);
+      if (themeMode === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
     }
   }, [themeMode]);
 
