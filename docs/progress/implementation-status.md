@@ -1,61 +1,71 @@
 # Implementation Status Board
 
 ## Backend Phase 1: Foundation
-* [x] **Task 101**: Database Schema Creation ── *Complete*
-* [x] **Task 102**: API Session Management ── *Complete*
-* [x] **Task 103**: Document Upload & Status tracking ── *Complete*
-* [x] **Task 104**: SQS Consumer Loop ── *Complete*
-* [x] **Task 105**: SSE Architecture Refactor ── *Complete*
-* [x] **Task 106**: Automated API Specification Generation ── *Complete*
-* [x] **Task 107**: Session Auto-Initialization Refactor ── *Complete*
-* [x] **Task 108**: Express API CORS Configuration ── *Complete*
+
+- [x] **Task 101**: Database Schema Creation ── _Complete_
+- [x] **Task 102**: API Session Management ── _Complete_
+- [x] **Task 103**: Document Upload & Status tracking ── _Complete_
+- [x] **Task 104**: SQS Consumer Loop ── _Complete_
+- [x] **Task 105**: SSE Architecture Refactor ── _Complete_
+- [x] **Task 106**: Automated API Specification Generation ── _Complete_
+- [x] **Task 107**: Session Auto-Initialization Refactor ── _Complete_
+- [x] **Task 108**: Express API CORS Configuration ── _Complete_
 
 ### Phase 1 Maintenance & Fixes
-* [x] **Fix 103-A**: confirm-upload Idempotency Resolution ── *Complete*
+
+- [x] **Fix 103-A**: confirm-upload Idempotency Resolution ── _Complete_
 
 ## Backend Phase 2: Ingestion Pipeline
-* [x] **Task 201**: Worker Document Extraction ── *Complete*
-* [x] **Task 202**: Worker Chunking & Embedding ── *Complete*
-* [x] **Task 203**: Worker Vector Storage & Status Updates ── *Complete*
 
+- [x] **Task 201**: Worker Document Extraction ── _Complete_
+- [x] **Task 202**: Worker Chunking & Embedding ── _Complete_
+- [x] **Task 203**: Worker Vector Storage & Status Updates ── _Complete_
 
 ## Backend Phase 3: Query Engine
-* [x] **Task 301**: API Similarity Search ── *Complete*
-* [x] **Task 302**: API Answer Generation & Citation Verification ── *Complete*
+
+- [x] **Task 301**: API Similarity Search ── _Complete_
+- [x] **Task 302**: API Answer Generation & Citation Verification ── _Complete_
 
 ## Backend Phase 4: Observability
-* [ ] **Task 401**: OpenTelemetry Tracing ── *Incomplete*
-* [ ] **Task 402**: Prometheus & Loki Setup ── *Incomplete*
+
+- [ ] **Task 401**: OpenTelemetry Tracing ── _Incomplete_
+- [ ] **Task 402**: Prometheus & Loki Setup ── _Incomplete_
 
 ## Backend Phase 5: Platform
-* [ ] **Task 501**: Terraform Provisioning ── *Incomplete*
-* [ ] **Task 502**: Helm Charting ── *Incomplete*
-* [ ] **Task 503**: ArgoCD GitOps ── *Incomplete*
-* [ ] **Task 504**: KEDA Autoscaling ── *Incomplete*
-* [ ] **Task 505**: Security Hardening ── *Incomplete*
+
+- [ ] **Task 501**: Terraform Provisioning ── _Incomplete_
+- [ ] **Task 502**: Helm Charting ── _Incomplete_
+- [ ] **Task 503**: ArgoCD GitOps ── _Incomplete_
+- [ ] **Task 504**: KEDA Autoscaling ── _Incomplete_
+- [ ] **Task 505**: Security Hardening ── _Incomplete_
 
 ---
 
 ## Frontend Phase 1: Foundation, Tailwind & Hybrid Mocking
-* [x] **Task F1.1**: Next.js Workspace Scaffolding & Core Configurations ── *Complete*
-* [x] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── *Complete*
-* [x] **Task F1.3**: Reusable Tailwind UI & Theme System ── *Complete*
+
+- [x] **Task F1.1**: Next.js Workspace Scaffolding & Core Configurations ── _Complete_
+- [x] **Task F1.2**: Hybrid API Router & MSW Interception Engine ── _Complete_
+- [x] **Task F1.3**: Reusable Tailwind UI & Theme System ── _Complete_
 
 ## Frontend Phase 2: Application Shell, Session & API Layer
-* [x] **Task F2.1**: API Integration Client & Error Schema Adapter ── *Complete*
-* [x] **Task F2.2**: Session Verification & Auth Shell ── *Complete*
-* [x] **Task F2.3**: Dashboard Homepage & Empty States ── *Complete*
+
+- [x] **Task F2.1**: API Integration Client & Error Schema Adapter ── _Complete_
+- [x] **Task F2.2**: Session Verification & Auth Shell ── _Complete_
+- [x] **Task F2.3**: Dashboard Homepage & Empty States ── _Complete_
 
 ## Frontend Phase 3: Batch Upload & S3 Ingestion Flow
-* [x] **Task F3.1**: Drag-and-Drop Picker UI ── *Complete*
-* [x] **Task F3.2**: Batch Initialization & Queue Controller Hook ── *Complete*
-* [x] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── *Complete*
+
+- [x] **Task F3.1**: Drag-and-Drop Picker UI ── _Complete_
+- [x] **Task F3.2**: Batch Initialization & Queue Controller Hook ── _Complete_
+- [x] **Task F3.3**: Multipart Presigned POST S3 Upload & Confirmation Handback ── _Complete_
 
 ## Frontend Phase 4: Real-Time Processing & Progress Visualizer
-* [x] **Task F4.1**: SSE Client & Polling Fallback Hook ── *Complete*
-* [x] **Task F4.2**: Document Processing Feed & Progress Indicators ── *Complete*
+
+- [x] **Task F4.1**: SSE Client & Polling Fallback Hook ── _Complete_
+- [x] **Task F4.2**: Document Processing Feed & Progress Indicators ── _Complete_
 
 ## Frontend Phase 5: Query Interface & Streaming Q&A
-* [x] **Task F5.1**: Chat Layout & SSE Query Stream Hook ── *Complete*
-* [x] **Task F5.2**: Citation Parser & Source Popover UI ── *Complete*
-* [x] **Task F5.3**: Chat Error Handling & Citations Validation ── *Complete*
+
+- [x] **Task F5.1**: Chat Layout & SSE Query Stream Hook ── _Complete_
+- [x] **Task F5.2**: Citation Parser & Source Popover UI ── _Complete_
+- [x] **Task F5.3**: Chat Error Handling & Citations Validation ── _Complete_
