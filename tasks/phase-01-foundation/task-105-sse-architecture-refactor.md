@@ -18,7 +18,7 @@ Migrate the existing per-document SSE and status endpoints to session-scoped equ
 - Schema table changes (no new columns or tables required)
 - `POST /api/documents` and `POST /api/documents/:id/confirm-upload` (unaffected)
 - Worker service changes
-- Frontend changes (covered in Task 303)
+- Frontend changes (covered in Frontend Phase 4 & Phase 5)
 
 ## Dependencies
 

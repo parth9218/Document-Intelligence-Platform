@@ -190,7 +190,7 @@ Worker
 - Returns `{ "documents": [ <status object> ] }` where each item uses the identical unified document status object shape.
 - Frontend must use the same parsing logic for both `snapshot` event data and the polling response body.
 
-**SSE reconnect contract:** On `EventSource.onclose`, React must either reconnect or fall back to polling. Reconnecting is safe at any point — the `snapshot` event on reconnect delivers current state for all documents. This is a Task 303 implementation requirement.
+**SSE reconnect contract:** On `EventSource.onclose`, React must either reconnect or fall back to polling. Reconnecting is safe at any point — the `snapshot` event on reconnect delivers current state for all documents. This is a frontend implementation requirement.
 
 ---
 

@@ -335,7 +335,7 @@ The **polling fallback** (`GET /api/documents/status`) is the right safety net w
 
 The PG NOTIFY payload limit (8KB) is not a concern — the NOTIFY payload is a small JSON object of progress fields, not chunk content.
 
-**Important caveat:** If the Express API restarts while a user is watching document processing, the SSE connection drops. The React client must detect `EventSource.onclose` and reconnect (which replays the full `snapshot` for all documents) or fall back to polling. This reconnect logic must be explicitly implemented in the frontend (Task 303).
+**Important caveat:** If the Express API restarts while a user is watching document processing, the SSE connection drops. The React client must detect `EventSource.onclose` and reconnect (which replays the full `snapshot` for all documents) or fall back to polling. This reconnect logic must be explicitly implemented in the frontend (Frontend Phase 4).
 
 ---
 
