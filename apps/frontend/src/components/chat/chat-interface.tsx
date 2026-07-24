@@ -9,8 +9,8 @@ import {
   Sparkles,
   MessageSquare,
   AlertCircle,
-  HelpCircle,
-  ArrowRight,
+  AlertTriangle,
+  FileCheck,
 } from 'lucide-react';
 
 export const ChatInterface: React.FC = () => {
@@ -19,7 +19,14 @@ export const ChatInterface: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const chatMessages = useAppStore((state) => state.chatMessages);
+  const documentRegistry = useAppStore((state) => state.documentRegistry);
   const { isStreaming, error, submitQuery, abortStream, clearChat } = useQuery();
+
+  // Verify user has at least 1 document in 'completed' status before enabling Q&A querying
+  const completedDocsCount = Object.values(documentRegistry).filter(
+    (doc) => doc.status === 'completed',
+  ).length;
+  const hasCompletedDocument = completedDocsCount > 0;
 
   // Auto-scroll to bottom of chat as new tokens arrive
   const scrollToBottom = () => {
@@ -40,14 +47,14 @@ export const ChatInterface: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && hasCompletedDocument) {
       e.preventDefault();
       handleSend();
     }
   };
 
   const handleSend = () => {
-    if (!queryInput.trim() || isStreaming) return;
+    if (!queryInput.trim() || isStreaming || !hasCompletedDocument) return;
     submitQuery(queryInput);
     setQueryInput('');
     if (textareaRef.current) {
@@ -71,9 +78,19 @@ export const ChatInterface: React.FC = () => {
             <Sparkles className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-              Grounded Document Q&A
-            </h2>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                Grounded Document Q&A
+              </h2>
+              {hasCompletedDocument && (
+                <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border shadow-2xs
+                  bg-emerald-50 text-emerald-700 border-emerald-300
+                  dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+                  <FileCheck className="w-3 h-3 text-emerald-500" />
+                  <span>{completedDocsCount} Ready</span>
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
               Ask questions backed by verified document citations.
             </p>
@@ -114,7 +131,9 @@ export const ChatInterface: React.FC = () => {
                 No conversation started
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                Upload documents to your session and type a query below to generate answers grounded in your files.
+                {hasCompletedDocument
+                  ? 'Type a question below to generate answers grounded in your processed documents.'
+                  : 'Please upload and process at least 1 document to enable document Q&A.'}
               </p>
             </div>
           </div>
@@ -138,6 +157,16 @@ export const ChatInterface: React.FC = () => {
         </div>
       )}
 
+      {/* Warning Banner when 0 completed documents exist */}
+      {!hasCompletedDocument && (
+        <div className="flex items-center space-x-2 p-3 mb-3 rounded-xl border text-xs font-semibold
+          bg-amber-50 text-amber-900 border-amber-300
+          dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800/80">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>Upload and process at least 1 document to enable grounded Q&A.</span>
+        </div>
+      )}
+
       {/* Input Box Controls */}
       <div className="pt-3.5 border-t border-slate-200 dark:border-slate-800 space-y-2">
         <div className="relative flex items-center">
@@ -149,12 +178,14 @@ export const ChatInterface: React.FC = () => {
             onKeyDown={handleKeyDown}
             aria-label="Ask a question about your documents"
             placeholder={
-              isStreaming
-                ? 'Assistant is answering...'
-                : 'Ask a question about your documents... (Enter to send, Shift+Enter for newline)'
+              !hasCompletedDocument
+                ? 'Upload and process at least 1 document to enable Q&A...'
+                : isStreaming
+                  ? 'Assistant is answering...'
+                  : 'Ask a question about your documents... (Enter to send, Shift+Enter for newline)'
             }
-            disabled={isStreaming}
-            className="w-full py-3.5 pl-4 pr-24 rounded-xl border text-sm font-sans font-medium transition-all resize-none shadow-inner disabled:opacity-60
+            disabled={!hasCompletedDocument || isStreaming}
+            className="w-full py-3.5 pl-4 pr-24 rounded-xl border text-sm font-sans font-medium transition-all resize-none shadow-inner disabled:opacity-50 disabled:cursor-not-allowed
               bg-slate-50 text-slate-900 border-slate-300 placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20
               dark:bg-slate-950 dark:text-slate-100 dark:border-slate-700 dark:placeholder:text-slate-500 dark:focus:border-cyan-500 dark:focus:ring-cyan-500/30"
           />
@@ -176,7 +207,7 @@ export const ChatInterface: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={!queryInput.trim()}
+                disabled={!queryInput.trim() || !hasCompletedDocument}
                 aria-label="Send query"
                 className="p-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
               >

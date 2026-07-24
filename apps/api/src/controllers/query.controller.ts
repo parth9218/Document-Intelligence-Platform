@@ -38,8 +38,10 @@ class QueryController {
         // 1. Emit retrieved context chunks and citation references
         res.write(`event: context\ndata: ${JSON.stringify({ query, results })}\n\n`);
 
-        // Skip generation when there are no retrieved chunks
+        // When 0 chunks are retrieved, stream a friendly fallback response informing the user
         if (results.length === 0) {
+          const fallbackToken = "I couldn't find any relevant information in your uploaded documents to answer this question. Please ensure your documents are uploaded and processed, or try rephrasing your query.";
+          res.write(`event: token\ndata: ${JSON.stringify({ token: fallbackToken })}\n\n`);
           res.write(`event: done\ndata: [DONE]\n\n`);
           res.end();
           return;

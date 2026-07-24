@@ -91,6 +91,12 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
         <div className="text-sm leading-relaxed font-normal text-slate-900 dark:text-slate-100 whitespace-pre-wrap">
           {renderFormattedText(message.content)}
 
+          {!message.content && !message.isStreaming && (
+            <span className="text-sm text-slate-600 dark:text-slate-300 italic">
+              I couldn't find any relevant information in your uploaded documents to answer this question. Please ensure your documents are uploaded and processed, or try rephrasing your query.
+            </span>
+          )}
+
           {/* Streaming Cursor Indicator */}
           {message.isStreaming && (
             <span className="inline-flex items-center ml-1 space-x-1.5 text-cyan-600 dark:text-cyan-400 font-medium">

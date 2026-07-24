@@ -115,6 +115,9 @@ export function useQuery() {
                 updateChatMessage(assistantMsgId, (prev) => ({
                   ...prev,
                   isStreaming: false,
+                  content: !prev.content.trim()
+                    ? "I couldn't find any relevant information in your uploaded documents to answer this question. Please ensure your documents are uploaded and processed, or try rephrasing your query."
+                    : prev.content,
                 }));
                 break;
               }
@@ -165,6 +168,9 @@ export function useQuery() {
         updateChatMessage(assistantMsgId, (prev) => ({
           ...prev,
           isStreaming: false,
+          content: !prev.content.trim()
+            ? "I couldn't find any relevant information in your uploaded documents to answer this question. Please ensure your documents are uploaded and processed, or try rephrasing your query."
+            : prev.content,
         }));
       } catch (err: any) {
         if (err.name === 'AbortError') {

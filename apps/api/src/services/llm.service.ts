@@ -227,6 +227,9 @@ export class LocalLlmProvider implements ILlmProvider {
     const model = config.llm.model;
 
     try {
+      const timeoutSignal = AbortSignal.timeout(2000);
+      const activeSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+
       const response = await fetch(`${endpoint}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,7 +242,7 @@ export class LocalLlmProvider implements ILlmProvider {
             { role: 'user', content: userMessage },
           ],
         }),
-        signal,
+        signal: activeSignal,
       });
 
       if (!response.ok) {
