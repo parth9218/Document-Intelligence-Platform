@@ -227,9 +227,8 @@ export class LocalLlmProvider implements ILlmProvider {
     const model = config.llm.model;
 
     try {
-      const timeoutSignal = AbortSignal.timeout(2000);
+      const timeoutSignal = AbortSignal.timeout(15000);
       const activeSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
-
       const response = await fetch(`${endpoint}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,7 +243,6 @@ export class LocalLlmProvider implements ILlmProvider {
         }),
         signal: activeSignal,
       });
-
       if (!response.ok) {
         throw new Error(`Ollama responded with HTTP ${response.status}`);
       }
