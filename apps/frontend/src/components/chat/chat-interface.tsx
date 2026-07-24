@@ -100,10 +100,10 @@ export const ChatInterface: React.FC = () => {
       <div
         tabIndex={0}
         aria-label="Chat messages history"
-        className="flex-1 overflow-y-auto py-4 space-y-4 pr-2 custom-scrollbar focus:outline-none focus:ring-1 focus:ring-cyan-500/30"
+        className="flex-1 overflow-y-auto py-4 space-y-4 pr-2 custom-scrollbar focus:outline-none focus:ring-1 focus:ring-cyan-500/30 flex flex-col"
       >
         {chatMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 my-auto py-8">
+          <div className="flex flex-col items-center justify-center flex-1 my-auto text-center space-y-6 py-8">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center border shadow-md
               bg-cyan-100 text-cyan-800 border-cyan-300
               dark:bg-cyan-950/80 dark:text-cyan-400 dark:border-cyan-700">
