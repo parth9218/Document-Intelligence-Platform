@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:local": "env-cmd -f .env.development next dev",
-    "dev:prod": "env-cmd -f .env.production next dev",
+    "dev:local": "env-cmd -f .env.development next dev -p 3001",
+    "dev:prod": "env-cmd -f .env.production next dev -p 3001",
     "build": "next build",
     "build:local": "env-cmd -f .env.development next build",
     "build:prod": "env-cmd -f .env.production next build",
