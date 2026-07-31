@@ -1,4 +1,4 @@
-# Task 502: Helm Chart Packaging
+# Task 402: Helm Chart Packaging
 
 ## Goal
 Create reusable Helm charts for API and Worker services.

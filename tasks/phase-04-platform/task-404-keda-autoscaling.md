@@ -1,4 +1,4 @@
-# Task 504: KEDA Autoscaler Configuration
+# Task 404: KEDA Autoscaler Configuration
 
 ## Goal
 Configure Worker scaling based on SQS queue message length.
@@ -10,7 +10,7 @@ Write KEDA ScaledObject declarations.
 * `infra/k8s/helm/worker/templates/scaledobject.yaml`
 
 ## Dependencies
-* Task 502 (Helm Charting)
+* Task 402 (Helm Charting)
 
 ## Acceptance Criteria
 * ScaledObject points to main SQS queue.

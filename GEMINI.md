@@ -7,7 +7,6 @@ The objective of this project is to build a production-grade, multi-tenant, clou
 * **AWS DevOps Engineer Professional (AWS-DOP)** capabilities (EKS, IAM/IRSA, RDS, SQS, S3, KMS, Secrets Manager, CloudWatch).
 * **Certified Kubernetes Administrator (CKA)** skills (Deployments, Ingress, NetworkPolicies, HPA, Pod Security Standards).
 * **GitOps workflows** via ArgoCD.
-* **Modern cloud-native observability** (Prometheus, Loki, Tempo, OpenTelemetry, Grafana).
 
 ## 2. Core Architectural Principles
 To prevent architectural drift, the codebase enforces the following:

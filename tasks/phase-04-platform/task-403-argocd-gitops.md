@@ -1,4 +1,4 @@
-# Task 503: ArgoCD GitOps Git Integration
+# Task 403: ArgoCD GitOps Git Integration
 
 ## Goal
 Configure ArgoCD application-of-applications templates to automate deployments.
@@ -10,7 +10,7 @@ Define GitOps declarations tracking values and target states.
 * `infra/k8s/argocd/application.yaml`
 
 ## Dependencies
-* Task 502 (Helm Charting)
+* Task 402 (Helm Charting)
 
 ## Acceptance Criteria
 * ArgoCD Application tracks Git repository deployment manifest paths.

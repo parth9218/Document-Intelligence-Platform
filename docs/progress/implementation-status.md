@@ -26,18 +26,14 @@
 - [x] **Task 301**: API Similarity Search ── _Complete_
 - [x] **Task 302**: API Answer Generation & Citation Verification ── _Complete_
 
-## Backend Phase 4: Observability
 
-- [ ] **Task 401**: OpenTelemetry Tracing ── _Incomplete_
-- [ ] **Task 402**: Prometheus & Loki Setup ── _Incomplete_
+## Backend Phase 4: Platform
 
-## Backend Phase 5: Platform
-
-- [ ] **Task 501**: Terraform Provisioning ── _Incomplete_
-- [ ] **Task 502**: Helm Charting ── _Incomplete_
-- [ ] **Task 503**: ArgoCD GitOps ── _Incomplete_
-- [ ] **Task 504**: KEDA Autoscaling ── _Incomplete_
-- [ ] **Task 505**: Security Hardening ── _Incomplete_
+- [ ] **Task 401**: Terraform Provisioning ── _Incomplete_
+- [ ] **Task 402**: Helm Charting ── _Incomplete_
+- [ ] **Task 403**: ArgoCD GitOps ── _Incomplete_
+- [ ] **Task 404**: KEDA Autoscaling ── _Incomplete_
+- [ ] **Task 405**: Security Hardening ── _Incomplete_
 
 ---
 

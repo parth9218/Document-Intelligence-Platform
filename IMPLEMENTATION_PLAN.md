@@ -40,23 +40,16 @@ This document maps out the phased execution plan for the platform, ensuring each
 
 ---
 
-## Phase 4: Observability Integration
-* **Goal**: Standardize telemetry across Express API and Python Worker.
-* **Tasks**:
-  * **Task 4.1: OpenTelemetry Tracing (Task 401)**: Wire up auto-instrumentation for Express, prisma client, pg, boto3, and Bedrock calls.
-  * **Task 4.2: Prometheus & Loki Aggregation (Task 402)**: Standardize metric collection and structured JSON logging.
-* **Milestone**: Metrics, traces, and logs are aggregated and queryable in Grafana.
-* **Verification**: Verify trace maps connect API requests down through SQS, Worker tasks, Bedrock API calls, and DB transactions.
 
 ---
 
-## Phase 5: Cloud Deployment & Platform Hardening
+## Phase 4: Cloud Deployment & Platform Hardening
 * **Goal**: Terraform provisioning, Helm packaging, ArgoCD GitOps, and KEDA autoscaling.
 * **Tasks**:
-  * **Task 5.1: Terraform Provisioning (Task 501)**
-  * **Task 5.2: Helm Charting (Task 502)**
-  * **Task 5.3: ArgoCD GitOps Integration (Task 503)**
-  * **Task 5.4: KEDA Autoscaling (Task 504)**
-  * **Task 5.5: Security Hardening (NetworkPolicies, Kyverno) (Task 505)**
+  * **Task 4.1: Terraform Provisioning (Task 401)**
+  * **Task 4.2: Helm Charting (Task 402)**
+  * **Task 4.3: ArgoCD GitOps Integration (Task 403)**
+  * **Task 4.4: KEDA Autoscaling (Task 404)**
+  * **Task 4.5: Security Hardening (NetworkPolicies, Kyverno) (Task 405)**
 * **Milestone**: Infrastructure is created from zero via Terraform and deployed automatically via GitOps.
 * **Verification**: Verify workers scale from 0 to 10 based on SQS queue depth KEDA metrics.

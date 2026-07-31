@@ -1,4 +1,4 @@
-# Task 505: Kubernetes Security Hardening
+# Task 405: Kubernetes Security Hardening
 
 ## Goal
 Apply zero-trust configurations using NetworkPolicies and Kyverno security limits.

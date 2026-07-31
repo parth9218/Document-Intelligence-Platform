@@ -1,4 +1,4 @@
-# Task 501: Infrastructure Provisioning
+# Task 401: Infrastructure Provisioning
 
 ## Goal
 Write Terraform configurations to deploy the target VPC, EKS, RDS Proxy, and IAM resources.
