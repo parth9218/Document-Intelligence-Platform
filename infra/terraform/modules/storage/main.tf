@@ -73,6 +73,23 @@ data "aws_iam_policy_document" "origin_bucket_policy" {
       values   = [aws_cloudfront_distribution.frontend.arn]
     }
   }
+  statement {
+    sid    = "AllowGithubActionsCIRoleWriteObjects"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [var.github_actions_ci_role]
+    }
+    actions = [
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      "${aws_s3_bucket.frontend.arn}",
+      "${aws_s3_bucket.frontend.arn}/*"
+    ]
+  }
 }
 
 resource "aws_s3_bucket_policy" "frontend" {

@@ -11,3 +11,4 @@ variable "db_name" { type = string }
 variable "db_user_name" { type = string }
 variable "account_id" { type = string }
 variable "region" { type = string }
+variable "github_actions_ci_role" { type = string }

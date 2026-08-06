@@ -45,15 +45,16 @@ module "secrets" {
 }
 
 module "storage" {
-  source          = "../../modules/storage"
-  project_name    = var.project_name
-  environment     = var.environment
-  vpc_id          = module.vpc.vpc_id
-  private_subnets = module.vpc.private_subnets
-  db_name         = var.db_name
-  db_user_name    = var.db_username
-  region          = data.aws_region.current.region
-  account_id      = data.aws_caller_identity.current.account_id
+  source                 = "../../modules/storage"
+  project_name           = var.project_name
+  environment            = var.environment
+  vpc_id                 = module.vpc.vpc_id
+  private_subnets        = module.vpc.private_subnets
+  db_name                = var.db_name
+  db_user_name           = var.db_username
+  region                 = data.aws_region.current.region
+  account_id             = data.aws_caller_identity.current.account_id
+  github_actions_ci_role = module.oidc.github_actions_ci_role_arn
 }
 
 module "oidc" {
