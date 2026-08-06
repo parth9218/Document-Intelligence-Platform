@@ -22,3 +22,11 @@ variable "db_username" {
   type    = string
   default = "postgres"
 }
+variable "github_username" {
+  type    = string
+  default = "parth9218"
+}
+variable "github_repo" {
+  type    = string
+  default = "Document-Intelligence-Platform"
+}

@@ -13,3 +13,6 @@ output "ssm_secrets_arn" {
 output "cluster_endpoint" {
   value = module.eks.cluster_endpoint
 }
+output "github_actions_ci_role" {
+  value = module.oidc.github_actions_ci_role_arn
+}

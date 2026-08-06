@@ -56,6 +56,21 @@ module "storage" {
   account_id      = data.aws_caller_identity.current.account_id
 }
 
+module "oidc" {
+  source          = "../../modules/oidc"
+  project_name    = var.project_name
+  environment     = var.environment
+  github_username = var.github_username
+  github_repo     = var.github_repo
+}
+
+module "ecr" {
+  source       = "../../modules/ecr"
+  project_name = var.project_name
+  environment  = var.environment
+  ci_role_arn  = module.oidc.github_actions_ci_role_arn
+}
+
 module "eks" {
   source               = "../../modules/eks"
   project_name         = var.project_name
