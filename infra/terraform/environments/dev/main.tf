@@ -57,11 +57,15 @@ module "storage" {
 }
 
 module "eks" {
-  source             = "../../modules/eks"
-  project_name       = var.project_name
-  environment        = var.environment
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = [for subnet in module.vpc.private_subnets : subnet.id]
+  source               = "../../modules/eks"
+  project_name         = var.project_name
+  environment          = var.environment
+  vpc_id               = module.vpc.vpc_id
+  private_subnet_ids   = [for subnet in module.vpc.private_subnets : subnet.id]
+  rds_db_arn           = module.storage.db_arn
+  db_credentials_arn   = module.secrets.secrets_arn
+  documents_sqs_arn    = module.messaging.sqs_queue_arn
+  documents_bucket_arn = module.storage.documents_bucket_arn
 }
 
 module "messaging" {
@@ -70,4 +74,16 @@ module "messaging" {
   environment          = var.environment
   documents_bucket_id  = module.storage.documents_bucket_id
   documents_bucket_arn = module.storage.documents_bucket_arn
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_name
+}
+
+provider "helm" {
+  kubernetes = {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    token                  = data.aws_eks_cluster_auth.cluster.token
+  }
 }
