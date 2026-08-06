@@ -2,6 +2,22 @@ locals {
   eks_name = "${var.project_name}-${var.environment}-eks-cluster"
 }
 
+data "aws_iam_policy_document" "node_role_boundary" {
+  statement {
+    sid    = "AllowPullFromECRBoundary"
+    effect = "Deny"
+    actions = [
+      "ecr:*"
+    ]
+    not_resources = var.ecr_repo_arns
+  }
+}
+
+resource "aws_iam_policy" "node_role_boundary" {
+  name   = "${local.eks_name}-node-role-boundary"
+  policy = data.aws_iam_policy_document.node_role_boundary.json
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -19,6 +35,9 @@ module "eks" {
     enabled    = true
     node_pools = ["general-purpose", "system"]
   }
+
+  # attach node role boundary to restrict permissions to the ecr repos in module.ecr only
+  node_iam_role_permissions_boundary = aws_iam_policy.node_role_boundary.arn
 
   vpc_id     = var.vpc_id
   subnet_ids = var.private_subnet_ids

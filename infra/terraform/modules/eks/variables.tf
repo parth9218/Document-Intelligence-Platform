@@ -6,3 +6,4 @@ variable "rds_db_arn" { type = string }
 variable "db_credentials_arn" { type = string }
 variable "documents_sqs_arn" { type = string }
 variable "documents_bucket_arn" { type = string }
+variable "ecr_repo_arns" { type = list(string) }

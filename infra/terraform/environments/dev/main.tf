@@ -79,6 +79,7 @@ module "eks" {
   private_subnet_ids   = [for subnet in module.vpc.private_subnets : subnet.id]
   rds_db_arn           = module.storage.db_arn
   db_credentials_arn   = module.secrets.secrets_arn
+  ecr_repo_arns        = module.ecr.ecr_repo_arns
   documents_sqs_arn    = module.messaging.sqs_queue_arn
   documents_bucket_arn = module.storage.documents_bucket_arn
 }
