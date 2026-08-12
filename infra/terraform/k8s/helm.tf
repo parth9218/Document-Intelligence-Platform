@@ -1,16 +1,18 @@
 data "aws_region" "current" {}
 
 resource "helm_release" "aws_load_balancer_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "3.5.0"
+  name                       = "aws-load-balancer-controller"
+  repository                 = "https://aws.github.io/eks-charts"
+  chart                      = "aws-load-balancer-controller"
+  namespace                  = "kube-system"
+  version                    = "3.5.0"
+  timeout                    = 600
+  disable_openapi_validation = true
 
   set = [
     {
       name  = "clusterName"
-      value = module.eks.cluster_name
+      value = var.cluster_name
     },
     {
       name  = "serviceAccount.name"
@@ -43,21 +45,18 @@ resource "helm_release" "aws_load_balancer_controller" {
   ]
 
   depends_on = [
-    module.eks,
-    aws_eks_pod_identity_association.alb_controller
+    kubectl_manifest.crds
   ]
 }
 
 
 resource "helm_release" "argocd" {
-  name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm"
-  chart            = "argo-cd"
-  namespace        = "argocd"
-  version          = "10.3.0"
-  create_namespace = true
-
-  depends_on = [
-    module.eks
-  ]
+  name                       = "argocd"
+  repository                 = "https://argoproj.github.io/argo-helm"
+  chart                      = "argo-cd"
+  namespace                  = "argocd"
+  version                    = "10.3.0"
+  create_namespace           = true
+  timeout                    = 600
+  disable_openapi_validation = true
 }

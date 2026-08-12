@@ -30,3 +30,7 @@ variable "github_repo" {
   type    = string
   default = "Document-Intelligence-Platform"
 }
+variable "api_hostname" {
+  type    = string
+  default = "api.docintel.com"
+}

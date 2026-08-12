@@ -9,7 +9,7 @@ data "aws_iam_policy_document" "node_role_boundary" {
     actions = [
       "ecr:*"
     ]
-    not_resources = var.ecr_repo_arns
+    not_resources = concat(var.ecr_repo_arns, )
   }
 }
 
@@ -37,7 +37,7 @@ module "eks" {
   }
 
   # attach node role boundary to restrict permissions to the ecr repos in module.ecr only
-  node_iam_role_permissions_boundary = aws_iam_policy.node_role_boundary.arn
+  # node_iam_role_permissions_boundary = aws_iam_policy.node_role_boundary.arn
 
   vpc_id     = var.vpc_id
   subnet_ids = var.private_subnet_ids

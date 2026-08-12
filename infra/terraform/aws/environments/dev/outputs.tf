@@ -10,9 +10,15 @@ output "db_password_secret" {
 output "ssm_secrets_arn" {
   value = module.secrets.secrets_arn
 }
+output "eks_cluster_name" {
+  value = module.eks.cluster_name
+}
 output "cluster_endpoint" {
   value = module.eks.cluster_endpoint
 }
 output "github_actions_ci_role" {
   value = module.oidc.github_actions_ci_role_arn
+}
+output "acm_cert_arn" {
+  value = module.acm.acm_cert_arn
 }

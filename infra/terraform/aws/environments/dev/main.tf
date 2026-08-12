@@ -1,8 +1,13 @@
 terraform {
+  required_version = ">= 1.8.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 6.57.1"
+    }
+    tls = {
+      source  = "hashicorp/tls",
+      version = ">= 4.3.0"
     }
   }
 }
@@ -93,14 +98,9 @@ module "messaging" {
   documents_bucket_arn = module.storage.documents_bucket_arn
 }
 
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_name
-}
-
-provider "helm" {
-  kubernetes = {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-    token                  = data.aws_eks_cluster_auth.cluster.token
-  }
+module "acm" {
+  source       = "../../modules/acm"
+  project_name = var.project_name
+  environment  = var.environment
+  api_hostname = var.api_hostname
 }
