@@ -252,3 +252,10 @@ This document lists completed tasks and code files created.
   - Added MSW mock handler in [handlers.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/mocks/handlers.ts) to simulate query SSE stream events in hybrid/mock development mode.
   - Integrated `ChatInterface` into [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) with workspace tabs for switching between Document Management & Ingestion Feed and Grounded Q&A Chat.
   - Verified clean Next.js build compilation (`npm run build`).
+
+- **Infrastructure Provisioning (Phase 4)**:
+  - Designed and structured the Terraform modular layout within `infra/terraform/`.
+  - Created environment-agnostic modules under `infra/terraform/aws/modules/` including configurations for `vpc`, `eks`, `storage` (S3/RDS with pgvector), `messaging` (SQS, DLQ), `iam` (Pod Identity Associations, OIDC, Secrets Manager), `acm`, and `ecr`.
+  - Set up `dev` environment instantiation under `infra/terraform/aws/environments/dev/` utilizing S3 remote state backend.
+  - Implemented Kubernetes provider configurations and resources inside `infra/terraform/k8s/` including API Gateway integration and ALB Gateway Controller setup.
+  - Documented the architecture changes in [terraform-infrastructure-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/terraform-infrastructure-spec.md).
