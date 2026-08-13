@@ -1,11 +1,5 @@
-
+# Add AWSSecretsManagerClientReadOnlyAccess managed policy to all the roles below
 data "aws_iam_policy_document" "api_policy" {
-  statement {
-    actions = [
-      "secretsmanager:GetSecretValue"
-    ]
-    resources = [var.db_credentials_arn]
-  }
   statement {
     actions = [
       "rds-db:connect"
@@ -36,42 +30,13 @@ resource "aws_iam_policy" "api_policy" {
   policy = data.aws_iam_policy_document.api_policy.json
 }
 
-resource "aws_iam_role" "api_role" {
-  name = "${var.project_name}-${var.environment}-api-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "pods.eks.amazonaws.com"
-        }
-        Action = [
-          "sts:AssumeRole",
-          "sts:TagSession"
-        ]
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "api_policy_attachment" {
-  role       = aws_iam_role.api_role.name
-  policy_arn = aws_iam_policy.api_policy.arn
-}
-
-resource "aws_eks_pod_identity_association" "api" {
-  cluster_name    = module.eks.cluster_name
-  namespace       = "default"
-  service_account = "api-sa"
-  role_arn        = aws_iam_role.api_role.arn
-}
-
-
 data "aws_iam_policy_document" "worker_policy" {
   statement {
     actions = [
-      "secretsmanager:GetSecretValue"
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+      "ssm:GetParameter",
+      "ssm:GetParameters"
     ]
     resources = [var.db_credentials_arn]
   }
@@ -109,6 +74,7 @@ data "aws_iam_policy_document" "worker_policy" {
     ]
     resources = ["*"]
   }
+  policy_id = "AWSSecretsManagerClientReadOnlyAccess"
 }
 
 resource "aws_iam_policy" "worker_policy" {
@@ -135,9 +101,53 @@ resource "aws_iam_role" "worker_role" {
   })
 }
 
+resource "aws_iam_role" "api_role" {
+  name = "${var.project_name}-${var.environment}-api-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "pods.eks.amazonaws.com"
+        }
+        Action = [
+          "sts:AssumeRole",
+          "sts:TagSession"
+        ]
+      }
+    ]
+  })
+}
+
+locals {
+  worker_policy_arns = [
+    aws_iam_policy.worker_policy.arn,
+    "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+  ]
+  api_policy_arns = [
+    aws_iam_policy.api_policy.arn,
+    "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+  ]
+}
+
+resource "aws_iam_role_policy_attachment" "api_policy_attachment" {
+  for_each   = toset(local.api_policy_arns)
+  role       = aws_iam_role.api_role.name
+  policy_arn = each.value
+}
+
+resource "aws_eks_pod_identity_association" "api" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "default"
+  service_account = "api-sa"
+  role_arn        = aws_iam_role.api_role.arn
+}
+
 resource "aws_iam_role_policy_attachment" "worker_policy_attachment" {
+  for_each   = toset(local.worker_policy_arns)
   role       = aws_iam_role.worker_role.name
-  policy_arn = aws_iam_policy.worker_policy.arn
+  policy_arn = each.value
 }
 
 resource "aws_eks_pod_identity_association" "worker" {

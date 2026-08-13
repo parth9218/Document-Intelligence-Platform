@@ -46,6 +46,19 @@ module "eks" {
     eks-pod-identity-agent = {
       before_compute = true
     }
+    aws-secrets-store-csi-driver-provider = {
+      configuration_values = jsonencode({
+        secrets-store-csi-driver : {
+          rotationPollInterval : "120s",
+          syncSecret : {
+            enabled : true
+          },
+          tokenRequests : [{
+            audience : "pods.eks.amazonaws.com"
+          }]
+        }
+      })
+    }
   }
 
   tags = {
