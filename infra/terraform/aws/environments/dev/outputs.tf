@@ -7,8 +7,11 @@ output "db_endpoint" {
 output "db_password_secret" {
   value = module.storage.db_password_secret
 }
-output "ssm_secrets_arn" {
-  value = module.secrets.secrets_arn
+output "ssm_parameters_name" {
+  value = module.secrets.ssm_parameter_name
+}
+output "ssm_secrets_name" {
+  value = module.secrets.ssm_secrets_name
 }
 output "eks_cluster_name" {
   value = module.eks.cluster_name

@@ -1,0 +1,99 @@
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: docintel-secrets-class
+spec:
+  provider: aws                             # accepted provider options: azure or vault or gcp
+  parameters:
+    usePodIdentity: "true"
+    objects: |
+      - objectName: ${parameters_name}
+        objectType: "ssmparameter"
+        jmesPath:
+          - path: "DB_HOST"
+            objectAlias: "DB_HOST"
+          - path: "DB_NAME"
+            objectAlias: "DB_NAME"
+          - path: "DB_PORT"
+            objectAlias: "DB_PORT"
+          - path: "DB_USER"
+            objectAlias: "DB_USER"
+          - path: "DB_SSL"
+            objectAlias: "DB_SSL"
+          - path: "S3_BUCKET"
+            objectAlias: "S3_BUCKET"
+          - path: "CORS_ALLOWED_ORIGIN"
+            objectAlias: "CORS_ALLOWED_ORIGIN"
+          - path: "EMBEDDING_PROVIDER"
+            objectAlias: "EMBEDDING_PROVIDER"
+          - path: "EMBEDDING_MODEL"
+            objectAlias: "EMBEDDING_MODEL"
+          - path: "EMBEDDING_ENDPOINT"
+            objectAlias: "EMBEDDING_ENDPOINT"
+          - path: "LLM_PROVIDER"
+            objectAlias: "LLM_PROVIDER"
+          - path: "LLM_MODEL"
+            objectAlias: "LLM_MODEL"
+          - path: "LLM_ENDPOINT"
+            objectAlias: "LLM_ENDPOINT"
+          - path: "LLM_MAX_TOKENS"
+            objectAlias: "LLM_MAX_TOKENS"
+          - path: "QUEUE_URL"
+            objectAlias: "QUEUE_URL"
+          - path: "DLQ_URL"
+            objectAlias: "DLQ_URL"
+      - objectName: ${ssm_secret_name}
+        objectType: "ssmparameter"
+        jmesPath:
+          - path: "SESSION_SECRET"
+            objectAlias: "SESSION_SECRET"
+          - path: "LLM_API_KEY"
+            objectAlias: "LLM_API_KEY"
+          - path: "EMBEDDING_API_KEY"
+            objectAlias: "EMBEDDING_API_KEY"
+
+  secretObjects:
+    - secretName: parameters
+      type: Opaque
+      data: 
+      - objectName: "DB_HOST" 
+        key: "DB_HOST"
+      - objectName: "DB_NAME" 
+        key: "DB_NAME"
+      - objectName: "DB_PORT" 
+        key: "DB_PORT"
+      - objectName: "DB_USER" 
+        key: "DB_USER"
+      - objectName: "DB_SSL" 
+        key: "DB_SSL"
+      - objectName: "S3_BUCKET" 
+        key: "S3_BUCKET"
+      - objectName: "CORS_ALLOWED_ORIGIN" 
+        key: "CORS_ALLOWED_ORIGIN"
+      - objectName: "EMBEDDING_PROVIDER" 
+        key: "EMBEDDING_PROVIDER"
+      - objectName: "EMBEDDING_MODEL" 
+        key: "EMBEDDING_MODEL"
+      - objectName: "EMBEDDING_ENDPOINT" 
+        key: "EMBEDDING_ENDPOINT"
+      - objectName: "LLM_PROVIDER" 
+        key: "LLM_PROVIDER"
+      - objectName: "LLM_MODEL" 
+        key: "LLM_MODEL"
+      - objectName: "LLM_ENDPOINT" 
+        key: "LLM_ENDPOINT"
+      - objectName: "LLM_MAX_TOKENS" 
+        key: "LLM_MAX_TOKENS"
+      - objectName: "QUEUE_URL" 
+        key: "QUEUE_URL"
+      - objectName: "DLQ_URL" 
+        key: "DLQ_URL"
+    - secretName: secrets
+      type: Opaque
+      data: 
+      - objectName: "SESSION_SECRET" 
+        key: "SESSION_SECRET"
+      - objectName: "LLM_API_KEY" 
+        key: "LLM_API_KEY"
+      - objectName: "EMBEDDING_API_KEY" 
+        key: "EMBEDDING_API_KEY"

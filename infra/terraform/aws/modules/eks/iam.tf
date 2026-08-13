@@ -1,4 +1,6 @@
-# Add AWSSecretsManagerClientReadOnlyAccess managed policy to all the roles below
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_policy_document" "api_policy" {
   statement {
     actions = [
@@ -23,6 +25,22 @@ data "aws_iam_policy_document" "api_policy" {
     ]
     resources = ["*"]
   }
+  statement {
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath"
+    ]
+    resources = [
+      "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/${var.project_name}/${var.environment}/*"
+    ]
+  }
+  statement {
+    actions = [
+      "kms:Decrypt"
+    ]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_policy" "api_policy" {
@@ -36,9 +54,19 @@ data "aws_iam_policy_document" "worker_policy" {
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret",
       "ssm:GetParameter",
-      "ssm:GetParameters"
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath"
     ]
-    resources = [var.db_credentials_arn]
+    resources = [
+      var.db_credentials_arn,
+      "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/${var.project_name}/${var.environment}/*"
+    ]
+  }
+  statement {
+    actions = [
+      "kms:Decrypt"
+    ]
+    resources = ["*"]
   }
   statement {
     actions = [
