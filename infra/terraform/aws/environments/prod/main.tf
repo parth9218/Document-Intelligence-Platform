@@ -22,14 +22,13 @@ provider "aws" {
 }
 
 module "core" {
-  source          = "../../modules/core"
-  project_name    = var.project_name
-  environment     = var.environment
-  vpc_cidr        = var.vpc_cidr
-  tags            = var.tags
-  db_name         = var.db_name
-  db_username     = var.db_username
-  github_username = var.github_username
-  github_repo     = var.github_repo
-  api_hostname    = var.api_hostname
+  source                 = "../../modules/core"
+  project_name           = var.project_name
+  environment            = var.environment
+  vpc_cidr               = var.vpc_cidr
+  tags                   = var.tags
+  db_name                = var.db_name
+  db_username            = var.db_username
+  api_hostname           = var.api_hostname
+  github_actions_ci_role = var.github_actions_ci_role
 }

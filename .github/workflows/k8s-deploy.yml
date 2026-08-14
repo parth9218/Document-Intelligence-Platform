@@ -84,11 +84,26 @@ jobs:
             echo "ENV=dev" >> $GITHUB_ENV
           fi
 
+      - name: Check if AWS was also modified
+        uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            aws:
+              - 'infra/terraform/aws/**'
+
       - name: Check AWS Infrastructure (Push Event)
         id: aws-check
         if: github.event_name == 'push'
         working-directory: infra/terraform/aws/environments/dev
         run: |
+          if [ "${{ steps.filter.outputs.aws }}" == "true" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "AWS infrastructure changes detected in the same commit. Deferring to aws-deploy workflow to avoid race conditions."
+            exit 0
+          fi
+          
           terraform init
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
           if [ -z "$CLUSTER_NAME" ]; then

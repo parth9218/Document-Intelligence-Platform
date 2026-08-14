@@ -19,9 +19,6 @@ output "eks_cluster_name" {
 output "cluster_endpoint" {
   value = module.eks.cluster_endpoint
 }
-output "github_actions_ci_role" {
-  value = module.oidc.github_actions_ci_role_arn
-}
 output "acm_cert_arn" {
   value = module.acm.acm_cert_arn
 }
