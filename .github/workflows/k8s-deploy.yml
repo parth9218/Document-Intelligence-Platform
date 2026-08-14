@@ -78,7 +78,10 @@ jobs:
 
       - name: Terraform Init (Backend disabled for validation)
         working-directory: infra/terraform/k8s
-        run: terraform init -backend=false
+        run: |
+          terraform init -backend=false \
+            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
+            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
 
       - name: Terraform Validate
         working-directory: infra/terraform/k8s
@@ -119,7 +122,9 @@ jobs:
             exit 0
           fi
           
-          terraform init
+          terraform init -upgrade \
+            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
+            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
           if [ -z "$CLUSTER_NAME" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -154,7 +159,7 @@ jobs:
         if: github.event_name != 'push' || steps.aws-check.outputs.skip == 'false'
         working-directory: infra/terraform/k8s
         run: |
-          terraform init \
+          terraform init -upgrade\
             -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
             -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
 
