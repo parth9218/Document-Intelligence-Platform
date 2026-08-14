@@ -12,7 +12,7 @@ on:
         description: 'Environment to deploy (dev or prod)'
         required: true
         default: 'dev'
-        
+
 concurrency:
       group: deploy-${{ github.workflow }}-${{ inputs.environment || 'dev' }}
       cancel-in-progress: false
