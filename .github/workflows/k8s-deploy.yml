@@ -101,7 +101,7 @@ jobs:
           fi
 
       - name: Check if AWS was also modified
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         if: inputs.cluster_name == ''
         with:
