@@ -19,6 +19,7 @@ provider "aws" {
     }
   }
 }
+
 module "core" {
   source                 = "../../modules/core"
   project_name           = var.project_name
