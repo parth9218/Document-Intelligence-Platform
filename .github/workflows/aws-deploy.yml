@@ -72,7 +72,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false
 
       - name: Extract Terraform Outputs
         id: tf-outputs
