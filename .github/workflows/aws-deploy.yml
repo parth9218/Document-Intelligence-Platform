@@ -47,6 +47,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.15.0"
+          terraform_wrapper: false
 
       - name: Terraform Format
         working-directory: infra/terraform/aws
@@ -72,6 +73,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
+        env:
+          TF_LOG: DEBUG
         run: terraform apply -auto-approve -input=false
 
       - name: Extract Terraform Outputs
