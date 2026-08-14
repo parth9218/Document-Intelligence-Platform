@@ -1,0 +1,141 @@
+name: Deploy K8s Infrastructure
+
+on:
+  push:
+    paths:
+      - 'infra/terraform/k8s/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: 'dev'
+      cluster_name:
+        description: 'EKS Cluster Name'
+        required: true
+      vpc_id:
+        description: 'VPC ID'
+        required: true
+      api_domain:
+        description: 'API Domain'
+        required: true
+        default: 'api.docintel.com'
+      acm_cert_arn:
+        description: 'ACM Certificate ARN'
+        required: true
+      ssm_parameters_name:
+        description: 'SSM Parameters Name'
+        required: true
+      ssm_secrets_name:
+        description: 'SSM Secrets Name'
+        required: true
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      cluster_name:
+        required: true
+        type: string
+      vpc_id:
+        required: true
+        type: string
+      api_domain:
+        required: true
+        type: string
+      acm_cert_arn:
+        required: true
+        type: string
+      ssm_parameters_name:
+        required: true
+        type: string
+      ssm_secrets_name:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::111122223333:role/github-actions-ci-role # Replace with actual AWS Account ID
+          aws-region: us-east-1
+
+      - name: Set Environment Context
+        id: context
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_call" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "ENV=${{ inputs.environment }}" >> $GITHUB_ENV
+          else
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Check AWS Infrastructure (Push Event)
+        id: aws-check
+        if: github.event_name == 'push'
+        working-directory: infra/terraform/aws/environments/dev
+        run: |
+          terraform init
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          if [ -z "$CLUSTER_NAME" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "EKS cluster output missing in AWS state. Skipping K8s deploy."
+            exit 0
+          fi
+          if ! aws eks describe-cluster --name "$CLUSTER_NAME" > /dev/null 2>&1; then
+             echo "skip=true" >> $GITHUB_OUTPUT
+             echo "EKS cluster $CLUSTER_NAME does not exist. Skipping K8s deploy."
+             exit 0
+          fi
+          
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "API_DOMAIN=api.docintel.com" >> $GITHUB_ENV
+          echo "ACM_CERT_ARN=$(terraform output -raw acm_cert_arn)" >> $GITHUB_ENV
+          echo "SSM_PARAMETERS_NAME=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_ENV
+          echo "SSM_SECRETS_NAME=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_ENV
+
+      - name: Set Variables (Dispatch/Call Events)
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "CLUSTER_NAME=${{ inputs.cluster_name }}" >> $GITHUB_ENV
+          echo "VPC_ID=${{ inputs.vpc_id }}" >> $GITHUB_ENV
+          echo "API_DOMAIN=${{ inputs.api_domain }}" >> $GITHUB_ENV
+          echo "ACM_CERT_ARN=${{ inputs.acm_cert_arn }}" >> $GITHUB_ENV
+          echo "SSM_PARAMETERS_NAME=${{ inputs.ssm_parameters_name }}" >> $GITHUB_ENV
+          echo "SSM_SECRETS_NAME=${{ inputs.ssm_secrets_name }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: github.event_name != 'push' || steps.aws-check.outputs.skip == 'false'
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform init \
+            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
+            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
+
+      - name: Terraform Apply
+        if: github.event_name != 'push' || steps.aws-check.outputs.skip == 'false'
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform apply -auto-approve \
+            -var="cluster_name=${{ env.CLUSTER_NAME }}" \
+            -var="vpc_id=${{ env.VPC_ID }}" \
+            -var="api_domain=${{ env.API_DOMAIN }}" \
+            -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
+            -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
+            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}"

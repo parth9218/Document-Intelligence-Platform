@@ -1,0 +1,67 @@
+name: Deploy AWS Infrastructure
+
+on:
+  push:
+    paths:
+      - 'infra/terraform/aws/**'
+      # Do not trigger dev deployment if changes are exclusively in the prod environment folder
+      - '!infra/terraform/aws/environments/prod/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-aws-dev:
+    runs-on: ubuntu-latest
+    outputs:
+      vpc_id: ${{ steps.tf-outputs.outputs.vpc_id }}
+      eks_cluster_name: ${{ steps.tf-outputs.outputs.eks_cluster_name }}
+      acm_cert_arn: ${{ steps.tf-outputs.outputs.acm_cert_arn }}
+      ssm_parameters_name: ${{ steps.tf-outputs.outputs.ssm_parameters_name }}
+      ssm_secrets_name: ${{ steps.tf-outputs.outputs.ssm_secrets_name }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::111122223333:role/github-actions-ci-role # Replace with actual AWS Account ID
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        working-directory: infra/terraform/aws/environments/dev
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/aws/environments/dev
+        run: terraform apply -auto-approve -var-file=dev.tfvars
+
+      - name: Extract Terraform Outputs
+        id: tf-outputs
+        working-directory: infra/terraform/aws/environments/dev
+        run: |
+          echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_OUTPUT
+          echo "eks_cluster_name=$(terraform output -raw eks_cluster_name)" >> $GITHUB_OUTPUT
+          echo "acm_cert_arn=$(terraform output -raw acm_cert_arn)" >> $GITHUB_OUTPUT
+          echo "ssm_parameters_name=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_OUTPUT
+          echo "ssm_secrets_name=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_OUTPUT
+
+  trigger-k8s-dev:
+    needs: deploy-aws-dev
+    # Trigger the reusable k8s workflow, passing outputs from AWS as inputs
+    uses: ./.github/workflows/k8s-deploy.yml
+    with:
+      environment: dev
+      cluster_name: ${{ needs.deploy-aws-dev.outputs.eks_cluster_name }}
+      vpc_id: ${{ needs.deploy-aws-dev.outputs.vpc_id }}
+      api_domain: "api.docintel.com"
+      acm_cert_arn: ${{ needs.deploy-aws-dev.outputs.acm_cert_arn }}
+      ssm_parameters_name: ${{ needs.deploy-aws-dev.outputs.ssm_parameters_name }}
+      ssm_secrets_name: ${{ needs.deploy-aws-dev.outputs.ssm_secrets_name }}
