@@ -30,3 +30,7 @@ variable "github_actions_ci_role" {
   type = string
 }
 
+variable "admin_user_arns" {
+  type    = list(string)
+  default = []
+}

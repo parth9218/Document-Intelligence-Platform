@@ -57,6 +57,7 @@ module "eks" {
   ecr_repo_arns        = module.ecr.ecr_repo_arns
   documents_sqs_arn    = module.messaging.sqs_queue_arn
   documents_bucket_arn = module.storage.documents_bucket_arn
+  admin_user_arns      = var.admin_user_arns
 }
 
 module "messaging" {

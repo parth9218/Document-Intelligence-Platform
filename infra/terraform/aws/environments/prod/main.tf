@@ -31,5 +31,6 @@ module "core" {
   db_username            = var.db_username
   api_hostname           = var.api_hostname
   github_actions_ci_role = var.github_actions_ci_role
+  admin_user_arns        = var.admin_user_arns
 }
 

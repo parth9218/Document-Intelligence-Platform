@@ -29,7 +29,8 @@ module "eks" {
   endpoint_public_access = true
 
   # Optional: Adds the current caller identity as an administrator via cluster access entry
-  enable_cluster_creator_admin_permissions = true
+  # Comment if deploying via Github Actions as we are providing admin ARNs in access_entries
+  # enable_cluster_creator_admin_permissions = true
 
   compute_config = {
     enabled    = true
@@ -58,6 +59,21 @@ module "eks" {
           }]
         }
       })
+    }
+  }
+
+  # Add admin user ARNs to cluster access entries for AWS Console access
+  access_entries = {
+    for arn in var.admin_user_arns : arn => {
+      principal_arn = arn
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
     }
   }
 
