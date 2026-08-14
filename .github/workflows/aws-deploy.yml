@@ -32,7 +32,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::111122223333:role/github-actions-ci-role # Replace with actual AWS Account ID
+          role-to-assume: arn:aws:iam::389642461016:role/github-actions-ci-role # Replace with actual AWS Account ID
           aws-region: us-east-1
 
       - name: Terraform Init
