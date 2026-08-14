@@ -52,7 +52,10 @@ on:
       ssm_secrets_name:
         required: true
         type: string
-
+        
+concurrency:
+      group: deploy-${{ github.workflow }}-${{ inputs.environment || 'dev' }}
+      cancel-in-progress: false
 permissions:
   id-token: write
   contents: read
