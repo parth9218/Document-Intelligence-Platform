@@ -96,7 +96,7 @@ jobs:
       environment: ${{ inputs.environment || 'dev' }}
       cluster_name: ${{ needs.deploy-aws.outputs.eks_cluster_name }}
       vpc_id: ${{ needs.deploy-aws.outputs.vpc_id }}
-      api_domain: "api.docintel.com"
+      api_domain: ${{ vars.TF_API_HOSTNAME }}
       acm_cert_arn: ${{ needs.deploy-aws.outputs.acm_cert_arn }}
       ssm_parameters_name: ${{ needs.deploy-aws.outputs.ssm_parameters_name }}
       ssm_secrets_name: ${{ needs.deploy-aws.outputs.ssm_secrets_name }}

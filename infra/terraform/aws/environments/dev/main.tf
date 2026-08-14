@@ -32,3 +32,4 @@ module "core" {
   github_actions_ci_role = var.github_actions_ci_role
   admin_user_arns        = var.admin_user_arns
 }
+

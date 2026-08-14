@@ -138,7 +138,7 @@ jobs:
           echo "skip=false" >> $GITHUB_OUTPUT
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
           echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
-          echo "API_DOMAIN=api.docintel.com" >> $GITHUB_ENV
+          echo "API_DOMAIN=${{ inputs.api_domain || vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
           echo "ACM_CERT_ARN=$(terraform output -raw acm_cert_arn)" >> $GITHUB_ENV
           echo "SSM_PARAMETERS_NAME=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_ENV
           echo "SSM_SECRETS_NAME=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_ENV
@@ -148,7 +148,7 @@ jobs:
         run: |
           echo "CLUSTER_NAME=${{ inputs.cluster_name }}" >> $GITHUB_ENV
           echo "VPC_ID=${{ inputs.vpc_id }}" >> $GITHUB_ENV
-          echo "API_DOMAIN=${{ inputs.api_domain }}" >> $GITHUB_ENV
+          echo "API_DOMAIN=${{ inputs.api_domain || vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
           echo "ACM_CERT_ARN=${{ inputs.acm_cert_arn }}" >> $GITHUB_ENV
           echo "SSM_PARAMETERS_NAME=${{ inputs.ssm_parameters_name }}" >> $GITHUB_ENV
           echo "SSM_SECRETS_NAME=${{ inputs.ssm_secrets_name }}" >> $GITHUB_ENV
