@@ -30,7 +30,7 @@ module "eks" {
 
   # Optional: Adds the current caller identity as an administrator via cluster access entry
   # Comment if deploying via Github Actions as we are providing admin ARNs in access_entries
-  # enable_cluster_creator_admin_permissions = true
+  enable_cluster_creator_admin_permissions = true
 
   compute_config = {
     enabled    = true
