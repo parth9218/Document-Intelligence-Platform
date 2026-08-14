@@ -105,6 +105,7 @@ jobs:
         id: filter
         if: inputs.cluster_name == ''
         with:
+          base: test
           filters: |
             aws:
               - 'infra/terraform/aws/**'

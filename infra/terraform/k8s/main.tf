@@ -19,6 +19,7 @@ data "aws_eks_cluster" "cluster_info" {
 data "aws_eks_cluster_auth" "cluster" {
   name = var.cluster_name
 }
+
 provider "helm" {
   kubernetes = {
     host                   = data.aws_eks_cluster.cluster_info.endpoint
