@@ -105,6 +105,7 @@ jobs:
         id: filter
         if: inputs.cluster_name == ''
         with:
+          # Change to the real base branch 
           base: test
           filters: |
             aws:
