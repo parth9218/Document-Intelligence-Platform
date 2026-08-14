@@ -112,7 +112,7 @@ jobs:
       - name: Check AWS Infrastructure (Push Event)
         id: aws-check
         if: inputs.cluster_name == ''
-        working-directory: infra/terraform/aws/environments/dev
+        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         run: |
           if [ "${{ steps.filter.outputs.aws }}" == "true" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -120,9 +120,7 @@ jobs:
             exit 0
           fi
           
-          terraform init -upgrade \
-            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
-            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate" 
+          terraform init -upgrade 
           CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
           if [ -z "$CLUSTER_NAME" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
