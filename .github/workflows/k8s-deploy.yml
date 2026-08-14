@@ -63,6 +63,7 @@ permissions:
 jobs:
   deploy-k8s:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
