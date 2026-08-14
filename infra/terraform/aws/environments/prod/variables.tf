@@ -4,7 +4,7 @@ variable "project_name" {
 }
 variable "environment" {
   type    = string
-  default = "dev"
+  default = "prod"
 }
 variable "vpc_cidr" {
   type    = string
@@ -32,6 +32,5 @@ variable "github_repo" {
 }
 variable "api_hostname" {
   type    = string
-  default = "api.dev.docintel.com"
+  default = "api.docintel.com"
 }
-

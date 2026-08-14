@@ -16,17 +16,17 @@ resource "kubectl_manifest" "alb_gatewayclass" {
     kubectl_manifest.crds,
     helm_release.aws_load_balancer_controller
   ]
-  yaml_body = file("alb_gatewayclass.yaml")
+  yaml_body = file("manifests/alb_gatewayclass.yaml")
 }
 resource "kubectl_manifest" "api_gateway" {
   depends_on = [kubectl_manifest.alb_gatewayclass]
-  yaml_body = templatefile("api_gateway.tftpl", {
+  yaml_body = templatefile("manifests/api_gateway.tftpl", {
     domain_name  = var.api_domain,
     acm_cert_arn = var.acm_cert_arn
   })
 }
 resource "kubectl_manifest" "storage_provider_class" {
-  yaml_body = templatefile("StorageProviderClass.tftpl", {
+  yaml_body = templatefile("manifests/StorageProviderClass.tftpl", {
     parameters_name = var.ssm_parameters_name
     ssm_secret_name = var.ssm_secrets_name
   })
