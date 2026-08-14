@@ -54,8 +54,8 @@ on:
         type: string
         
 concurrency:
-      group: deploy-${{ github.workflow }}-${{ inputs.environment || 'dev' }}
-      cancel-in-progress: false
+  group: deploy-k8s-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
 permissions:
   id-token: write
   contents: read

@@ -14,8 +14,8 @@ on:
         default: 'dev'
 
 concurrency:
-      group: deploy-${{ github.workflow }}-${{ inputs.environment || 'dev' }}
-      cancel-in-progress: false
+  group: deploy-aws-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
 permissions:
   id-token: write
   contents: read

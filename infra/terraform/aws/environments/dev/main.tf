@@ -31,4 +31,3 @@ module "core" {
   api_hostname           = var.api_hostname
   github_actions_ci_role = var.github_actions_ci_role
 }
-
