@@ -149,18 +149,18 @@ resource "aws_iam_role" "api_role" {
 }
 
 locals {
-  worker_policy_arns = [
-    aws_iam_policy.worker_policy.arn,
-    "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
-  ]
-  api_policy_arns = [
-    aws_iam_policy.api_policy.arn,
-    "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
-  ]
+  worker_policy_arns = {
+    custom              = aws_iam_policy.worker_policy.arn
+    secretsmanager_read = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+  }
+  api_policy_arns = {
+    custom              = aws_iam_policy.api_policy.arn
+    secretsmanager_read = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "api_policy_attachment" {
-  for_each   = toset(local.api_policy_arns)
+  for_each   = local.api_policy_arns
   role       = aws_iam_role.api_role.name
   policy_arn = each.value
 }
@@ -173,7 +173,7 @@ resource "aws_eks_pod_identity_association" "api" {
 }
 
 resource "aws_iam_role_policy_attachment" "worker_policy_attachment" {
-  for_each   = toset(local.worker_policy_arns)
+  for_each   = local.worker_policy_arns
   role       = aws_iam_role.worker_role.name
   policy_arn = each.value
 }
