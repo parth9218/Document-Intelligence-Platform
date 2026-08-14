@@ -75,7 +75,8 @@ jobs:
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         env:
           TF_LOG: DEBUG
-        run: terraform apply -auto-approve -input=false
+        # Reduced parallelism from default 10 to 5 to prevent OOM killer on standard GitHub Action runners during complex EKS provisioning
+        run: terraform apply -auto-approve -input=false -parallelism=5
 
       - name: Extract Terraform Outputs
         id: tf-outputs
