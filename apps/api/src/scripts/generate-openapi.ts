@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { swaggerSpec } from '../config/swagger';
 
-const outputPath = path.resolve(__dirname, '../../../../docs/context/api-specification.json');
+const outputPath = process.env.SWAGGER_OUT || path.resolve(__dirname, '../../../../docs/context/api-specification.json');
 
 try {
   // Ensure the target directory exists

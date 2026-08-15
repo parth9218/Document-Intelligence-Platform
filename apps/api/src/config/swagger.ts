@@ -1,5 +1,6 @@
-import swaggerJSDoc from 'swagger-jsdoc';
 import { config as appConfig } from './index';
+import fs from 'fs';
+import path from 'path';
 
 const swaggerDefinition = {
   openapi: '3.0.0',
@@ -117,13 +118,22 @@ The stream uses two typed events (via the standard SSE \`event:\` field):
   },
 };
 
-const options = {
-  swaggerDefinition,
-  apis: [
-    './src/routes/*.ts',
-    './src/app.ts',
-    './src/config/swagger.ts',
-  ],
-};
+let spec;
+const swaggerJsonPath = path.resolve(process.cwd(), 'swagger.json');
 
-export const swaggerSpec = swaggerJSDoc(options);
+if (fs.existsSync(swaggerJsonPath)) {
+  spec = JSON.parse(fs.readFileSync(swaggerJsonPath, 'utf8'));
+} else {
+  const swaggerJSDoc = require('swagger-jsdoc');
+  const options = {
+    swaggerDefinition,
+    apis: [
+      './src/routes/*.ts',
+      './src/app.ts',
+      './src/config/swagger.ts',
+    ],
+  };
+  spec = swaggerJSDoc(options);
+}
+
+export const swaggerSpec = spec;

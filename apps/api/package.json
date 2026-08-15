@@ -25,7 +25,6 @@
     "express": "^4.19.2",
     "pg": "^8.11.5",
     "prisma": "^5.14.0",
-    "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
@@ -41,6 +40,7 @@
     "jest": "^30.4.2",
     "nodemon": "^3.1.0",
     "supertest": "^7.2.2",
+    "swagger-jsdoc": "^6.3.0",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"

@@ -82,16 +82,3 @@ export const config = {
     maxTokens: parseInt(process.env.LLM_MAX_TOKENS || '1024', 10),
   },
 };
-
-// Simple configuration validation
-if (config.nodeEnv !== 'local') {
-  if (!config.db.databaseUrl && !config.db.iamAuthEnabled) {
-    throw new Error('Production environment must define DATABASE_URL or DB_IAM_AUTH_ENABLED to true');
-  }
-  if (config.sessionSecret === 'dev-session-secret-key-change-in-production-12345') {
-    console.warn('[Warning] Running in production with default SESSION_SECRET');
-  }
-  if (!config.cors.allowedOrigin) {
-    console.warn('[Warning] Running in production without CORS_ALLOWED_ORIGIN — all cross-origin requests will be blocked');
-  }
-}

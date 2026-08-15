@@ -5,8 +5,6 @@ import { sessionController } from './controllers/session.controller';
 import documentsRouter from './routes/documents.route';
 import queryRouter from './routes/query.route';
 import { errorHandler } from './middlewares/error-handler';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger';
 import { config } from './config';
 
 const app = express();
@@ -60,6 +58,8 @@ app.use(express.json());
 
 // Mount OpenAPI documentation UI (conditional on environment, before session check middlewares)
 if (config.nodeEnv === "dev" || config.nodeEnv === "local") {
+  const swaggerUi = require('swagger-ui-express');
+  const { swaggerSpec } = require('./config/swagger');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 } else {
   app.use('/api-docs', (req, res) => {
