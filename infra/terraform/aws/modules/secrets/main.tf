@@ -19,12 +19,12 @@ resource "aws_ssm_parameter" "parameters" {
   name = local.ssm_parameters
   type = "String"
   value = jsonencode({
-    DB_IAM_AUTH_ENABLED = true
+    DB_IAM_AUTH_ENABLED = "true"
     DB_HOST             = var.db_host
-    DB_PORT             = var.db_port
+    DB_PORT             = tostring(var.db_port)
     DB_NAME             = var.db_name
     DB_USER             = var.db_username
-    DB_SSL              = true
+    DB_SSL              = "true"
     S3_BUCKET           = var.s3_bucket
     CORS_ALLOWED_ORIGIN = "*"
 

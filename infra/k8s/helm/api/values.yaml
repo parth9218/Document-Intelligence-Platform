@@ -26,3 +26,6 @@ service:
 
 env:
   PORT: "3000"
+
+gateway:
+  name: "docintel-dev-api-gateway"

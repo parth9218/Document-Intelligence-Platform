@@ -10,3 +10,6 @@ container:
   secrets-provider-class: "docintel-prod-secrets-class"
   secrets-object: "docintel-prod-secrets"
   parameters-object: "docintel-prod-parameters"
+
+gateway:
+  name: "docintel-prod-api-gateway"
