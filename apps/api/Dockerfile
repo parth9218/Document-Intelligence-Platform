@@ -8,24 +8,23 @@ COPY prisma ./prisma
 RUN npm run db:generate
 COPY . .
 RUN npm run build
+RUN npm prune --production
 
 FROM node:22-alpine AS runner
 
 WORKDIR /app
 RUN apk add --no-cache openssl
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-
-ENV PORT=3000
-ENV NODE_ENV=dev
-
-EXPOSE ${PORT}
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup -u 1001
 
-# Change ownership using numeric IDs
-RUN chown -R 1001:1001 /app
+COPY --chown=1001:1001 --from=builder /app/package*.json ./
+COPY --chown=1001:1001 --from=builder /app/node_modules ./node_modules
+COPY --chown=1001:1001 --from=builder /app/dist ./dist
+COPY --chown=1001:1001 --from=builder /app/prisma ./prisma
+
+ENV PORT=3000
+ENV NODE_ENV=production
+
+EXPOSE ${PORT}
 
 # Switch to the numeric UID instead of the string name
 USER 1001
