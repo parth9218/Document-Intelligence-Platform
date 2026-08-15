@@ -114,7 +114,7 @@ async function verifyExtendAndReturn(cookieValue: string, req: Request, res: Res
     // Re-issue cookie with sliding expiration
     res.cookie(COOKIE_NAME, cookieValue, {
       httpOnly: true,
-      secure: config.nodeEnv === 'production',
+      secure: config.nodeEnv !== 'local',
       sameSite: 'lax',
       expires: expiresAt,
     });
@@ -164,7 +164,7 @@ export async function sessionMiddleware(req: Request, res: Response, next: NextF
 
       res.cookie(COOKIE_NAME, signedToken, {
         httpOnly: true,
-        secure: config.nodeEnv === 'production',
+        secure: config.nodeEnv !== 'local',
         sameSite: 'lax',
         expires: expiresAt,
       });

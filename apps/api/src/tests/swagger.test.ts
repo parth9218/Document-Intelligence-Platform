@@ -30,7 +30,7 @@ describe('Swagger Documentation Endpoint Tests', () => {
   });
 
   it('should return 404 Not Found at /api-docs in production environment', async () => {
-    process.env.NODE_ENV = 'production';
+    process.env.NODE_ENV = 'prod';
     
     // Import app dynamically
     const app = require('../app').default;

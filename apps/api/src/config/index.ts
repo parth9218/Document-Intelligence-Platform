@@ -1,13 +1,12 @@
 import dotenv from 'dotenv';
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV === 'local') {
   dotenv.config();
 }
 
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET || 'dev-session-secret-key-change-in-production-12345',
   
   aws: {
@@ -15,9 +14,18 @@ export const config = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'mock',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'mock',
     s3Bucket: process.env.S3_BUCKET || 'documents-bucket',
-    endpointUrl: process.env.AWS_ENDPOINT_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:4566'),
+    endpointUrl: process.env.AWS_ENDPOINT_URL || (process.env.NODE_ENV !== 'local' ? undefined : 'http://localhost:4566'),
   },
-
+  db: {
+    // databaseUrl is required only when iamAuthEnabled is false.
+    databaseUrl: process.env.DATABASE_URL || "",
+    iamAuthEnabled: process.env.DB_IAM_AUTH_ENABLED === 'true' || false,
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
+    database: process.env.DB_DATABASE || 'documents-db',
+    user: process.env.DB_USER || 'postgres',
+    ssl: process.env.DB_SSL === 'true' || false,
+  },
   limits: {
     // Max file upload size: 5 MB (5,242,880 bytes)
     fileSizeMinBytes: 1,
@@ -76,9 +84,9 @@ export const config = {
 };
 
 // Simple configuration validation
-if (config.nodeEnv === 'production') {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('Production environment must define DATABASE_URL');
+if (config.nodeEnv !== 'local') {
+  if (!config.db.databaseUrl && !config.db.iamAuthEnabled) {
+    throw new Error('Production environment must define DATABASE_URL or DB_IAM_AUTH_ENABLED to true');
   }
   if (config.sessionSecret === 'dev-session-secret-key-change-in-production-12345') {
     console.warn('[Warning] Running in production with default SESSION_SECRET');

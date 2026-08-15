@@ -114,11 +114,11 @@ describe('CORS Middleware Tests (ADR-018)', () => {
   // Production environment
   // ---------------------------------------------------------------------------
 
-  describe('Production mode (NODE_ENV=production)', () => {
+  describe('Production mode (NODE_ENV=prod)', () => {
     const ALLOWED_ORIGIN = 'https://docintel.example.com';
 
     beforeEach(() => {
-      process.env.NODE_ENV = 'production';
+      process.env.NODE_ENV = 'prod';
       process.env.CORS_ALLOWED_ORIGIN = ALLOWED_ORIGIN;
       // Provide required production env vars so config validation does not throw.
       process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/testdb';

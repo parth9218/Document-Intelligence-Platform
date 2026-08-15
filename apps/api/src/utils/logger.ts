@@ -20,7 +20,7 @@ class StructuredLogger {
       ...(meta ? { metadata: meta } : {}),
     };
 
-    if (config.nodeEnv === 'production') {
+    if (config.nodeEnv === 'prod') {
       return JSON.stringify(logData);
     }
 
@@ -39,7 +39,7 @@ class StructuredLogger {
   }
 
   public debug(message: string, meta?: any): void {
-    if (config.nodeEnv !== 'production' || process.env.LOG_LEVEL === 'DEBUG') {
+    if (config.nodeEnv !== 'prod' || process.env.LOG_LEVEL === 'DEBUG') {
       console.debug(this.formatMessage(LogLevel.DEBUG, message, meta));
     }
   }

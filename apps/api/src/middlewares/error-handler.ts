@@ -42,7 +42,7 @@ export const errorHandler: ErrorRequestHandler = (
     message: 'An unexpected error occurred.',
   };
 
-  if (config.nodeEnv !== 'production') {
+  if (config.nodeEnv === 'local') {
     responsePayload.stack = err.stack;
     responsePayload.details = err.message;
   }

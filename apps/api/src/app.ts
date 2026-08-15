@@ -35,18 +35,18 @@ const corsOptions: CorsOptions = {
       return callback(null, true);
     }
 
-    if (config.nodeEnv === 'production') {
+    if (config.nodeEnv === 'local') {
+      // Local / test: dynamically reflect the request Origin so all local
+      // ports work without manual configuration. Wildcard '*' cannot be used
+      // when credentials are enabled.
+      callback(null, origin);
+    } else {
       // Production: strict whitelist — only the configured frontend origin is allowed.
       if (origin === config.cors.allowedOrigin) {
         callback(null, origin);
       } else {
         callback(new Error(`CORS: origin '${origin}' is not allowed`));
       }
-    } else {
-      // Development / test: dynamically reflect the request Origin so all local
-      // ports work without manual configuration. Wildcard '*' cannot be used
-      // when credentials are enabled.
-      callback(null, origin);
     }
   },
 };
@@ -59,7 +59,7 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Mount OpenAPI documentation UI (conditional on environment, before session check middlewares)
-if (config.nodeEnv === 'production') {
+if (config.nodeEnv !== 'local') {
   app.use('/api-docs', (req, res) => {
     res.status(404).send('Not Found');
   });
