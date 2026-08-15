@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 import { config } from './config';
 import { getRdsIamAuthToken } from './utils/rds-auth';
@@ -20,7 +22,10 @@ function createPgPool(): Pool {
       port: config.db.port,
       database: config.db.database,
       user: config.db.user,
-      ssl: config.db.ssl ? { rejectUnauthorized: false } : false,
+      ssl: config.db.ssl ? { 
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(path.join(process.cwd(), 'global-bundle.pem')).toString()
+      } : false,
       password: async () => {
         return await getRdsIamAuthToken({
           hostname: config.db.host,
