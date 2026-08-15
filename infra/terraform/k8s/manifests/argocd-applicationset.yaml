@@ -23,7 +23,7 @@ spec:
         # TODO: Update with your actual Git repository URL
         repoURL: ${github_repository_url}
         # Note: Set targetRevision to 'dev' or 'main' based on the deployment environment
-        targetRevision: HEAD
+        targetRevision: task402-helm-charting
         path: '{{path}}'
         helm: 
           valueFiles:
