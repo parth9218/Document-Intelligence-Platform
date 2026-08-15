@@ -16,3 +16,12 @@ variable "ssm_parameters_name" {
 variable "ssm_secrets_name" {
   type = string
 }
+variable "project_name" {
+  type = string
+}
+variable "environment" {
+  type = string
+}
+variable "github_repository_url" {
+  type = string
+}
