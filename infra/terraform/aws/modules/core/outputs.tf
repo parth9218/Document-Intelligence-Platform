@@ -25,3 +25,6 @@ output "github_actions_ci_role" {
 output "acm_cert_arn" {
   value = module.acm.acm_cert_arn
 }
+output "ecr_repo_urls" {
+  value = module.ecr.ecr_repo_urls
+}
