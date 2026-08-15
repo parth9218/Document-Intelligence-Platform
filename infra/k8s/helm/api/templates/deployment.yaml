@@ -7,6 +7,13 @@ metadata:
     environment: {{ .Values.environment }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ if eq .Values.environment "prod" }}RollingUpdate{{ else }}Recreate{{ end }}
+    {{- if eq .Values.environment "prod" }}
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    {{- end }}
   selector:
     matchLabels:
       app: {{ .Values.appName }}
