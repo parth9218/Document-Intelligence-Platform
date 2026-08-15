@@ -22,7 +22,7 @@ export const config = {
     iamAuthEnabled: process.env.DB_IAM_AUTH_ENABLED === 'true' || false,
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
-    database: process.env.DB_DATABASE || 'documents-db',
+    database: process.env.DB_NAME || 'documents-db',
     user: process.env.DB_USER || 'postgres',
     ssl: process.env.DB_SSL === 'true' || false,
   },
