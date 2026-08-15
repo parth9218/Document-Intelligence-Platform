@@ -28,7 +28,7 @@ resource "kubectl_manifest" "api_gateway" {
   })
 }
 resource "kubectl_manifest" "storage_provider_class" {
-  yaml_body = templatefile("manifests/StorageProviderClass.yaml", {
+  yaml_body = templatefile("manifests/secrets-provider-class.yaml", {
     project_name    = var.project_name,
     environment     = var.environment,
     parameters_name = var.ssm_parameters_name

@@ -3,3 +3,9 @@
 
 environment: "dev"
 replicaCount: 1
+container: 
+  image: ""
+  tag: ""
+  secrets-provider-class: ""
+  secrets-object: ""
+  parameters-object: ""

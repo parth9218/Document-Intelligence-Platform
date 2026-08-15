@@ -3,3 +3,9 @@
 
 environment: "prod"
 replicaCount: 5
+container:
+  image: ""
+  tag: ""
+  secrets-provider-class: ""
+  secrets-object: ""
+  parameters-object: ""

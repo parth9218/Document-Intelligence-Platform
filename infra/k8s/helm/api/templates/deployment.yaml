@@ -18,14 +18,26 @@ spec:
         environment: {{ .Values.environment }}
     spec:
       serviceAccountName: {{ .Release.Name }}-{{ .Values.appName }}-{{ .Values.environment }}-service-account
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ index .Values.container "secrets-provider-class" }}
       containers:
         - name: {{ .Values.appName }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.container.image.repository }}:{{ .Values.container.image.tag }}"
+          imagePullPolicy: {{ .Values.container.image.pullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ index .Values.container "secrets-object" }}
+            - secretRef:
+                name: {{ index .Values.container "parameters-object" }}
           env:
             - name: NODE_ENV
               value: {{ .Values.environment | quote }}
@@ -33,6 +45,10 @@ spec:
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /health
