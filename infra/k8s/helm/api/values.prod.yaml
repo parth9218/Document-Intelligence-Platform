@@ -4,8 +4,9 @@
 environment: "prod"
 replicaCount: 5
 container:
-  image: ""
-  tag: ""
-  secrets-provider-class: ""
-  secrets-object: ""
-  parameters-object: ""
+  image:
+    repository: ""
+    tag: "latest"
+  secrets-provider-class: "docintel-prod-secrets-class"
+  secrets-object: "docintel-prod-secrets"
+  parameters-object: "docintel-prod-parameters"

@@ -9,7 +9,7 @@ environment: "dev"
 
 container:
   image:
-    repository: "your-account-id.dkr.ecr.your-region.amazonaws.com/docintel/api"
+    repository: ""
     tag: "latest"
     pullPolicy: IfNotPresent
   secrets-provider-class: ""
