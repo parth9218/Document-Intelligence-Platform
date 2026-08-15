@@ -1,0 +1,5 @@
+# Development Environment Values Override
+# These values will override the defaults in values.yaml when deployed to dev.
+
+environment: "dev"
+replicaCount: 1

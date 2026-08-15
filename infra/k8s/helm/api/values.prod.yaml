@@ -1,0 +1,5 @@
+# Production Environment Values Override
+# These values will override the defaults in values.yaml when deployed to prod.
+
+environment: "prod"
+replicaCount: 5
