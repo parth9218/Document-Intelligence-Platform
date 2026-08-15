@@ -259,3 +259,7 @@ This document lists completed tasks and code files created.
   - Set up `dev` environment instantiation under `infra/terraform/aws/environments/dev/` utilizing S3 remote state backend.
   - Implemented Kubernetes provider configurations and resources inside `infra/terraform/k8s/` including API Gateway integration and ALB Gateway Controller setup.
   - Documented the architecture changes in [terraform-infrastructure-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/terraform-infrastructure-spec.md).
+  - Refactored AWS infrastructure by consolidating it into a core module for reuse across different environments.
+  - Integrated AWS Secrets Store CSI driver with EKS, configuring `StorageProviderClass` to mount AWS SSM Parameter Store configurations and Secrets Manager secrets as Kubernetes volumes.
+  - Expanded Pod Identity policies with `secretsmanager:DescribeSecret` and `ssm:GetParameter` permissions to authorize the CSI driver.
+  - Reorganized Kubernetes resource manifests into `infra/terraform/k8s/manifests/`.

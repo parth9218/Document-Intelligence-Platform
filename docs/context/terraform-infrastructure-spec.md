@@ -13,7 +13,7 @@ The `infra/terraform` directory is structured to separate reusable modules from 
   - `eks`: EKS cluster configuration with dedicated node groups (`api-nodes`, `worker-nodes`), EKS Pod Identity Associations.
   - `messaging`: SQS Queues and Dead Letter Queues (DLQs).
   - `oidc`: OIDC Identity Providers for EKS.
-  - `secrets`: AWS Secrets Manager setup.
+  - `secrets`: AWS Secrets Manager and SSM Parameter Store setup for dynamic configuration.
   - `storage`: S3 buckets (Frontend and Documents) and RDS PostgreSQL database with pgvector.
   - `vpc`: VPC, public/private subnets, NAT gateways, and VPC endpoints.
 
@@ -24,8 +24,10 @@ The `infra/terraform` directory is structured to separate reusable modules from 
 
 - **Kubernetes Resources (`infra/terraform/k8s`)**:
   - Configures the Kubernetes provider using EKS cluster credentials.
-  - Deploys necessary CRDs, ALB GatewayClass, and API Gateway configurations via `kubectl_manifest` and `helm_release`.
+  - Deploys necessary CRDs, ALB GatewayClass, and API Gateway configurations via `kubectl_manifest` and `helm_release` utilizing templates from `infra/terraform/k8s/manifests/`.
+  - Integrates the AWS Secrets Store CSI driver to mount configurations from SSM Parameter Store and Secrets Manager via a dynamically templated `SecretProviderClass`.
 
 ## Security & IAM
 - The EKS nodes reside in private subnets.
 - Dedicated EKS Pod Identity Associations enforce the principle of least privilege, allowing API and Worker pods specific access to Bedrock, S3, RDS Proxy, and SQS as needed.
+- Pod Identities are additionally granted `secretsmanager:DescribeSecret` and `ssm:GetParameter` permissions, allowing the `secrets-store-csi-driver` to fetch sensitive parameters securely on behalf of the application pods.
