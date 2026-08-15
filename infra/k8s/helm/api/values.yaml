@@ -4,6 +4,7 @@
 
 replicaCount: 1
 
+projectName: "docintel"
 appName: "api"
 environment: "dev"
 

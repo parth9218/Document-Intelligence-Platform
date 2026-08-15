@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.appName }}-{{ .Values.environment }}-deployment
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-deployment
   labels:
     app: {{ .Values.appName }}
     environment: {{ .Values.environment }}
@@ -17,7 +17,7 @@ spec:
         app: {{ .Values.appName }}
         environment: {{ .Values.environment }}
     spec:
-      serviceAccountName: {{ .Values.appName }}-{{ .Values.environment }}-api-sa
+      serviceAccountName: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-sa
       volumes:
         - name: secrets-store-inline
           csi:
