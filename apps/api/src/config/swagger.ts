@@ -21,12 +21,7 @@ The stream uses two typed events (via the standard SSE \`event:\` field):
 1. **\`snapshot\`**: Emitted once on connection with an array of all active documents.
 2. **\`update\`**: Emitted on database updates (via PG NOTIFY) with a single enriched status object.`,
   },
-  servers: [
-    {
-      url: `http://localhost:${appConfig.port}`,
-      description: 'Local Development Server',
-    },
-  ],
+
   components: {
     securitySchemes: {
       CookieAuth: {
