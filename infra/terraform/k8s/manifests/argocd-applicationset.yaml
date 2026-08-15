@@ -34,6 +34,7 @@ spec:
         namespace: default
       syncPolicy:
         automated:
+          enabled: true
           prune: true
           selfHeal: true # Self-healing active to automatically revert manual modifications
         syncOptions:
