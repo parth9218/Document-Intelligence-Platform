@@ -19,13 +19,14 @@ resource "aws_ssm_parameter" "parameters" {
   name = local.ssm_parameters
   type = "String"
   value = jsonencode({
-    DB_HOST             = ""
-    DB_PORT             = ""
-    DB_NAME             = ""
-    DB_USER             = ""
-    DB_SSL              = ""
-    S3_BUCKET           = ""
-    CORS_ALLOWED_ORIGIN = ""
+    DB_IAM_AUTH_ENABLED = true
+    DB_HOST             = var.db_host
+    DB_PORT             = var.db_port
+    DB_NAME             = var.db_name
+    DB_USER             = var.db_username
+    DB_SSL              = true
+    S3_BUCKET           = var.s3_bucket
+    CORS_ALLOWED_ORIGIN = "*"
 
     EMBEDDING_PROVIDER = ""
     EMBEDDING_MODEL    = ""
@@ -36,8 +37,8 @@ resource "aws_ssm_parameter" "parameters" {
     LLM_ENDPOINT   = ""
     LLM_MAX_TOKENS = ""
 
-    QUEUE_URL = ""
-    DLQ_URL   = ""
+    QUEUE_URL = var.sqs_url
+    DLQ_URL   = var.dlq_url
   })
   tags = {
     Name = local.ssm_parameters

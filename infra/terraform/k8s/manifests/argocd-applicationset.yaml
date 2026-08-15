@@ -25,6 +25,10 @@ spec:
         # Note: Set targetRevision to 'dev' or 'main' based on the deployment environment
         targetRevision: HEAD
         path: '{{path}}'
+        helm: 
+          valueFiles:
+          - values.yaml
+          - values.${environment}.yaml
       destination:
         server: 'https://kubernetes.default.svc'
         namespace: default
