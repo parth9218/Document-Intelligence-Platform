@@ -59,12 +59,12 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Mount OpenAPI documentation UI (conditional on environment, before session check middlewares)
-if (config.nodeEnv !== 'local') {
+if (config.nodeEnv === "dev" || config.nodeEnv === "local") {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+} else {
   app.use('/api-docs', (req, res) => {
     res.status(404).send('Not Found');
   });
-} else {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 }
 
 /**
