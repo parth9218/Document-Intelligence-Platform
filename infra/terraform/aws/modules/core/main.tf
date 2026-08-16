@@ -88,3 +88,67 @@ module "acm" {
   environment  = var.environment
   api_hostname = var.api_hostname
 }
+
+
+resource "null_resource" "db_grant" {
+  depends_on = [
+    module.eks,
+    module.storage.db_address
+  ]
+
+  triggers = {
+    db_endpoint = module.storage.db_address
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      echo "Configuring kubectl for EKS cluster..."
+      aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${data.aws_region.current.region}
+
+      echo "Generating RDS IAM Auth token since master password is disabled for rds_iam users..."
+      PASSWORD=$(aws secretsmanager get-secret-value --secret-id '${module.storage.db_password_secret}' --query SecretString --output text | jq -r '.password')
+      
+      JOB_NAME="${var.project_name}-${var.environment}-db-grant"
+      
+      echo "Deploying Kubernetes Job to execute SQL grants..."
+      kubectl create secret generic db-grant-token --from-literal=PGPASSWORD="$PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
+      # Temporarily use the api's service account to apply the grants
+      # We will create a dedicated service account for the API deployment later
+      kubectl create sa "${var.project_name}-${var.environment}-api-sa"
+
+      cat <<EOF | kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $JOB_NAME
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 30
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: "${var.project_name}-${var.environment}-api-sa"
+      containers:
+      - name: psql
+        image: postgres:alpine
+        envFrom:
+        - secretRef:
+            name: db-grant-token
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          wget -qO /tmp/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+          psql "host=${module.storage.db_address} port=${module.storage.db_port} user=${var.db_username} dbname=${var.db_name} sslmode=verify-full sslrootcert=/tmp/global-bundle.pem" -c "GRANT rds_iam TO ${var.db_username}; GRANT CONNECT ON DATABASE ${var.db_name} TO ${var.db_username}; CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;"
+      restartPolicy: Never
+EOF
+      
+      echo "Waiting for Job to complete..."
+      kubectl wait --for=condition=complete job/$JOB_NAME --timeout=60s || { echo "Job failed!"; kubectl logs job/$JOB_NAME; exit 1; }
+      echo "Grants applied successfully!"
+      kubectl logs job/$JOB_NAME
+      kubectl delete job $JOB_NAME
+      kubectl delete secret db-grant-token
+      kubectl delete ${var.project_name}-${var.environment}-api-sa
+    EOT
+  }
+}
