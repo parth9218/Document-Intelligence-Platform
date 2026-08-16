@@ -7,7 +7,7 @@ data "aws_iam_policy_document" "api_policy" {
       "rds-db:connect"
     ]
     resources = [
-      "${var.rds_db_arn}"
+      "arn:aws:rds-db:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:dbuser:${var.dbi_resource_id}/${var.db_username}"
     ]
   }
   statement {
@@ -82,7 +82,7 @@ data "aws_iam_policy_document" "worker_policy" {
       "rds-db:connect"
     ]
     resources = [
-      "${var.rds_db_arn}"
+      "arn:aws:rds-db:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:dbuser:${var.dbi_resource_id}/${var.db_username}"
     ]
   }
   statement {

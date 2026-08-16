@@ -6,3 +6,6 @@ output "db_arn" { value = aws_db_instance.db.arn }
 output "db_port" {
   value = aws_db_instance.db.port
 }
+output "dbi_resource_id" {
+  value = aws_db_instance.db.id
+}

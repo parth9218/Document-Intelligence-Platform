@@ -67,11 +67,12 @@ module "eks" {
   environment          = var.environment
   vpc_id               = module.vpc.vpc_id
   private_subnet_ids   = [for subnet in module.vpc.private_subnets : subnet.id]
-  rds_db_arn           = module.storage.db_arn
   db_credentials_arn   = module.storage.db_password_secret
   ecr_repo_arns        = module.ecr.ecr_repo_arns
   documents_sqs_arn    = module.messaging.sqs_queue_arn
   documents_bucket_arn = module.storage.documents_bucket_arn
+  dbi_resource_id      = module.storage.dbi_resource_id
+  db_username          = var.db_username
 }
 
 module "messaging" {
