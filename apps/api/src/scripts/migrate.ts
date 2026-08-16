@@ -1,7 +1,6 @@
 import { execSync } from 'child_process';
 import { getRdsIamAuthToken } from '../utils/rds-auth';
 import { config } from '../config';
-import fs from 'fs';
 import path from 'path';
 
 async function runMigration() {
@@ -13,10 +12,10 @@ async function runMigration() {
     const encodedToken = encodeURIComponent(token);
     
     // Construct the connection string using the IAM token as the password
-    let url = `postgresql://${config.db.user}:${encodedToken}@${config.db.host}:${config.db.port}/${config.db.database}`;
+    let url = `postgresql://${config.db.user}:${encodedToken}@${config.db.host}:${config.db.port}/${config.db.database}?schema=public`;
     if (config.db.ssl) {
-      const certPath = path.join(process.cwd(), 'global-bundle.pem');
-      url += '?sslmode=verify-full&sslrootcert=' + encodeURIComponent(certPath);
+      const certPath = path.resolve(process.cwd(), 'global-bundle.pem');
+      url += '&sslmode=verify-full&sslrootcert='+certPath;
     }
     
     databaseUrl = url;
