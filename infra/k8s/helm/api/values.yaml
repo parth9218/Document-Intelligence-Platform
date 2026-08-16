@@ -20,6 +20,11 @@ container:
 serviceAccount:
   annotations: {}
 
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
 service:
   type: ClusterIP
   port: 3000
