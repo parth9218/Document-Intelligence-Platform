@@ -12,7 +12,13 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /
+            value: /api
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
       backendRefs:
         - name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
           port: {{ .Values.service.port }}
