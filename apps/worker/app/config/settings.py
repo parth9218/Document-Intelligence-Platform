@@ -14,9 +14,17 @@ else:
 class Settings:
     # Postgres Configuration
     DATABASE_URL: str = os.getenv("DATABASE_URL")
+    DB_IAM_AUTH_ENABLED: bool = os.getenv("DB_IAM_AUTH_ENABLED", "false").lower() == "true"
+    
+    # Extract components if IAM auth is enabled and we need them dynamically
+    DB_HOST: str = os.getenv("DB_HOST", "localhost")
+    DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
+    DB_USER: str = os.getenv("DB_USER", "postgres")
+    DB_SSL: str = os.getenv("DB_SSL", "false")
+    DB_SSL_ROOT_CERT: str = os.getenv("DB_SSL_ROOT_CERT", "/app/global-bundle.pem")
     
     # Strip query parameters like schema=public if present for SQLAlchemy
-    if "?" in DATABASE_URL:
+    if DATABASE_URL and "?" in DATABASE_URL:
         DATABASE_URL = DATABASE_URL.split("?")[0]
 
     # AWS SQS Configuration
@@ -35,5 +43,8 @@ class Settings:
 
     # Embedding Provider Configuration (local or bedrock)
     EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "local")
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "intfloat/e5-large-v2")
+    EMBEDDING_DIMENSIONS: int = os.getenv("EMBEDDING_DIMENSIONS", "1024")
+    EMBEDDING_API_KEY: str = os.getenv("EMBEDDING_API_KEY", "")
 
 settings = Settings()

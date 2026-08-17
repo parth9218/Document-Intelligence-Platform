@@ -33,10 +33,10 @@ class BedrockEmbeddingProvider(EmbeddingProvider):
         for attempt in range(1, max_attempts + 1):
             try:
                 response = client.invoke_model(
-                    modelId='amazon.titan-embed-text-v2:0',
+                    modelId=settings.EMBEDDING_MODEL,
                     body=json.dumps({
                         "inputText": text,
-                        "dimensions": 1024,
+                        "dimensions": settings.EMBEDDING_DIMENSIONS,
                         "normalize": True
                     }),
                     contentType='application/json',

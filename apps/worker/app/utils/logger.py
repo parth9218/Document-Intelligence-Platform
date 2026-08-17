@@ -38,7 +38,7 @@ def setup_logging():
     
     # Check if we are running in production
     env = os.getenv("PYTHON_ENV")
-    if env == "production":
+    if env == "prod":
         formatter = JsonFormatter()
     else:
         formatter = logging.Formatter(
