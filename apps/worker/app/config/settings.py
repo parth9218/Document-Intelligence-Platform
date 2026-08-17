@@ -20,9 +20,14 @@ class Settings:
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
     DB_USER: str = os.getenv("DB_USER", "postgres")
+    DB_NAME: str = os.getenv("DB_NAME", "postgres")
     DB_SSL: str = os.getenv("DB_SSL", "false")
     DB_SSL_ROOT_CERT: str = os.getenv("DB_SSL_ROOT_CERT", "/app/global-bundle.pem")
     
+    # Construct DATABASE_URL if missing (e.g. in IAM Auth mode)
+    if not DATABASE_URL:
+        DATABASE_URL = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
     # Strip query parameters like schema=public if present for SQLAlchemy
     if DATABASE_URL and "?" in DATABASE_URL:
         DATABASE_URL = DATABASE_URL.split("?")[0]
