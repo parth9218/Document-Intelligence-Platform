@@ -49,7 +49,7 @@ class Settings:
     # Embedding Provider Configuration (local or bedrock)
     EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "local")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "intfloat/e5-large-v2")
-    EMBEDDING_DIMENSIONS: int = os.getenv("EMBEDDING_DIMENSIONS", "1024")
+    EMBEDDING_DIMENSIONS: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
     EMBEDDING_API_KEY: str = os.getenv("EMBEDDING_API_KEY", "")
 
 settings = Settings()
