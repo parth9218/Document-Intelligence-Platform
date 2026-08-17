@@ -75,7 +75,10 @@ data "aws_iam_policy_document" "worker_policy" {
       "sqs:GetQueueAttributes",
       "sqs:SendMessage"
     ]
-    resources = [var.documents_sqs_arn]
+    resources = [
+      var.documents_sqs_arn,
+      var.documents_dlq_arn
+    ]
   }
   statement {
     actions = [

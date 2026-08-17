@@ -70,6 +70,7 @@ module "eks" {
   db_credentials_arn   = module.storage.db_password_secret
   ecr_repo_arns        = module.ecr.ecr_repo_arns
   documents_sqs_arn    = module.messaging.sqs_queue_arn
+  documents_dlq_arn    = module.messaging.dlq_arn
   documents_bucket_arn = module.storage.documents_bucket_arn
   dbi_resource_id      = module.storage.dbi_resource_id
   db_username          = var.db_username
