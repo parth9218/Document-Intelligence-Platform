@@ -115,7 +115,7 @@ resource "null_resource" "db_grant" {
       kubectl create secret generic db-grant-token --from-literal=PGPASSWORD="$PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
       # Temporarily use the api's service account to apply the grants
       # We will create a dedicated service account for the API deployment later
-      kubectl create sa "${var.project_name}-${var.environment}-api-sa"
+      kubectl create sa "${var.project_name}-${var.environment}-api-sa" --dry-run=client -o yaml | kubectl apply -f -
 
       cat <<EOF | kubectl apply -f -
 apiVersion: batch/v1
@@ -149,7 +149,7 @@ EOF
       kubectl logs job/$JOB_NAME
       kubectl delete job $JOB_NAME
       kubectl delete secret db-grant-token
-      kubectl delete ${var.project_name}-${var.environment}-api-sa
+      kubectl delete sa ${var.project_name}-${var.environment}-api-sa
     EOT
   }
 }
