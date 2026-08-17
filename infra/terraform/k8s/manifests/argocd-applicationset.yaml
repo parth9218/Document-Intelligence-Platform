@@ -10,8 +10,8 @@ spec:
           # Applications to be deployed by ArgoCD
           - app: "${project_name}-${environment}-api"
             path: infra/k8s/helm/api
-          # - app: "${project_name}-${environment}-worker" (To be uncommented when worker helm chart is ready)
-          #   path: infra/k8s/helm/worker
+          - app: "${project_name}-${environment}-worker"
+            path: infra/k8s/helm/worker
   template:
     metadata:
       name: '{{app}}'
