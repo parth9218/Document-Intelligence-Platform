@@ -11,11 +11,7 @@ class S3Service {
     this.client = new S3Client({
       region: config.aws.region,
       endpoint: config.aws.endpointUrl,
-      forcePathStyle: !!config.aws.endpointUrl,
-      credentials: {
-        accessKeyId: config.aws.accessKeyId,
-        secretAccessKey: config.aws.secretAccessKey,
-      },
+      forcePathStyle: !!config.aws.endpointUrl
     });
   }
 
