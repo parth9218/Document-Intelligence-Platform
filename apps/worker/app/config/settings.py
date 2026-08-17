@@ -40,11 +40,11 @@ class Settings:
     DLQ_URL: str = os.getenv("DLQ_URL")
     
     # AWS S3 Configuration
-    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET")
     
     # AWS Credentials (optional, mock keys used for Localstack)
-    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+    #AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID")
+    #AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY")
 
     # Embedding Provider Configuration (local or bedrock)
     EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "local")
