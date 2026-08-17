@@ -209,14 +209,12 @@ resource "aws_iam_role" "alb_controller" {
   })
 }
 
-data "http" "alb_controller_policy" {
-  url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json"
-}
-
 resource "aws_iam_role_policy" "alb_controller" {
-  name   = "AWSLoadBalancerControllerIAMPolicy"
-  role   = aws_iam_role.alb_controller.id
-  policy = data.http.alb_controller_policy.response_body
+  name = "AWSLoadBalancerControllerIAMPolicy"
+  role = aws_iam_role.alb_controller.id
+  // Policy had to be downloaded because of frequent "429 Too Many Requests" errors from Github
+  // https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+  policy = file("${path.module}/iam_policy.json")
 }
 
 resource "aws_eks_pod_identity_association" "alb_controller" {
