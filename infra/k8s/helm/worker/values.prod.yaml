@@ -1,0 +1,16 @@
+# Production Environment Values Override
+# These values will override the defaults in values.yaml when deployed to prod.
+
+environment: "prod"
+replicaCount: 5
+container:
+  image:
+    repository: ""
+    tag: "latest"
+  secrets-provider-class: "docintel-prod-secrets-class"
+  secrets-object: "docintel-prod-secrets"
+  parameters-object: "docintel-prod-parameters"
+
+env:
+  - key: NODE_ENV
+    value: prod
