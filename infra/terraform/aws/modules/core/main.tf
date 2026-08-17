@@ -21,16 +21,17 @@ module "vpc" {
 }
 
 module "secrets" {
-  source       = "../secrets"
-  project_name = var.project_name
-  environment  = var.environment
-  db_name      = var.db_name
-  db_username  = var.db_username
-  db_host      = module.storage.db_address
-  db_port      = module.storage.db_port
-  s3_bucket    = module.storage.documents_bucket_id
-  sqs_url      = module.messaging.sqs_queue_url
-  dlq_url      = module.messaging.dlq_url
+  source            = "../secrets"
+  project_name      = var.project_name
+  environment       = var.environment
+  db_name           = var.db_name
+  db_username       = var.db_username
+  db_host           = module.storage.db_address
+  db_port           = module.storage.db_port
+  s3_bucket         = module.storage.documents_bucket_id
+  cloudfront_domain = module.storage.cloudfront_domain
+  sqs_url           = module.messaging.sqs_queue_url
+  dlq_url           = module.messaging.dlq_url
 }
 
 module "storage" {

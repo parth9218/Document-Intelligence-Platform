@@ -31,3 +31,6 @@ output "acm_cert_arn" {
 output "ecr_repo_urls" {
   value = module.ecr.ecr_repo_urls
 }
+output "cloudfront_domain" {
+  value = module.storage.cloudfront_domain
+}
