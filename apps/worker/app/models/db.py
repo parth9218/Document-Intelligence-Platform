@@ -10,7 +10,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Initialize SQLAlchemy Engine
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+# Provide a placeholder "database" if DB_IAM_AUTH_ENABLED is True, otherwise use DATABASE_URL
+engine = create_engine(settings.DATABASE_URL if not settings.DB_IAM_AUTH_ENABLED else "database" , pool_pre_ping=True)
 
 if settings.DB_IAM_AUTH_ENABLED:
     logger.info("IAM Auth enabled for worker: Registering do_connect event for dynamic token generation.")

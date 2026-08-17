@@ -15,6 +15,7 @@ RUN wget -qO /app/global-bundle.pem https://truststore.pki.rds.amazonaws.com/glo
 FROM python:3-slim AS runner
 
 ENV PYTHON_ENV=dev
+ENV DB_SSL_ROOT_CERT=/app/global-bundle.pem
 
 # Create a non-root user for security3-slim
 RUN groupadd -r appgroup && useradd -r -g appgroup -u 1001 appuser
