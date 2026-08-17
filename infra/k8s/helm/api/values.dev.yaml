@@ -14,3 +14,5 @@ container:
 
 gateway:
   name: "docintel-dev-api-gateway"
+env: 
+  NODE_ENV: "dev"

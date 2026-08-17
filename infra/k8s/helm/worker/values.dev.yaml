@@ -12,5 +12,4 @@ container:
   secrets-object: "docintel-dev-secrets"
   parameters-object: "docintel-dev-parameters"
 env: 
-  - key: NODE_ENV
-    value: dev
+  PYTHON_ENV: "dev"

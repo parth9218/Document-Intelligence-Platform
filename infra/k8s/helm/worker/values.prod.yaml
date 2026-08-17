@@ -12,5 +12,4 @@ container:
   parameters-object: "docintel-prod-parameters"
 
 env:
-  - key: NODE_ENV
-    value: prod
+  PYTHON_ENV: "prod"
