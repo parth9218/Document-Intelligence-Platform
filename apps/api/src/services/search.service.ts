@@ -1,10 +1,8 @@
-import { PrismaClient } from '@prisma/client';
 import { getEmbeddingProvider } from './embedding.service';
 import { logger } from '../utils/logger';
-import { config } from '../config/index'
+import { config } from '../config/index';
 import { InternalServerError } from '../errors/app-error';
-
-const prisma = new PrismaClient();
+import { prisma } from '../db';
 
 export interface SearchResultChunk {
   id: string;
