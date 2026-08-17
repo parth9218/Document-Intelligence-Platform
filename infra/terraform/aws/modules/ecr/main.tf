@@ -14,6 +14,7 @@ resource "aws_ecr_repository" "images" {
   image_scanning_configuration {
     scan_on_push = true
   }
+  force_delete = var.environment == "dev" ? true : false
 
   tags = {
     Name = each.value
