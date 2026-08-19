@@ -153,12 +153,12 @@ resource "aws_iam_role" "api_role" {
 
 locals {
   worker_policy_arns = {
-    custom  = aws_iam_policy.worker_policy.arn,
-    managed = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+    custom              = aws_iam_policy.worker_policy.arn
+    secretsmanager_read = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
   }
   api_policy_arns = {
-    custom  = aws_iam_policy.api_policy.arn,
-    managed = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
+    custom              = aws_iam_policy.api_policy.arn
+    secretsmanager_read = "arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess"
   }
 }
 

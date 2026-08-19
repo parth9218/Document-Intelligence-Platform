@@ -9,7 +9,7 @@ terraform {
       version = ">= 2.12.0"
     }
   }
-  required_version = ">= 1.8.0"
+  required_version = ">= 1.15.0"
 }
 
 data "aws_eks_cluster" "cluster_info" {

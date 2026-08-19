@@ -44,22 +44,14 @@ module "storage" {
   db_user_name           = var.db_username
   region                 = data.aws_region.current.region
   account_id             = data.aws_caller_identity.current.account_id
-  github_actions_ci_role = module.oidc.github_actions_ci_role_arn
-}
-
-module "oidc" {
-  source          = "../oidc"
-  project_name    = var.project_name
-  environment     = var.environment
-  github_username = var.github_username
-  github_repo     = var.github_repo
+  github_actions_ci_role = var.github_actions_ci_role
 }
 
 module "ecr" {
   source       = "../ecr"
   project_name = var.project_name
   environment  = var.environment
-  ci_role_arn  = module.oidc.github_actions_ci_role_arn
+  ci_role_arn  = var.github_actions_ci_role
 }
 
 module "eks" {
@@ -75,6 +67,7 @@ module "eks" {
   documents_bucket_arn = module.storage.documents_bucket_arn
   dbi_resource_id      = module.storage.dbi_resource_id
   db_username          = var.db_username
+  admin_user_arns      = var.admin_user_arns
 }
 
 module "messaging" {

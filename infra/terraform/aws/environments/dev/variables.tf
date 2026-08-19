@@ -22,16 +22,15 @@ variable "db_username" {
   type    = string
   default = "postgres"
 }
-variable "github_username" {
-  type    = string
-  default = "parth9218"
-}
-variable "github_repo" {
-  type    = string
-  default = "Document-Intelligence-Platform"
-}
 variable "api_hostname" {
   type    = string
   default = "api.dev.docintel.com"
 }
+variable "github_actions_ci_role" {
+  type = string
+}
 
+variable "admin_user_arns" {
+  type    = list(string)
+  default = []
+}

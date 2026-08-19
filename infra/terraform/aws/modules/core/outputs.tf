@@ -22,9 +22,6 @@ output "cluster_endpoint" {
 output "cluster_certificate_authority_data" {
   value = module.eks.cluster_certificate_authority_data
 }
-output "github_actions_ci_role" {
-  value = module.oidc.github_actions_ci_role_arn
-}
 output "acm_cert_arn" {
   value = module.acm.acm_cert_arn
 }

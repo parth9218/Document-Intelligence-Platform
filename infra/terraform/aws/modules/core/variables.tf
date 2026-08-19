@@ -17,12 +17,13 @@ variable "db_name" {
 variable "db_username" {
   type = string
 }
-variable "github_username" {
-  type = string
-}
-variable "github_repo" {
-  type = string
-}
 variable "api_hostname" {
   type = string
+}
+variable "github_actions_ci_role" {
+  type = string
+}
+variable "admin_user_arns" {
+  type    = list(string)
+  default = []
 }

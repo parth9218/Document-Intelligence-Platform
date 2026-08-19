@@ -1,0 +1,51 @@
+name: Destroy AWS Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy (dev or prod)'
+        required: true
+        default: 'dev'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy-aws:
+    name: Destroy AWS ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # Map to the GitHub environment to dynamically inject vars/secrets for that specific environment
+    environment: ${{ inputs.environment }}
+    env:
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
+      TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
+      TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
+      TF_VAR_github_actions_ci_role: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+      TF_VAR_api_hostname: ${{ vars.TF_API_HOSTNAME }}
+      TF_VAR_admin_user_arns: ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_github_actions_ci_role }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform Destroy
+        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        run: terraform destroy -auto-approve

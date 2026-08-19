@@ -1,0 +1,174 @@
+name: Deploy K8s Infrastructure
+
+on:
+  push:
+    paths:
+      - 'infra/terraform/k8s/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: 'dev'
+      cluster_name:
+        description: 'EKS Cluster Name'
+        required: true
+      vpc_id:
+        description: 'VPC ID'
+        required: true
+      api_domain:
+        description: 'API Domain'
+        required: true
+        default: 'api.docintel.com'
+      acm_cert_arn:
+        description: 'ACM Certificate ARN'
+        required: true
+      ssm_parameters_name:
+        description: 'SSM Parameters Name'
+        required: true
+      ssm_secrets_name:
+        description: 'SSM Secrets Name'
+        required: true
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      cluster_name:
+        required: true
+        type: string
+      vpc_id:
+        required: true
+        type: string
+      api_domain:
+        required: true
+        type: string
+      acm_cert_arn:
+        required: true
+        type: string
+      ssm_parameters_name:
+        required: true
+        type: string
+      ssm_secrets_name:
+        required: true
+        type: string
+        
+concurrency:
+  group: deploy-k8s-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-k8s:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Terraform Format
+        working-directory: infra/terraform/k8s
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (Backend disabled for validation)
+        working-directory: infra/terraform/k8s
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: infra/terraform/k8s
+        run: terraform validate
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: us-east-1
+
+      - name: Set Environment Context
+        id: context
+        run: |
+          if [ -n "${{ inputs.cluster_name }}" ]; then
+            echo "ENV=${{ inputs.environment }}" >> $GITHUB_ENV
+          else
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Check if AWS was also modified
+        uses: dorny/paths-filter@v4
+        id: filter
+        if: inputs.cluster_name == ''
+        with:
+          # Change to the real base branch 
+          base: test
+          filters: |
+            aws:
+              - 'infra/terraform/aws/**'
+
+      - name: Check AWS Infrastructure (Push Event)
+        id: aws-check
+        if: inputs.cluster_name == ''
+        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
+        run: |
+          if [ "${{ steps.filter.outputs.aws }}" == "true" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "AWS infrastructure changes detected in the same commit. Deferring to aws-deploy workflow to avoid race conditions."
+            exit 0
+          fi
+          
+          terraform init -upgrade 
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          if [ -z "$CLUSTER_NAME" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "EKS cluster output missing in AWS state. Skipping K8s deploy."
+            exit 0
+          fi
+          if ! aws eks describe-cluster --name "$CLUSTER_NAME" > /dev/null 2>&1; then
+             echo "skip=true" >> $GITHUB_OUTPUT
+             echo "EKS cluster $CLUSTER_NAME does not exist. Skipping K8s deploy."
+             exit 0
+          fi
+          
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "API_DOMAIN=${{ inputs.api_domain || vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
+          echo "ACM_CERT_ARN=$(terraform output -raw acm_cert_arn)" >> $GITHUB_ENV
+          echo "SSM_PARAMETERS_NAME=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_ENV
+          echo "SSM_SECRETS_NAME=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_ENV
+
+      - name: Set Variables (Dispatch/Call Events)
+        if: inputs.cluster_name != ''
+        run: |
+          echo "CLUSTER_NAME=${{ inputs.cluster_name }}" >> $GITHUB_ENV
+          echo "VPC_ID=${{ inputs.vpc_id }}" >> $GITHUB_ENV
+          echo "API_DOMAIN=${{ inputs.api_domain || vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
+          echo "ACM_CERT_ARN=${{ inputs.acm_cert_arn }}" >> $GITHUB_ENV
+          echo "SSM_PARAMETERS_NAME=${{ inputs.ssm_parameters_name }}" >> $GITHUB_ENV
+          echo "SSM_SECRETS_NAME=${{ inputs.ssm_secrets_name }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform init -upgrade\
+            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
+            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
+
+      - name: Terraform Apply
+        if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform apply -auto-approve \
+            -var="cluster_name=${{ env.CLUSTER_NAME }}" \
+            -var="vpc_id=${{ env.VPC_ID }}" \
+            -var="api_domain=${{ env.API_DOMAIN }}" \
+            -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
+            -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
+            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}"
