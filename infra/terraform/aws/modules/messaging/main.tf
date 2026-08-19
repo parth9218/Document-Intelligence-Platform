@@ -33,7 +33,8 @@ resource "aws_sqs_queue_policy" "documents" {
         Action    = "sqs:SendMessage"
         Resource  = aws_sqs_queue.documents.arn
         Condition = {
-          ArnEquals = { "aws:SourceArn" = var.documents_bucket_arn }
+          ArnEquals    = { "aws:SourceArn" = var.documents_bucket_arn }
+          StringEquals = { "aws:SourceAccount" = var.account_id }
         }
       }
     ]
@@ -45,7 +46,7 @@ resource "aws_s3_bucket_notification" "documents" {
   queue {
     queue_arn     = aws_sqs_queue.documents.arn
     events        = ["s3:ObjectCreated:*"]
-    filter_prefix = "/"
+    filter_prefix = "sessions/"
   }
   depends_on = [aws_sqs_queue_policy.documents]
 }

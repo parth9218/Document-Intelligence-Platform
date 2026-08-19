@@ -106,6 +106,19 @@ resource "aws_s3_bucket" "documents" {
   }
 }
 
+resource "aws_s3_bucket_cors_configuration" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
+
 resource "aws_db_subnet_group" "db" {
   name        = local.rds_subnet_group
   description = "Subnet Group for Postgres RDS"

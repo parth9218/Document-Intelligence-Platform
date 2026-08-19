@@ -81,6 +81,7 @@ module "messaging" {
   source               = "../messaging"
   project_name         = var.project_name
   environment          = var.environment
+  account_id           = data.aws_caller_identity.current.account_id
   documents_bucket_id  = module.storage.documents_bucket_id
   documents_bucket_arn = module.storage.documents_bucket_arn
 }
