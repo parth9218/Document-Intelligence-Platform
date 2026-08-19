@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-deployment
+  labels:
+    app: {{ .Values.appName }}
+    environment: {{ .Values.environment }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ if eq .Values.environment "prod" }}RollingUpdate{{ else }}Recreate{{ end }}
+    {{- if eq .Values.environment "prod" }}
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+      environment: {{ .Values.environment }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+        environment: {{ .Values.environment }}
+    spec:
+      serviceAccountName: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-sa
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ index .Values.container "secrets-provider-class" }}
+      containers:
+        - name: {{ .Values.appName }}
+          image: "{{ .Values.container.image.repository }}:{{ .Values.container.image.tag }}"
+          imagePullPolicy: {{ .Values.container.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ index .Values.container "secrets-object" }}
+            - secretRef:
+                name: {{ index .Values.container "parameters-object" }}
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.environment | quote }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10

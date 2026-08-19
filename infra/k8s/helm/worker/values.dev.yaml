@@ -1,0 +1,15 @@
+# Development Environment Values Override
+# These values will override the defaults in values.yaml when deployed to dev.
+
+environment: "dev"
+replicaCount: 1
+container: 
+  image:
+    repository: "389642461016.dkr.ecr.us-east-1.amazonaws.com/docintel-dev-worker"
+    tag: "latest"
+    pullPolicy: "Always"
+  secrets-provider-class: "docintel-dev-secrets-class"
+  secrets-object: "docintel-dev-secrets"
+  parameters-object: "docintel-dev-parameters"
+env: 
+  PYTHON_ENV: "dev"

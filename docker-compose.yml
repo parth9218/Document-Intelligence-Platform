@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: docintel-db
+    ports:
+      - ${DB_PORT:-5432}:5432
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-docintel}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d docintel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: docintel-localstack
+    ports:
+      - ${LOCALSTACK_PORT:-4566}:4566
+    environment:
+      SERVICES: ${SERVICES}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      QUEUE_NAME: ${QUEUE_NAME}
+      DLQ_NAME: ${DLQ_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${LOCALSTACK_PORT:-4566}/_localstack/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/localstack:/etc/localstack/init/ready.d
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: docintel-ollama
+    ports:
+      - ${OLLAMA_PORT:-11434}:11434
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+    entrypoint: ["/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./scripts/ollama/entrypoint.sh:/entrypoint.sh
+
+volumes:
+  postgres_data:
+  localstack_data:
+  ollama_data:

@@ -3,17 +3,269 @@
 This document lists completed tasks and code files created.
 
 ## Executed Work Cycles
-* **Documentation & Constitution (Architecture Setup)**:
+
+- **Documentation & Constitution (Architecture Setup)**:
   - Updated agent development guidelines in [GEMINI.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/GEMINI.md) to enforce visual/architectural documentation standards for future cycles.
   - Formulated [ADR-007](file:///Users/parth/RAG/Document%20Intelligence%20Platform/DECISIONS.md) to support local testing (Localstack, Ollama/local LLMs), evaluated FAISS against local pgvector container capabilities, and purged FAISS in favor of 100% SQL and indexing parity with production.
-* **Architectural Refinement & Retrieval/Progress Flows**:
+
+- **Architectural Refinement & Retrieval/Progress Flows**:
   - Refined [ARCHITECTURE.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/ARCHITECTURE.md) to detail the Retrieval & Grounded Q&A mechanism and real-time Ingestion Progress Update flows with clean ASCII text sequence diagrams.
   - Approved [ADR-008](file:///Users/parth/RAG/Document%20Intelligence%20Platform/DECISIONS.md) to use a hybrid SSE push model (backed by PostgreSQL `LISTEN/NOTIFY`) and REST polling fallback for tracking document processing status.
   - Updated [IMPLEMENTATION_PLAN.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/IMPLEMENTATION_PLAN.md) and all Phase 1-3 tasks inside `/tasks/` to include specific sub-tasks for progress status updates, SSE connections, pgvector queries, and citation verification.
-* **Polyglot Stack & Dual ORM Architecture Setup**:
+
+- **Polyglot Stack & Dual ORM Architecture Setup**:
   - Restored the backend API runtime to Node.js/Express (TypeScript) in the Project Constitution [GEMINI.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/GEMINI.md) to prioritize high-concurrency connection scaling.
   - Formulated [ADR-009](file:///Users/parth/RAG/Document%20Intelligence%20Platform/DECISIONS.md) detailing the **dual ORM strategy**: using **Prisma ORM** (with Prisma Migrate as the single source of truth for the schema) for database access inside the Express API, and **SQLAlchemy** mapping inside the Python SQS worker daemon.
   - Reverted task worksheets inside the `/tasks` directory to map TS/Express files and targets.
 
+- **Ingestion Flow Pre-Implementation Review & Decision Capture**:
+  - Conducted full end-to-end review of the proposed document ingestion pipeline.
+  - Corrected presigned URL timing: URLs are generated after file selection (Option B), one per file.
+  - Identified and specified the required `POST /api/documents/:id/confirm-upload` endpoint as the only mechanism to transition `pending_upload → uploaded` (S3 ObjectCreated → SQS triggers the worker, not this status update).
+  - Confirmed S3 → SQS direct delivery with no Lambda intermediary required.
+  - Finalized 11-status state machine with canonical transition rules (see [ingestion-flow-decisions.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/ingestion-flow-decisions.md)).
+  - Specified hybrid progress model: aggregate counters (`total_chunks`, `processed_chunks`, `progress_pct`, `checkpoint_index`) updated per 50-chunk batch.
+  - Specified idempotency strategy: `UNIQUE (document_id, chunk_index)` + `ON CONFLICT DO UPDATE` + `checkpoint_index` resume.
+  - Added DLQ bridge (secondary polling loop) and orphan cleanup job specifications.
+  - Identified 8 known risks and mitigations.
+  - Updated task files: [Task 101](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-101-db-schema.md), [Task 103](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-103-api-document-upload.md), [Task 104](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-104-worker-sqs-consumer.md), [Task 201](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-201-worker-extraction.md), [Task 202](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-202-worker-chunking-embedding.md), [Task 203](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-02-ingestion/task-203-worker-vector-storage.md).
+- **Database Schema Creation (Task 101)**:
+  - Formulated full Prisma schema file [schema.prisma](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/prisma/schema.prisma) covering six database tables: `sessions`, `documents`, `processing_jobs`, `document_chunks`, `query_logs`, and `audit_log`.
+  - Configured PostgreSQL relational rules including cascading delete relations from session to documents, chunks, and jobs.
+  - Implemented `pgvector` indexing by declaring the embedding vector size to 1024 dimensions (`Unsupported("vector(1024)")`) and defining a custom HNSW cosine similarity index `document_chunks_embedding_hnsw_idx` (with `m=16`, `ef_construction=64`).
+  - Added a PG `LISTEN/NOTIFY` trigger `processing_jobs_notify` on table `processing_jobs` to publish progress updates automatically on channel `progress_channel` for Server-Sent Events (SSE).
+  - Drafted database schema specification document [database-schema-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/database-schema-spec.md) detailing indices, triggers, and entity relationships.
+- **API Session Management (Task 102)**:
+  - Implemented session signature middleware in [session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/middleware/session.ts) using HMAC-SHA256 and node's native `crypto.timingSafeEqual` to sign/verify session tokens, securing lookup queries and preventing timing attacks.
+  - Set up sliding window updates: on every valid request, the session's `expires_at` is extended by 24 hours in the database, and the cookie is re-issued with the updated expiration date.
+  - Built GET `/api/session` router in [session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/routes/session.ts) returning current session details, mounted globally on Express in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts).
+  - Drafted session management specification document [session-management-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/session-management-spec.md) capturing the authentication flow, security mechanism, and cookie flags.
+- **Document Upload & Status Tracking (Task 103)**:
+  - Configured raw PostgreSQL connection pool (`pgPool`) in [db.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/db.ts) alongside PrismaClient.
+  - Implemented Express router in [documents.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/routes/documents.ts) protecting all endpoints via `sessionMiddleware` and validating requests.
+  - Built batch initialization (`POST /api/documents`) running two-tiered validation: per-file (MIME types `application/pdf` / `text/plain`, sizes 1B - 5MB) and batch-level checks (concurrency count <= 5, storage quota <= 50MB per session).
+  - Configured AWS SDK v3 `createPresignedPost` URL generation with S3 policies (`content-length-range`, `Content-Type`) and atomically registered `Document` and `ProcessingJob` records inside a single Prisma transaction.
+  - Implemented upload confirmation (`POST /api/documents/:id/confirm-upload`) validating session ownership and atomically transitioning status (`pending_upload` -> `uploaded`) with strict idempotency guards.
+  - Developed status polling fallback (`GET /api/documents/:id/status`) and real-time Server-Sent Events (SSE) streaming (`GET /api/documents/:id/progress`) listening to raw `LISTEN progress_channel` updates via pg Pool client.
+  - Implemented scheduled cleanup job in [cleanup.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/jobs/cleanup.ts) running every 5 minutes to mark un-uploaded jobs >30 mins as `expired` and stuck uploads >10 mins as `failed` with code `sqs_delivery_failure`.
+  - Refactored the entire API codebase into a production-grade layered architecture separating concerns across Controllers (`controllers/`), Services (`services/`), Validators (`validators/`), Central Configurations (`config/`), and Custom Error Classes (`errors/`).
+  - Implemented a structured JSON logger (`utils/logger.ts`) emitting colorized logs locally and JSON logs in production.
+  - Implemented a centralized Express error handling middleware (`middlewares/error-handler.ts`) translating thrown business and limit errors to consistent JSON payloads.
+  - Formulated an extensible MIME type configuration (`config/file-types.ts`) following the Open/Closed Principle to facilitate adding future categories with zero controller logic changes.
+- **SSE Session-Scoped Architecture Refactor (Task 105 / ADR-017)**:
+  - Formulated and applied a new Prisma migration updating the PostgreSQL trigger `notify_progress_channel()` to emit notifications on session-scoped channels: `progress_{sessionId}` (replacing hyphens in UUID with underscores).
+  - Replaced the per-document endpoints `GET /api/documents/:id/status` and `GET /api/documents/:id/progress` with session-scoped static endpoints `GET /api/documents/status` and `GET /api/documents/progress` respectively.
+  - Implemented the static `status` polling endpoint returning `{ documents: [...] }` containing the unified document status shape for all documents in the session.
+  - Implemented the static `progress` SSE streaming endpoint emitting named events: `event: snapshot` carrying initial status list of all session documents on connect, and `event: update` streaming individual progress updates received on `progress_{sessionId}`.
+  - Configured payload enrichment inside the Express handler using a cache populated by the initial snapshot query, preventing any additional DB query per notification.
+  - Ensured cleanup (`UNLISTEN progress_{sessionId}` and pg Pool client release) executes correctly on client socket close.
+- **Dynamic API Specification Generation (Task 106)**:
+  - Formulated OpenAPI specifications using inline JSDoc annotations across all active backend routes: `GET /health`, `GET /api/session`, `POST /api/documents`, `POST /api/documents/:id/confirm-upload`, `GET /api/documents/status`, and `GET /api/documents/progress`.
+  - Added Swagger component schemas (`DocumentStatusObject`, `ErrorResponse`) and `CookieAuth` security schemes in [swagger.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/swagger.ts) to define contracts cleanly and avoid repetition.
+  - Mounted Swagger UI in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts) at `GET /api-docs` using `swagger-ui-express` conditional on environment, rendering only in non-production environments and returning `404 Not Found` in production.
+  - Implemented automatic OpenAPI specification export script [generate-openapi.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/scripts/generate-openapi.ts) writing JSON spec directly to [api-specification.json](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/api-specification.json), registered under `npm run api:docs:generate`.
+  - Written dedicated integration test suite [swagger.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/swagger.test.ts) to verify correct Swagger UI loading in development/test environments and secure blocking (returning 404) in production environment.
+- **Session Auto-Initialization Refactor (Task 107)**:
+  - Refactored the `GET /api/session` route inside [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts) to mount the existing `sessionMiddleware` instead of the read-only `getSession` middleware. This automatically initializes a new cryptographically signed session in the database and returns it when the session token cookie is missing, eliminating the need for explicit frontend session creation requests.
+  - Updated JSDoc annotations in [session.route.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/routes/session.route.ts) and general descriptions in [swagger.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/swagger.ts) to document the auto-creation behavior and regenerated [api-specification.json](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/api-specification.json).
+  - Added new integration test cases to [session.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/session.test.ts) checking auto-creation success, cookie setting, sliding-window DB expiration extensions, and validation errors for invalid or tampered cookies.
+- **Frontend Scaffolding & Setup (Task F1.1)**:
+  - Scaffolded Next.js App Router workspace under `apps/frontend/` using TypeScript, Tailwind CSS, and NPM package manager.
+  - Configured import aliases in `tsconfig.json` mapping `@/*` to `src/*`.
+  - Installed node dependencies: `zustand`, `lucide-react`, `msw`, `clsx`, and `tailwind-merge`.
+- **Hybrid API Gateway & Interception Engine (Task F1.2)**:
+  - Initialized Mock Service Worker (MSW) inside `apps/frontend/` generating standard service worker files inside `public/`.
+  - Configured granular route settings in [api-routing.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/config/api-routing.ts) to toggle between `'api'` and `'mock'` individual endpoints (`session`, `documents`, `progress`, `query`).
+  - Formulated mock handlers in [handlers.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/mocks/handlers.ts) simulating S3 uploads, file limits, cumulative storage quotas, and readable stream progress events for Server-Sent Events (SSE).
+- **Tailwind UI Library & Theme Engine (Task F1.3)**:
+  - Formulated CSS configuration variable maps inside [globals.css](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/globals.css) setting up HSL color palettes for dark and light modes.
+  - Implemented responsive helper glassmorphic stylesheets utilizing Tailwind CSS v4 directives.
+  - Formulated layout loading wrapper in [providers.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/providers.tsx).
+  - Configured Outfit and JetBrains Mono dynamic Next.js fonts within [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx).
+  - Built core reusable visual UI widgets: [Button](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/button.tsx), [Card](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/card.tsx), [ProgressBar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/progress-bar.tsx), and [Toast](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/ui/toast.tsx) alerts context managers.
+  - Setup environment variable configuration loader structure (with separate settings for `.env.development` and `.env.production` alongside a `.env.example` template reference).
+  - Restricted the sandbox component visualization page to development-only environments by implementing runtime and compile-time router blockages.
+- **Frontend API Integration Client & Error Schema Adapter (Task F2.1)**:
+  - Created [api.d.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/types/api.d.ts) to define frontend type interfaces matching the Express backend schemas (`ErrorResponse`, `DocumentStatusObject`, `SessionResponse`, `BatchUploadInitRequest`, `BatchUploadInitResponse`, `ConfirmUploadResponse`).
+  - Configured [api-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/api-client.ts) to forward session cookies (`credentials: 'include'`) and parse custom error classes (`UnauthorizedError`, `StorageQuotaExceededError`, `RateLimitExceededError`, `ConcurrencyLimitExceededError`) inheriting from `ApiError`.
+  - Built a floating, dev-only [DevToolbar](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/dev-toolbar.tsx) to inspect and switch endpoints dynamically between `'api'` and `'mock'` routing modes.
+  - Integrated `DevToolbar` within the global layout wrapper [providers.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/providers.tsx).
+- **Frontend Session Verification & Auth Shell (Task F2.2)**:
+  - Formulated the [useAuth](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useAuth.ts) session hook to query active session details, handle 401 Unauthorized status codes, trigger auto-creation by hitting a protected endpoint, and sync result attributes with Zustand.
+  - Built the global [useAppStore](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/store/useAppStore.ts) using Zustand to maintain current session, document registry state, and UI toggles.
+  - Implemented the layout widgets [sidebar.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/sidebar.tsx) (collapsible side navigation panel with CSS easing transitions) and [header.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/header.tsx) (displays truncated session UUID and houses the light/dark theme switcher).
+  - Built [app-shell.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/layout/app-shell.tsx) to tie the layout widgets together, using dynamic `margin-left` transitions to prevent layout overlapping.
+  - Configured the main App Router layout [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx) to wrap core children with the new layout shell.
+  - Integrated custom AI generated RAG neural-document logo image asset (`/public/logo.png`) in both expanded and collapsed brand header layouts.
+- **Frontend Dashboard Homepage & Empty States (Task F2.3)**:
+  - Created the [EmptyState](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/empty-state.tsx) onboarding component containing guidance cards for session parameters (MIME, sizes, concurrency, and cumulative limits).
+  - Programmed the main index view [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) to query the Zustand registry and render onboarding cards when empty, or dynamic upload and processing feed lists when documents are present.
+  - Built a session limit tracker widget in `page.tsx` displaying live progress indicators for storage quota (MBs used vs 50 MB) and active uploads slots (used vs 5 max).
+  - Refactored text colors and sizes across the dashboard homepage, sidebar, and onboarding views to adhere to accessibility guidelines (W3C contrast minimums). Replaced all static slate colors (e.g., `text-slate-100`, `text-slate-200`) with dynamic HSL-mapped semantic classes (`text-foreground`, `text-muted`).
+  - Scaled up metadata and label sizes from `text-[10px]` to standard accessible `text-xs` or `text-sm` values across all dashboard modules.
+  - Resolved alignment issues on the "Welcome to the Document Intelligence Hub" card by setting start-alignment (`items-start` and `text-left`) to match adjacent page layout elements symmetrically, and completely eliminated the bouncing/floating visual animations.
+  - **Hydration Warning Resolution**: Added `suppressHydrationWarning` to the `<html>` and `<body>` tags in [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx) to resolve React hydration mismatch warnings caused by browser extensions or script-injected data-theme attributes in Next.js.
+- **Frontend Drag-and-Drop Picker UI (Task F3.1)**:
+  - Created the [UploadZone](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/upload/upload-zone.tsx) component supporting dynamic drag-and-drop events (`onDragOver`, `onDragLeave`, `onDrop`), file selector inputs, and HSL style transitions.
+  - Programmed local pre-flight checks validating file formats (only PDF and TXT allowed) and file sizes (1B - 5MB limit) before selection confirmation, utilizing the native Toast alert framework for direct warning notifications.
+  - Implemented Zustand concurrency locking to automatically disable upload selection triggers, dim visual opacity, set `cursor-not-allowed` styles, and display a descriptive warning banner when the active processing queue equals or exceeds 5 items.
+  - Integrated `UploadZone` within the dashboard homepage [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) in place of the static upload placeholder markup.
+- **Task F3.2 Batch Initialization & Queue Controller**:
+  - Implemented queue controller hook `useUpload.ts` and integrated it with `<UploadZone />` on the main dashboard (`page.tsx`).
+  - Configured batch initialization which groups all selected files in a single API call to `POST /api/documents`.
+  - Implemented client-side queue classification: direct rejected files with status `rejected` (along with their backend-supplied error code and message) to the document registry; ready files are queued in `localProgressQueue` for parallel uploads.
+  - Programmed concurrency pool limit logic executing up to 5 concurrent uploads in parallel and awaiting subsequent runs recursively.
+  - Implemented API confirm-upload route invocation on success of each S3 upload item and rollback logic on failure.
+  - Wired `useUpload` hook in `page.tsx` and implemented custom glassmorphic modal dialog to show concurrency limit or quota exceeded errors.
+- **Task F3.3 S3 Direct POST Upload Engine**:
+  - Implemented the direct S3 upload library in [s3-uploader.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/s3-uploader.ts) using native `XMLHttpRequest` to support file upload progress callbacks.
+  - Enforced strict FormData compliance: appended all pre-signed POST fields in the exact order received, and appended the file payload as the final parameter.
+  - Linked the S3 upload module into the concurrent queue hook (`useUpload.ts`) to replace the simulated timer progress loop.
+  - Added full post-upload confirmation integration calling `POST /api/documents/:id/confirm-upload` on successful completion of each file upload and updating document registry statuses.
+- **Task 108 CORS Configuration Architecture & Planning**:
+  - Formulated architectural decision ADR-018 in [DECISIONS.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/DECISIONS.md) and [active-decisions.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/active-decisions.md) defining environment-driven CORS validation.
+  - Formulated full task worksheet [task-108-api-cors-config.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/tasks/phase-01-foundation/task-108-api-cors-config.md) outlining Goal, Scope, Dependencies, and Acceptance Criteria.
+  - Documented `CORS_ALLOWED_ORIGIN` configuration template in [apps/api/.env.example](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/.env.example) and [apps/api/.env](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/.env).
+- **Task F4.2 Document Processing Feed & Progress Indicators**:
+  - Added `removeDocument` action to the Zustand store in [useAppStore.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/store/useAppStore.ts) to support removing individual document items from the registry.
+  - Created [document-card.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/document-card.tsx) which renders document status tags mapping to the processing lifecycle (Downloading, Validating, Extracting, Chunking, Embedding, Completed, etc.).
+  - Configured granular sub-stage progress monitoring: displaying chunk counts for chunking (e.g. "Chunking (4 of 8 chunks)...") and percentage for embedding (e.g. "Embedding (50% complete)...").
+  - Implemented the Orphan Ingestion Interceptor: if status is `failed` or `expired`, it applies a red/amber warning glow border, displays the detailed backend error, and renders "Dismiss" (deletes document card) and "Retry" (dismisses card and prompts user to re-drop) action buttons.
+  - Created [processing-feed.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/documents/processing-feed.tsx) to act as a unified list feed container for local uploads and backend document processing items.
+  - Refactored the dashboard [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) to replace the inline lists logic with the clean, modular `<ProcessingFeed />` component.
+- **Task F4.1 SSE Client & Polling Fallback Hook**:
+  - Built [sse-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/sse-client.ts) implementing a wrapper around standard browser `EventSource` listening to named events `snapshot` (emits all active session documents) and `update` (emits individual document progress/status changes).
+  - Developed custom hook [useIngestion.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useIngestion.ts) which establishes the SSE EventSource connection to track real-time progress.
+  - Implemented a 3-second fallback polling cycle calling `GET /api/documents/status` if the SSE connection is lost (offline mode / network blocks) and automatically tearing it down when the SSE connection successfully re-establishes (`onopen`).
+  - Added smart lifecycle management: EventSource connections are closed and polling loops are terminated once all active document status records are in terminal states (`completed`, `failed`, `expired`).
+  - Wired `useIngestion()` hook into `page.tsx` to automatically trigger real-time updates when the dashboard is loaded.
+- **Express API CORS Configuration (Task 108 / ADR-018)**:
+  - Installed the `cors` npm package and `@types/cors` dev dependency into the Express API project.
+  - Extended [config/index.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/index.ts) with a `cors.allowedOrigin` field sourced from the `CORS_ALLOWED_ORIGIN` environment variable, and added a production startup warning when this variable is absent.
+  - Registered a globally-scoped `cors` middleware in [app.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/app.ts) as the **first** middleware so that preflight `OPTIONS` requests are resolved before the session parser or any route handler executes.
+  - Implemented environment-driven origin policy inside the `CorsOptions.origin` callback:
+    - **Development / test**: dynamically reflects the request `Origin` header — all local ports are accepted without manual configuration.
+    - **Production**: strictly compares the request `Origin` against `config.cors.allowedOrigin`; non-matching origins receive no CORS headers, causing browsers to block the request.
+  - Wildcard `*` is never returned in `Access-Control-Allow-Origin` (enforced because `credentials: true` is always set).
+  - Registered a dedicated `app.options('*', cors(corsOptions))` handler to ensure preflight responses are served immediately with `Access-Control-Max-Age: 86400` (24 hours), reducing browser preflight round-trips.
+  - Written 10-case integration test suite [cors.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/cors.test.ts) covering: development dynamic-origin reflection, credentials header always present, wildcard-never guarantee, preflight `OPTIONS` response shape, allowed-methods listing, no-Origin pass-through, production whitelist accept, production origin block, production wildcard-never, production preflight block.
+- **Worker SQS Consumer Loop (Task 104)**:
+  - Structured the worker service using a modular, decoupled layout with separate layers for settings/config, logging, SQLAlchemy models, SQS client, database repositories, document service pipeline, and job execution/consuming handlers.
+  - Implemented SQS Client using boto3 with dynamic support for LocalStack redirects/mock keys and custom long-polling parameters (`WaitTimeSeconds=20`, `MaxNumberOfMessages=1`, `VisibilityTimeout=600`).
+  - Created SQS Consumer loop that fetches S3 event records, extracts `sessionId` and `documentId` from S3 object keys, delegates job handling to JobHandler, and ensures message deletion on success/permanent failure or visibility timeout expiration on transient failure.
+  - Programmed Job Handler to orchestrate job state transitions (`downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`) using SQLAlchemy ORM context managers.
+  - Implemented a DLQ bridge poller running as a secondary daemon thread every 30 seconds to catch messages routed to DLQ and mark them as `failed` with code `max_retries_exceeded` in the DB.
+  - Designed graceful shutdown logic intercepting SIGINT/SIGTERM to set a shutdown flag, complete the current polling/processing cycle, and safely exit without leaving half-processed messages un-acknowledged in SQS.
+- **Worker Document Extraction (Task 201)**:
+  - Implemented a complete S3 downloading verification pipeline in `ExtractorService` executing existence, size matching, and content-type checks before downloading objects.
+  - Programmed magic byte validation for PDFs (`%PDF` magic bytes checking) and encoding validation for plain text files (UTF-8 decode compliance checking), avoiding spoofed Content-Type trust.
+  - Integrated PyMuPDF (fitz) text parsing library to extract page-by-page text native elements and clean trailing whitespace.
+  - Mapped the extraction pipeline to job status transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) with atomic PostgreSQL commits.
+  - Updated worker setup to resolve Kubernetes HOSTNAME pod matching fallback with UUID suffixing.
+  - Formulated a 7-case integration test suite `test_integration.py` executing the 9 validation steps against LocalStack S3/SQS and real PostgreSQL database schemas.
+
 ## Verification Records
-* **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
+
+- **Local Environment Validation**: Verified Docker, Localstack, and Postgres container setups are fully prepared for local testing integration.
+- **Database Schema & Migration Validation**: Verified successful clean database reset and schema migration application using `npx prisma migrate reset` and subsequently applied the trigger-scoped migration via `npx prisma migrate dev`.
+- **PG NOTIFY Trigger Validation**: Successfully executed ts-node script [test-trigger.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/test-trigger.ts) which connects to the database, issues `LISTEN progress_{sessionId}`, inserts mock data, updates progress, and validates receipt of trigger notification payload.
+- **API Session Management Validation**: Added and ran typescript integration script [test-session.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/test-session.ts) (mapped to `npm run test:session`) which verifies session creation, database entry insertion, sliding cookie issuance, and HTTP 401 response on tampered session signatures.
+- **API Document Upload & Progress Streaming Validation**: Updated complete Jest integration tests in [documents.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/documents.test.ts) covering batch uploads, validation limits, S3 presigned URLs, upload confirmation state-machine transitions, session status polling fallbacks, SSE streams, and orphan cleanup timer rules.
+- **API Specification & Swagger Routing Verification**: Implemented and successfully ran automated integration test suite `swagger.test.ts` verifying environments logic, and executed spec builder CLI command `npm run api:docs:generate` producing error-free syntax validated OpenAPI 3.0.0 JSON output.
+- **Refactored Architecture Integration Verification**: Re-compiled the entire TypeScript project using `npm run build` and validated 100% test compatibility and functional parity by running all 20 sequential integration tests (`npm test -- --runInBand`) post-refactoring. All tests passed successfully.
+- **Frontend Compilation Verification**: Successfully verified clean production compilation of the scaffolded application without type errors using `npm run build` in the `apps/frontend/` workspace directory.
+- **MSW Configuration and Route Switcher Verification**: Executed mock server boots inside dev builds, confirming custom interceptors intercept and mock HTTP requests correctly based on `api-routing.ts` environment flags, and verified compiled build bundles.
+- **Tailwind UI & Theme System Compilation Verification**: Verified clean build output with zero warnings, validating exact responsive rendering hooks and theme transitions.
+- **Environment Configuration & Build Isolation Verification**: Verified that building the project loader dynamically reads `.env.production` during execution and correctly injects compile-time blockages, routing `/sandbox` hits to the system 404 page in production.
+- **Task F2.1 Integration & Compilation Verification**: Verified clean linting checks (`npm run lint`) and flawless production Next.js builds (`npm run build`) incorporating the newly defined types, custom errors, uploader client logic, and interactive DevToolbar in the frontend application.
+- **Task F2.2 Layout & Verification**: Verified clean linting checks (`npm run lint`) and flawless production compilation (`npm run build`) incorporating the new `useAuth` hook, Zustand store integration, collapsible sidebar (with morphing logo-toggle buttons), header console, and margin transitions in the App Shell frame.
+- **Task F2.3 Dashboard & Onboarding Verification**: Verified clean linting checks (`npm run lint`) and flawless production compilation (`npm run build`) incorporating the new `EmptyState` component, session quota indicators, dynamic upload feed queues, and responsive column grid folding on the dashboard homepage.
+- **Accessibility & UI Refinement Verification**: Verified clean linting checks and successful optimized Next.js builds after adjusting font contrast and sizes across light and dark theme modes, aligning onboarding elements symmetrically, and removing floating/bouncing animations.
+- **Task 107 Session Auto-Initialization Verification**: Verified all 21 API endpoints integration tests (including the new session auto-initialization, cookie sliding, signature verification, and error scenarios in `session.test.ts`) pass successfully using `npm test`.
+- **Hydration & Production Build Verification**: Re-ran production builds with `npm run build:local` and `npm run build:prod` in the `apps/frontend/` directory, confirming clean output compilation with zero TypeScript errors or warnings. Removed manual `NODE_ENV` settings from environment files to allow Next.js to determine and inject standard build-time environments automatically.
+- **Production UI Security & Navigation Isolation Verification**: Verified that building the frontend application under `process.env.NODE_ENV === 'production'` dynamically strips the "Sandbox UI" tab and the "Swagger API Docs" links from the sidebar navigation. Also verified that client-side routers correctly return inline 404 views when accessing `/sandbox` directly in production, avoiding any pre-rendering errors.
+- **DevToolbar Theme-Aware Readability Verification**: Refactored the `DevToolbar` to utilize solid theme-aware background colors (`bg-card` and `border-card-border`) and HSL-mapped preset/action indicators, ensuring readability and preventing background page content from bleeding through and overlapping the controls.
+- **Task F3.1 Upload Picker Verification**: Verified clean build bundles (`npm run build:local`), ran drop simulation tests, and verified that dropping non-compliant formats (like PNG) or oversized files (like >5MB mock files) triggers native Toast error warnings immediately while valid files successfully trigger uploader selected handlers.
+- **Task F3.2 Concurrency & Hook Integration Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero TypeScript or compiling warnings.
+  - Verified concurrency limit checks by selecting 6 files: mock MSW interceptor returns HTTP 429 which triggers the custom glassmorphic error dialog modal on the dashboard page.
+  - Verified inline error reporting by selecting a mix of valid and invalid files: valid files successfully update progress to S3 and trigger confirm-upload, while invalid files show their error details inline on the document card list.
+- **Task F3.3 S3 Direct POST Upload Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified upload progress tracking: XMLHttpRequests trigger smooth progress bar updates during simulation.
+  - Verified confirm-upload triggers: network logs assert `POST /api/documents/:id/confirm-upload` is called right after S3 returns 204 No Content.
+- **Task F4.1 SSE Client & Polling Fallback Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified network connections: confirmed EventSource connection to `/api/documents/progress` is active when ingestion starts.
+  - Verified polling fallback: simulated connection loss (EventSource error event) and asserted that the client immediately falls back to polling `/api/documents/status` every 3 seconds.
+  - Verified reconnection: bringing the network connection back online successfully resumes the EventSource connection and terminates the fallback polling loops automatically.
+- **Task F4.2 Ingestion Feed & Card Verification**:
+  - Successfully verified Next.js production build (`npm run build`) in `apps/frontend/` with zero compiling warnings or TypeScript errors.
+  - Verified active status transitions: processing documents display correct stage tags (Downloading, Validating, etc.) and progress percentages/chunk numbers.
+  - Verified failed and expired visual states: manually setting status to `failed` or `expired` updates card border styles to warning glows and reveals detailed error logs, and dismissing/retrying updates the store registry and removes the cards.
+- **Worker SQS Consumer Loop Verification (Task 104)**:
+  - Formulated 17 unit/integration test cases under `apps/worker/tests/test_worker.py` covering all consumer/poller functionality, SQS message routing, job handler state machine transitions, DLQ failure updates, and signal handling.
+  - Executed tests using the virtual environment python interpreter, passing successfully in 0.017 seconds.
+- **Resolution of /confirm-upload Race Condition**:
+  - Modified the upload confirmation endpoint (`POST /api/documents/:id/confirm-upload`) in [document.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/document.service.ts) to be fully idempotent.
+  - If a background worker consumes the S3/SQS event notification and transitions the document's state to `downloading` (or any subsequent processing/terminal state) before the frontend's API call arrives, the endpoint now logs the event and responds with `200 OK` rather than throwing a `409 Conflict` error.
+  - Updated unit and integration tests in [documents.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/documents.test.ts) to verify HTTP 200 is returned and that database states are not overwritten when the upload is already confirmed or processing.
+- **Worker Document Ingestion Integration Verification (Task 201)**:
+  - Formulated and successfully executed integration test suite [test_integration.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_integration.py) verifying all 9 validation steps in the task spec against LocalStack S3/SQS and real PostgreSQL database schemas.
+  - Verified correct status flow transitions (`downloading` -> `validating` -> `extracting` -> `completed` / `failed`) and correct SQS visibility timeout/message deletion behaviors for all success, mismatch, magic byte, and corrupt PDF file scenarios.
+- **Worker Chunking & Embedding Generation (Task 202)**:
+  - Implemented the paragraph-based sliding window document chunker `app/services/chunker.py` and the embeddings generation service `app/services/embeddings.py` (which supports Amazon Bedrock Titan Embeddings V2 with exponential backoff retries and local Sentence-Transformers E5 model fallback).
+  - Wired chunker and embedding stages into the main document ingestion service pipeline `app/services/document_service.py` to transition statuses to `chunking` and `embedding`, set `total_chunks` count, and execute embedding calls in batches of 50 chunks.
+  - Developed and successfully verified unit test suites [test_chunker.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_chunker.py) and [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py).
+  - Executed the full worker test suite discover discover, passing all 43 tests including end-to-end integration tests using LocalStack and local pgvector database parity.
+- **Worker Vector Storage & Job Progress Updates (Task 203)**:
+  - Created idempotent chunk upsert mechanism `upsert_chunks()` in `JobRepository` using PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` to safely permit retries.
+  - Configured `DocumentChunk.embedding` attribute to use the custom `pgvector` SQL Alchemy type `Vector(1024)`.
+  - Implemented per-batch transactional progress checkpointing: updates `processed_chunks`, `progress_pct` (capped at 99%), and `checkpoint_index` after writing each 50-chunk batch to the database.
+  - Supported resume-on-retry: calculates `resume_batch_index` from `checkpoint_index + 1` at start to skip already-persisted batches.
+  - Implemented final completion transition: atomically updates `processing_jobs.status = 'completed'` and `documents.status = 'completed'` with progress at 100% and completed timestamp inside a single transaction.
+  - Added new integration test assertions verifying that chunks are correctly persisted, structured, and carry the correct page numbers, content, and 1024-dimension float embedding vectors. All tests pass successfully.
+- **Worker AWS Bedrock Client Isolation**:
+  - Isolated the AWS Bedrock Runtime SDK interactions from the service layer into a standalone wrapper class `BedrockClient` in [bedrock_client.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/clients/bedrock_client.py).
+  - Modified [embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/app/services/embeddings.py) to import `BedrockClient` and utilize it in the `BedrockEmbeddingProvider` class via lazy initialization, also supporting optional constructor dependency injection for testability.
+  - Refactored [test_embeddings.py](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/worker/tests/test_embeddings.py) to test `BedrockClient` initialization/delegation directly and updated `TestEmbeddingsService` to assert against mocked `BedrockClient` wrappers using constructor dependency injection.
+  - Cleaned up orphan background worker processes from the local environment and ran the full worker test suite, successfully verifying all 47 unit and integration tests.
+- **API Similarity Search & Tenancy Enforcement (Task 301)**:
+  - Extended API configuration in [config/index.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/index.ts) with `embeddings` settings supporting environment-driven provider selection (`EMBEDDING_PROVIDER` set to `bedrock` or `local`).
+  - Created decoupled embedding service in [embedding.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/embedding.service.ts) supporting `BedrockEmbeddingProvider` (AWS Bedrock Runtime SDK calling `amazon.titan-embed-text-v2:0` with exponential backoff) and `LocalEmbeddingProvider` (`@xenova/transformers` with `intfloat/e5-large-v2` using `"query: "` prefix formatting).
+  - Created vector similarity search service in [search.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/search.service.ts) using Prisma Client `$queryRaw` to calculate cosine distance (`<=>`) against `document_chunks` joined with `documents`, enforcing strict session tenancy isolation (`WHERE c.session_id = ${sessionId}::uuid`), cosine distance threshold (`<= distanceThreshold`), and top-5 ascending distance ordering.
+  - Built request validator in [query.validator.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/validators/query.validator.ts), controller in [query.controller.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/controllers/query.controller.ts), and mounted endpoint `POST /api/query/search` in [query.route.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/routes/query.route.ts) with OpenAPI annotations.
+  - Developed and verified 6-case integration test suite in [query.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/query.test.ts) covering provider factory switching, strict cross-session tenancy isolation, distance filtering, invalid query handling, and 401 unauthorized session signature checks. All 39 API test cases across 5 test suites pass successfully.
+- **API Grounded Answer Generation & Citation Verification (Task 302)**:
+  - Created decoupled LLM provider abstraction in [llm.service.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/services/llm.service.ts) supporting `BedrockLlmProvider` (AWS Bedrock Runtime SDK `InvokeModelWithResponseStreamCommand` using IRSA with exponential backoff retries) and `LocalLlmProvider` (Ollama running in Docker with OpenAI-compatible SSE API and offline fallback stub).
+  - Built prompt generator `buildPrompt` formatting retrieved context chunks with sequential `[1]...[n]` bracket labels, document filenames, and page numbers alongside strict grounding system rules.
+  - Developed `CitationValidator` utility using regex pattern matching (`/\[(\d+)\]/g`) to extract inline citation indices, validate them against the active context chunk count (`1 <= index <= num_chunks`), strip hallucinated citation tokens, deduplicate indices per response stream, and emit structured citation metadata (`index`, `filename`, `pageNumber`).
+  - Extended SSE streaming handler in [query.controller.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/controllers/query.controller.ts) to stream `event: context`, `event: token` (cleaned text deltas), `event: citation` (validated source metadata), `event: error` (stream-level exceptions), and `event: done`. Added client disconnect safety via `AbortController` linked to `req.on('close')`.
+  - Added custom `UnsupportedLlmProviderError` class to [app-error.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/errors/app-error.ts) and configured `llm` settings in [config/index.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/config/index.ts).
+  - Expanded test suite in [query.test.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/api/src/tests/query.test.ts) with 14 unit and integration tests covering LLM provider factory switching, prompt formatting, citation extraction/deduplication/hallucination stripping, and full SSE stream integration. All 53 API tests pass successfully.
+- **Frontend Query Interface, Streaming Chat & Citations (Frontend Phase 5)**:
+  - Created custom hook [useQuery.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/hooks/useQuery.ts) managing SSE streaming requests to `POST /api/query/search` using `fetch` and `ReadableStream`. Listens for `context`, `token`, `citation`, `error`, and `done` frames, updating Zustand chat state in real-time with `AbortController` stream cancellation support.
+  - Developed [ChatInterface.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/chat/chat-interface.tsx) layout component featuring scroll-to-bottom auto-scroll viewport, auto-resizing prompt textarea (`Enter` submit / `Shift+Enter` newline), prompt suggestion pills, clear chat, and "Stop Generating" controls.
+  - Built [ChatBubble.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/chat/chat-bubble.tsx) message component formatting user questions and assistant answers, parsing inline `[n]` bracket references into interactive citation badges, and displaying streaming pulse indicators.
+  - Implemented [CitationBadge.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/chat/citation-badge.tsx) and [SourcePopover.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/chat/source-popover.tsx) rendering hover/click popover cards with document filename, page number, relevance match score, and exact context chunk snippet.
+  - Created [SourceAccordion.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/components/chat/source-accordion.tsx) rendering an expandable context panel attached to each answer displaying all retrieved document chunks.
+  - Added MSW mock handler in [handlers.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/mocks/handlers.ts) to simulate query SSE stream events in hybrid/mock development mode.
+  - Integrated `ChatInterface` into [page.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/page.tsx) with workspace tabs for switching between Document Management & Ingestion Feed and Grounded Q&A Chat.
+  - Verified clean Next.js build compilation (`npm run build`).
+
+- **Infrastructure Provisioning (Phase 4)**:
+  - Designed and structured the Terraform modular layout within `infra/terraform/`.
+  - Created environment-agnostic modules under `infra/terraform/aws/modules/` including configurations for `vpc`, `eks`, `storage` (S3/RDS with pgvector), `messaging` (SQS, DLQ), `iam` (Pod Identity Associations, OIDC, Secrets Manager), `acm`, and `ecr`.
+  - Set up `dev` environment instantiation under `infra/terraform/aws/environments/dev/` utilizing S3 remote state backend.
+  - Implemented Kubernetes provider configurations and resources inside `infra/terraform/k8s/` including API Gateway integration and ALB Gateway Controller setup.
+  - Documented the architecture changes in [terraform-infrastructure-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/terraform-infrastructure-spec.md).
+  - Refactored AWS infrastructure by consolidating it into a core module for reuse across different environments.
+  - Integrated AWS Secrets Store CSI driver with EKS, configuring `StorageProviderClass` to mount AWS SSM Parameter Store configurations and Secrets Manager secrets as Kubernetes volumes.
+  - Expanded Pod Identity policies with `secretsmanager:DescribeSecret` and `ssm:GetParameter` permissions to authorize the CSI driver.
+  - Reorganized Kubernetes resource manifests into `infra/terraform/k8s/manifests/`.
+- **Helm Charting & GitOps Prep (Task 402)**:
+  - Added Dockerfiles for the API and Worker services for containerization.
+  - Implemented Helm charts for API (`infra/k8s/helm/api`) and Worker (`infra/k8s/helm/worker`) with `values.dev.yaml` and `values.prod.yaml` environment support.
+  - Updated `secrets-provider-class.yaml` and integrated RDS IAM Authentication configs (`DB_IAM_AUTH_ENABLED`) using `@aws-sdk/rds-signer` in the API and IAM auth in the Worker.
+  - Created `argocd-applicationset.yaml` template for ArgoCD deployments of the API and Worker applications.
+  - Configured IAM policy in Terraform (`infra/terraform/aws/modules/eks/iam.tf`) to grant `rds-db:connect` permission for IAM database authentication.

@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: "${project_name}-${environment}-argocd-applicationset"
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          # Applications to be deployed by ArgoCD
+          - app: "${project_name}-${environment}-api"
+            path: infra/k8s/helm/api
+          - app: "${project_name}-${environment}-worker"
+            path: infra/k8s/helm/worker
+  template:
+    metadata:
+      name: '{{app}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "10" # Workloads deployed after core infrastructure
+    spec:
+      project: default
+      source:
+        # TODO: Update with your actual Git repository URL
+        repoURL: ${github_repository_url}
+        # Note: Set targetRevision to 'dev' or 'main' based on the deployment environment
+        targetRevision: task402-helm-charting
+        path: '{{path}}'
+        helm: 
+          valueFiles:
+          - values.yaml
+          - values.${environment}.yaml
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: default
+      syncPolicy:
+        automated:
+          enabled: true
+          prune: true
+          selfHeal: true # Self-healing active to automatically revert manual modifications
+        syncOptions:
+          - CreateNamespace=true

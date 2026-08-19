@@ -3,7 +3,7 @@
 This file details the structural specifications of the platform, outlining boundaries, components, data flows, and real-time synchronization mechanisms.
 
 ## 1. Component Boundaries & Responsibilities
-* **React SPA (Frontend)**: Served from CloudFront + S3. Responsible for cookie session creation, direct multipart upload to S3 (tracking browser-side upload progress), listening to Server-Sent Events (SSE) for document ingestion status and streaming query answers, and rendering interactive markdown with page citations.
+* **React SPA (Frontend)**: Served from CloudFront + S3. Responsible for session cookie handling/maintenance, direct multipart upload to S3 (tracking browser-side upload progress), listening to Server-Sent Events (SSE) for document ingestion status and streaming query answers, and rendering interactive markdown with page citations.
 * **API Service (Node.js/TypeScript)**: Express server in Kubernetes. Handles session HMAC signature validation, rate limits, storage quotas, S3 presigned URL generation, Bedrock query embedding, similarity querying against pgvector (using Prisma client), prompt rendering, Bedrock Claude integration, SSE streaming for query responses, and real-time ingestion progress push (via PG LISTEN/NOTIFY or status API polling).
 * **Worker Service (Python)**: Standalone boto3 polling script. Receives SQS events, downloads PDFs, Sniffs magic numbers, parses text via PyMuPDF, chunks paragraphs, calls Titan Embeddings V2, commits vectors to Postgres (using SQLAlchemy), and updates granular progress state in the database.
 * **Amazon SQS & DLQ**: Intermediate broker for ingestion jobs. DLQ alerts on message depth > 0 after 3 attempts.
@@ -28,9 +28,9 @@ To give users transparency during ingestion, the system tracks and updates progr
        |   (XHR progress: 0-100% upload status)|                |                 |                   |
        |                                       |-- 5. Event --->|                 |                   |
        |                                       |   Notification |                 |                   |
-       |                                       |   to SQS       |<- 6. Long Poll -|                   |
-       |                                       |                |   (Message) ----|                   |
-       |                                       |                |-- 7. Payload ------>|               |
+       |-- 5b. POST confirm-upload ----------->|   to SQS       |<- 6. Long Poll -|                   |
+       |   (status: uploaded)                  |                |   (Message) ----|                   |
+       |<- 5c. 200 OK -------------------------|                |-- 7. Payload ------>|               |
        |                                       |                |                     |               |
        |                                       |                                      |-- 8. Status ->|
        |                                       |                                      |  'downloading'|
@@ -41,6 +41,7 @@ To give users transparency during ingestion, the system tracks and updates progr
        |                                       |======= 12. File Data ===============>|               |
        |                                       |                                      |               |
        |                                       |                                      |-- 13. Status ->|
+       |<- 13b. SSE ("Validating...") ---------|                                      |  'validating' |
        |<- 14. SSE updates ("Extracting...") --|                                      |  'extracting' |
        |                                       |                                      |               |
        |                                       |                                      |-- 15. Chunks ->|
@@ -56,10 +57,10 @@ To give users transparency during ingestion, the system tracks and updates progr
 
 ### Detailed Ingestion Progress Mechanism
 1. **Upload Progress**: Tracked natively on the browser client via XMLHttpRequests/Fetch upload progress callbacks (since files are uploaded directly from the browser to the S3 bucket via presigned URLs).
-2. **State Updates**: The worker performs database transactions on a `processing_jobs` table to checkpoint progress. Statuses transition through: `pending_upload` -> `uploaded` -> `downloading` -> `extracting` -> `chunking` -> `embedding` -> `indexing` -> `completed` / `failed`.
+2. **State Updates**: The worker performs database transactions on a `processing_jobs` table to checkpoint progress. Statuses transition through: `pending_upload` -> `uploaded` -> `downloading` -> `validating` -> `extracting` -> `chunking` -> `embedding` -> `completed` / `failed`. The `uploaded` transition is triggered by the browser calling `POST /api/documents/:id/confirm-upload` after receiving a `200 OK` from S3 — not by the SQS event. The SQS ObjectCreated event triggers the worker's `downloading` transition.
 3. **Synchronous/Asynchronous Propagation**:
-   * **SSE Connection (Push Model)**: The API hosts `/api/documents/:id/progress`. It uses PostgreSQL `LISTEN/NOTIFY` (specifically listening to a `progress_channel` triggered when `processing_jobs` rows are updated). This triggers real-time SSE stream frames containing state updates to the React client.
-   * **Status Endpoint (Pull Fallback)**: The API implements `GET /api/documents/:id/status`. The frontend can poll this endpoint every 3 seconds to recover status if the SSE connection drops or is blocked.
+   * **SSE Connection (Push Model)**: The API hosts `GET /api/documents/progress` (session-scoped, no document ID). On connect, it sends a `snapshot` SSE event containing the current status of all session documents as a JSON array. PostgreSQL `LISTEN/NOTIFY` (specifically listening to a session-scoped channel `progress_{sessionId}`) then triggers `update` SSE events as the worker updates `processing_jobs` rows. The channel name is derived from the session ID with hyphens replaced by underscores (e.g., `progress_550e8400_e29b_41d4_a716_446655440000`), ensuring PostgreSQL routes events only to the correct listener.
+   * **Status Endpoint (Pull Fallback)**: The API implements `GET /api/documents/status` (session-scoped). The frontend can poll this endpoint every 3 seconds to recover status for all documents if the SSE connection drops or is blocked. The response schema is identical to the `snapshot` event data payload for consistent frontend parsing.
 
 ---
 
@@ -131,3 +132,18 @@ To reduce cloud costs and enable offline development, the system supports a loca
 * **Local LLM & Embeddings (Ollama & Offline Transformers)**:
   - **Ollama**: Emulates text generation models locally (e.g., Llama3/Mistral APIs mapped to Bedrock interfaces).
   - **Sentence-Transformers**: Provides offline local embeddings (mapping to Titan Embeddings V2 1024-dimension space) during offline testing.
+
+---
+
+## 6. Secure Cross-Origin Request Policy (CORS)
+
+Since the frontend React client and the backend Express API reside in decoupled runtime environments (served from S3/CloudFront and running in EKS respectively), the system implements a strict, environment-driven Cross-Origin Resource Sharing (CORS) policy:
+
+* **Credentials Enforcements**: The system tracks user sessions using a signed secure HTTP cookie (`session_token`). Browsers restrict the sharing of cross-origin cookies unless the server explicitly returns:
+  - `Access-Control-Allow-Credentials: true`
+  - An explicit, non-wildcard origin in `Access-Control-Allow-Origin` matching the request's origin. Specifying `*` is forbidden by browsers when credentials are enabled.
+* **Environment-Driven Configuration**:
+  - **Development/Test**: The API server dynamically reflects the incoming request's `Origin` header in the `Access-Control-Allow-Origin` response header, supporting all required HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`) to simplify local development without manually updating host configurations.
+  - **Production**: The API server enforces a strict whitelist, matching the `Origin` header against the `CORS_ALLOWED_ORIGIN` environment variable. If they do not match, the CORS headers are omitted and browser-side cross-origin fetches are blocked.
+* **Preflight Optimization**: The CORS middleware responds to preflight `OPTIONS` requests with a caching TTL (`Access-Control-Max-Age: 86400` / 24 hours), reducing network overhead by caching CORS policy checks on the browser client.
+

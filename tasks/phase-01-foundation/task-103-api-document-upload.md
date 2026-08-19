@@ -1,33 +1,195 @@
 # Task 103: Document Upload & Status Tracking
 
 ## Goal
-Expose Express endpoints returning S3 upload presigned URLs and tracking status updates (via polling and real-time Server-Sent Events).
+
+Expose Express endpoints for batch presigned URL generation, upload confirmation, status polling, and SSE progress streaming. Enforce per-file validation, batch-level concurrency and storage quota limits.
+
+---
 
 ## Scope
-Implement `/api/documents` (presigning), `/api/documents/:id/status` (polling API), and `/api/documents/:id/progress` (SSE push API) inside `apps/api` using Express and Prisma Client.
 
-## Files Expected To Change
-* `apps/api/src/routes/documents.ts`
-* `apps/api/src/services/s3.ts`
-* `apps/api/src/services/progress.ts`
+Implement the following routes inside `apps/api/src/routes/documents.ts`:
+
+- `POST /api/documents` — batch initialization: validate files, enforce limits, return presigned URLs per valid file
+- `POST /api/documents/:id/confirm-upload` — transition status to `uploaded` after S3 success
+- `GET /api/documents/status` — session-wide polling fallback: returns current status of all session documents
+- `GET /api/documents/progress` — session-wide SSE stream: emits `snapshot` on connect, then `update` events per PG NOTIFY
+
+Implement the orphan record cleanup job in `apps/api/src/jobs/cleanup.ts`.
+
+**Out of scope:** Frontend upload UI, S3 bucket configuration, SQS configuration, per-document status endpoints (removed per ADR-017).
+
+---
 
 ## Dependencies
-* Task 102 (API Session Management)
+
+- Task 101 (Database Schema — `documents`, `processing_jobs` tables and PG NOTIFY trigger must exist)
+- Task 102 (API Session Management — session middleware must be active on all routes)
+
+---
+
+## Endpoint Specifications
+
+### POST /api/documents
+
+Accepts a batch of file metadata. Returns per-file outcomes. See ADR-015 and `ingestion-flow-decisions.md §1`.
+
+**Request body:** `{ "documents": [{ "filename", "mimeType", "fileSizeBytes" }] }`
+
+**Validation is two-tiered:**
+
+**Tier 1 — Per-file (independent):**
+
+Validate each file in the input array independently:
+- `mimeType` not in `{application/pdf, text/plain}` → result entry: `status: "rejected"`, `error: "invalid_mime_type"`
+- `fileSizeBytes < 1` or `> 5242880` → result entry: `status: "rejected"`, `error: "file_too_large"`
+
+Files failing tier-1 are included in the response as `rejected`. No DB records are created for them.
+
+**Tier 2 — Batch-level (atomic, on the valid subset only):**
+
+After tier-1 filtering, apply both checks to the valid subset before any DB writes:
+
+1. Concurrency: query `processing_jobs.status` for the current session. If `active_count + valid_batch_count > 5`, return `HTTP 429`. Active states: `{pending_upload, uploaded, downloading, validating, extracting, chunking, embedding}`. See ADR-013 and `ingestion-flow-decisions.md §10`.
+2. Storage quota: sum `file_size_bytes` from `documents` for the current session where status not in `{expired, failed, cancelled}`. If `existing_bytes + SUM(valid_batch_sizes) > 52428800`, return `HTTP 400`, `error_code = 'storage_quota_exceeded'`. See ADR-014 and `ingestion-flow-decisions.md §11`.
+
+If either batch-level check fails, no DB records are created for any file in the batch.
+
+**On batch-level success**, for each valid file:
+- Generate a `document_id` (UUID).
+- Construct S3 key: `sessions/{sessionId}/documents/{documentId}/original`.
+- Generate a presigned POST using `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). This returns both a `url` and a `fields` object. Do NOT use `getSignedUrl('putObject')` — presigned PUT does not support policy conditions. See ADR-016.
+- Create `documents` row (`status = 'pending_upload'`) and `processing_jobs` row (`status = 'pending_upload'`, `progress_pct = 0`, `checkpoint_index = -1`) via Prisma.
+
+**Response:** Always `HTTP 200 OK`. Body: `{ "results": [...] }` where each entry is either:
+- `{ filename, status: "ready", documentId, uploadUrl, uploadFields, s3Key }` for valid files — `uploadUrl` is the S3 endpoint, `uploadFields` is the key-value object the browser must include in the multipart POST body before appending the file.
+- `{ filename, status: "rejected", error, message }` for rejected files
+
+`HTTP 400` and `HTTP 429` are returned only on batch-level failures (no `results` array in that case).
+
+---
+
+### POST /api/documents/:id/confirm-upload
+
+Called by the browser after receiving `200 OK` from S3. This is the **only mechanism** that transitions `pending_upload → uploaded`.
+
+**Request body:** None.
+
+**Required checks (in order):**
+
+1. **Session ownership:** Load document by `:id`. If the document is not found, or `document.session_id` does not match the current session, return `HTTP 404`. Do not return `403` — a `403` would confirm the document exists to an unauthorized caller.
+
+2. **Idempotency / status guard:** If `processing_jobs.status` is not `'pending_upload'`, return `HTTP 409 Conflict` with `error: "already_confirmed"`. This prevents double-calling from corrupting the state machine transition.
+
+3. **Atomic status transition:** Execute a single Prisma transaction updating both records: `documents.status = 'uploaded'` and `processing_jobs.status = 'uploaded'`. Return `HTTP 200` with `{ "status": "uploaded" }`.
+
+> **No S3 headObject call at this endpoint.** The endpoint does not verify that the S3 object exists. S3 object existence verification is performed by the Python worker during the `downloading` stage (see Task 201). This endpoint only updates DB status so the UI can immediately reflect "Upload Complete."
+
+---
+
+### GET /api/documents/status
+
+Session-wide polling fallback. Used when SSE is unavailable or the connection drops.
+
+Returns `{ "documents": [ <DocumentStatusObject> ] }` — an array of status objects for all documents belonging to the current session, ordered by `created_at` ascending.
+
+Each `DocumentStatusObject` has the unified shape:
+
+| Field             | Type            |
+|-------------------|-----------------|
+| `documentId`      | string (UUID)   |
+| `filename`        | string          |
+| `mimeType`        | string          |
+| `fileSizeBytes`   | number          |
+| `status`          | string          |
+| `progressPct`     | number          |
+| `processedChunks` | number          |
+| `totalChunks`     | number \| null  |
+| `errorCode`       | string \| null  |
+| `errorMessage`    | string \| null  |
+| `createdAt`       | string (ISO)    |
+
+Requires `documents` JOIN `processing_jobs` on `document_id`. Returns an empty array if the session has no documents. Returns `401` if session is invalid.
+
+---
+
+### GET /api/documents/progress
+
+Session-wide SSE stream endpoint. Sets `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`.
+
+**Behavior:**
+
+- On connect: query all documents for the session (JOIN `processing_jobs`) and emit a single `event: snapshot` frame. The `data` field is a JSON array of `DocumentStatusObject` items (same shape as `GET /api/documents/status` response array). Cache the document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) keyed by `documentId` for use when enriching subsequent NOTIFY payloads.
+- Open a PostgreSQL `LISTEN` connection (via `pg` driver, not Prisma) on channel `progress_{sessionId}` where the session UUID hyphens are replaced with underscores.
+- On each NOTIFY payload received: parse the JSON (contains `document_id`, `status`, `progress_pct`, `processed_chunks`, `total_chunks`, `error_code`, `error_message`). Enrich with cached document metadata. Emit as `event: update` frame with a single `DocumentStatusObject` as `data`.
+- On client disconnect (`req.on('close')`): issue `UNLISTEN progress_{sessionId}` and release the pg connection back to the pool.
+- Returns `401` if session is invalid.
+
+**SSE frame format:**
+```
+event: snapshot
+data: [{...}, {...}]
+
+event: update
+data: {...}
+```
+
+---
+
+## Cleanup Job: Orphan Record Management
+
+Implement `apps/api/src/jobs/cleanup.ts`, run via `setInterval` every 5 minutes on API startup.
+
+**Type 1 — `expired` (never uploaded):**
+- Condition: `processing_jobs.status = 'pending_upload'` AND `created_at < NOW() - 30 minutes`
+- Action: Set `documents.status = 'expired'` and `processing_jobs.status = 'expired'`
+
+**Type 2 — stuck `uploaded` (SQS event never arrived):**
+- Condition: `processing_jobs.status = 'uploaded'` AND `updated_at < NOW() - 10 minutes`
+- Action: Set `processing_jobs.status = 'failed'`, `error_code = 'sqs_delivery_failure'`
+
+---
 
 ## Acceptance Criteria
-* `POST /api/documents` generates a 5-minute S3 presigned PUT URL scoped to S3 path `sessions/{sessionId}/documents/{documentId}/original`.
-* Size (<= 25 MB) and MIME types (`application/pdf`, `text/plain`) are validated.
-* DB records created in `documents` (status = `pending_upload`) and `processing_jobs` (status = `pending_upload`, progress = 0) using Prisma Client.
-* `GET /api/documents/:id/status` returns current job status, progress percentage, and error state.
-* `GET /api/documents/:id/progress` opens a Server-Sent Events (SSE) connection that listens to PG notifications (via `LISTEN progress_channel` on the pg driver client) and streams progress changes for that document ID to the client.
 
-## Validation Steps
-1. POST to `/api/documents` with valid session cookie. Verify S3 presigned URL is returned.
-2. Assert database document and processing job entries are created in `pending_upload` state.
-3. Establish SSE connection to `/api/documents/:id/progress`. Manually update DB status/progress and verify SSE event is received.
-4. Verify requesting status of non-existent/unowned ID returns 404.
+- `POST /api/documents` accepts a `documents` array and returns a `results` array.
+- Per-file `mimeType` failure produces `status: "rejected"`, `error: "invalid_mime_type"` in the results array; overall response is `HTTP 200`.
+- Per-file `fileSizeBytes` failure produces `status: "rejected"`, `error: "file_too_large"` in the results array; overall response is `HTTP 200`.
+- Batch with mixed valid and invalid files returns `HTTP 200` with both `ready` and `rejected` entries; DB records are created only for `ready` files.
+- Batch-level concurrency check: if `active_count + valid_batch_count > 5`, returns `HTTP 429`; no DB records created for any file.
+- Batch-level quota check: if `existing_bytes + SUM(valid batch sizes) > 52428800`, returns `HTTP 400` with `error_code = 'storage_quota_exceeded'`; no DB records created for any file.
+- Each `ready` result entry includes `uploadUrl` (S3 endpoint) and `uploadFields` (key-value object for multipart POST body). The presigned POST policy enforces `content-length-range: [1, 5242880]` and the validated `Content-Type` at the S3 layer.
+- `documents` and `processing_jobs` rows created in `pending_upload` state for each `ready` file.
+- `POST /api/documents/:id/confirm-upload` returns `HTTP 404` if the document does not exist or does not belong to the current session (ownership check must not return `403`).
+- `POST /api/documents/:id/confirm-upload` returns `HTTP 409` with `error: "already_confirmed"` if `processing_jobs.status` is not `'pending_upload'` (idempotency guard).
+- `POST /api/documents/:id/confirm-upload` atomically transitions both `documents.status` and `processing_jobs.status` to `'uploaded'` in a single transaction; returns `HTTP 200` with `{ "status": "uploaded" }`.
+- `GET /api/documents/status` returns a `{ "documents": [...] }` response where each item includes all `DocumentStatusObject` fields for every document in the session.
+- `GET /api/documents/status` returns an empty `documents` array if the session has no documents.
+- `GET /api/documents/progress` SSE stream emits `event: snapshot` on connect with a JSON array of all session document statuses.
+- `GET /api/documents/progress` SSE stream emits `event: update` on each PG NOTIFY with a single `DocumentStatusObject`.
+- Update `event` frames include enriched document metadata (`filename`, `mimeType`, `fileSizeBytes`, `createdAt`) sourced from the snapshot cache, not from a live DB query per notification.
+- The `LISTEN` channel used is `progress_{sessionId}` with UUID hyphens replaced by underscores.
+- On SSE client disconnect, the handler issues `UNLISTEN progress_{sessionId}` and releases the pg pool connection.
+- All `GET /api/documents/status` and `GET /api/documents/progress` requests return `401` if session is missing or invalid (not `404`).
+- No per-document `GET /:id/status` or `GET /:id/progress` routes exist.
+- Cleanup job marks `pending_upload` records older than 30 min as `expired`.
+- Cleanup job marks stuck `uploaded` records older than 10 min as `failed` with `error_code = 'sqs_delivery_failure'`.
 
-## Definition Of Done
-* Presigned URL and status polling endpoints validated.
-* Real-time progress SSE stream validated with mock database triggers.
-* Test suite created asserting size validation and session-tenancy isolation.
+---
+
+## Notes
+
+- Concurrency check must query `processing_jobs.status` — `processing_jobs` is the authoritative status source.
+- Storage quota check must query `documents.file_size_bytes` and `documents.status` — `documents` holds the file size; materialized status is sufficient for the aggregate.
+- Both batch-level checks must execute after tier-1 per-file filtering and before any DB writes or S3 presigning.
+- The two quota checks use different state sets: storage quota excludes `{expired, failed, cancelled}`; concurrency quota counts only the 7 active processing states. Completed documents consume storage quota but free a concurrency slot.
+- Do not use application-level counters or cache for quota enforcement — always query the database to prevent race conditions under concurrent uploads.
+- Use `createPresignedPost()` from `@aws-sdk/s3-presigned-post` (AWS SDK v3). Do NOT use `getSignedUrl('putObject')` — presigned PUT does not support S3 policy conditions (`content-length-range`, `Content-Type`). See ADR-016.
+- See `ingestion-flow-decisions.md §1` for the full batch API contract and validation sequence.
+- See `ingestion-flow-decisions.md §10` and ADR-013 for the concurrency limit specification.
+- See `ingestion-flow-decisions.md §11` and ADR-014 for the storage quota specification.
+- See `ingestion-flow-decisions.md §9` for orphan cleanup timing parameters.
+- SSE and status endpoints are session-scoped (no document ID). See ADR-017 and `ingestion-flow-decisions.md §8` for the full SSE architecture specification including event types, payload shape, and channel naming.
+- The PG LISTEN channel `progress_{sessionId}` is derived by replacing all hyphens in the session UUID with underscores. This produces a valid unquoted PostgreSQL identifier. The `LISTEN` query string must use this derived form; using the raw UUID with hyphens will fail silently.
+- The SSE snapshot cache (document metadata keyed by `documentId`) is local to the SSE handler closure and is NOT shared across requests. Each SSE connection builds its own cache on connect.
+- The `GET /api/documents/:id/status` and `GET /api/documents/:id/progress` routes must NOT exist. Any existing implementation of those routes must be removed as part of Task 105.

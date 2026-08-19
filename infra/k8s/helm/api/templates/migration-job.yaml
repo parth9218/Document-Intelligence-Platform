@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.appName }}-{{ .Values.environment }}-migration
+  labels:
+    app: {{ .Values.appName }}
+    environment: {{ .Values.environment }}
+  annotations:
+    "argocd.argoproj.io/sync-wave": "-1"
+    "argocd.argoproj.io/hook": PreSync
+    "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}-migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-sa
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ index .Values.container "secrets-provider-class" }}
+      containers:
+        - name: {{ .Values.appName }}-migration
+          image: "{{ .Values.container.image.repository }}:{{ .Values.container.image.tag }}"
+          imagePullPolicy: {{ .Values.container.image.pullPolicy }}
+          command: ["node", "dist/scripts/migrate.js"]
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.environment | quote }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ index .Values.container "secrets-object" }}
+            - secretRef:
+                name: {{ index .Values.container "parameters-object" }}
