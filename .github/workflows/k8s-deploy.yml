@@ -172,3 +172,4 @@ jobs:
             -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
             -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
             -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}"
+            -var="environment=${{ env.ENV }}"
