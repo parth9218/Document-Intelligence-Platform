@@ -263,3 +263,9 @@ This document lists completed tasks and code files created.
   - Integrated AWS Secrets Store CSI driver with EKS, configuring `StorageProviderClass` to mount AWS SSM Parameter Store configurations and Secrets Manager secrets as Kubernetes volumes.
   - Expanded Pod Identity policies with `secretsmanager:DescribeSecret` and `ssm:GetParameter` permissions to authorize the CSI driver.
   - Reorganized Kubernetes resource manifests into `infra/terraform/k8s/manifests/`.
+- **Helm Charting & GitOps Prep (Task 402)**:
+  - Added Dockerfiles for the API and Worker services for containerization.
+  - Implemented Helm charts for API (`infra/k8s/helm/api`) and Worker (`infra/k8s/helm/worker`) with `values.dev.yaml` and `values.prod.yaml` environment support.
+  - Updated `secrets-provider-class.yaml` and integrated RDS IAM Authentication configs (`DB_IAM_AUTH_ENABLED`) using `@aws-sdk/rds-signer` in the API and IAM auth in the Worker.
+  - Created `argocd-applicationset.yaml` template for ArgoCD deployments of the API and Worker applications.
+  - Configured IAM policy in Terraform (`infra/terraform/aws/modules/eks/iam.tf`) to grant `rds-db:connect` permission for IAM database authentication.
