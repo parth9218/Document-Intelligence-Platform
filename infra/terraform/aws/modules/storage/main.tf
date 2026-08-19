@@ -100,7 +100,7 @@ resource "aws_s3_bucket_policy" "frontend" {
 resource "aws_s3_bucket" "documents" {
   bucket           = local.s3_bucket_documents
   bucket_namespace = "account-regional"
-
+  force_destroy    = var.environment == "dev"
   tags = {
     Name = local.s3_bucket_documents
   }
@@ -150,7 +150,8 @@ resource "aws_db_instance" "db" {
   db_subnet_group_name                = aws_db_subnet_group.db.name
   vpc_security_group_ids              = [aws_security_group.db.id]
   iam_database_authentication_enabled = true
-  skip_final_snapshot                 = true
+  skip_final_snapshot                 = var.environment != "prod"
+  deletion_protection                 = var.environment == "prod"
 
   tags = {
     Name = local.rds_name
