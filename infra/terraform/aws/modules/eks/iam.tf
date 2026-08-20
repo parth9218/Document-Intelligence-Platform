@@ -113,42 +113,27 @@ resource "aws_iam_policy" "worker_policy" {
   policy = data.aws_iam_policy_document.worker_policy.json
 }
 
-resource "aws_iam_role" "worker_role" {
-  name = "${var.project_name}-${var.environment}-worker-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "pods.eks.amazonaws.com"
-        }
-        Action = [
-          "sts:AssumeRole",
-          "sts:TagSession"
-        ]
-      }
+data "aws_iam_policy_document" "assume-role-policy-document" {
+  statement {
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
     ]
-  })
+  }
+}
+
+resource "aws_iam_role" "worker_role" {
+  name               = "${var.project_name}-${var.environment}-worker-role"
+  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
 }
 
 resource "aws_iam_role" "api_role" {
-  name = "${var.project_name}-${var.environment}-api-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "pods.eks.amazonaws.com"
-        }
-        Action = [
-          "sts:AssumeRole",
-          "sts:TagSession"
-        ]
-      }
-    ]
-  })
+  name               = "${var.project_name}-${var.environment}-api-role"
+  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
 }
 
 locals {
@@ -191,22 +176,8 @@ resource "aws_eks_pod_identity_association" "worker" {
 
 # ALB Controller IAM Role
 resource "aws_iam_role" "alb_controller" {
-  name = "${var.project_name}-${var.environment}-alb-controller"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "pods.eks.amazonaws.com"
-        }
-        Action = [
-          "sts:AssumeRole",
-          "sts:TagSession"
-        ]
-      }
-    ]
-  })
+  name               = "${var.project_name}-${var.environment}-alb-controller"
+  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
 }
 
 resource "aws_iam_role_policy" "alb_controller" {

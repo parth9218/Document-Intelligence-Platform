@@ -40,7 +40,8 @@ resource "kubectl_manifest" "argocd_applicationset" {
   yaml_body = templatefile("manifests/argocd-applicationset.yaml", {
     project_name          = var.project_name,
     environment           = var.environment,
-    github_repository_url = var.github_repository_url
+    github_repository_url = var.github_repository_url,
+    targetRevision        = var.targetRevision
   })
   depends_on = [helm_release.argocd]
 }

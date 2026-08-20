@@ -20,10 +20,8 @@ spec:
     spec:
       project: default
       source:
-        # TODO: Update with your actual Git repository URL
         repoURL: ${github_repository_url}
-        # Note: Set targetRevision to 'dev' or 'main' based on the deployment environment
-        targetRevision: task402-helm-charting
+        targetRevision: ${targetRevision}
         path: '{{path}}'
         helm: 
           valueFiles:
@@ -36,6 +34,6 @@ spec:
         automated:
           enabled: true
           prune: true
-          selfHeal: true # Self-healing active to automatically revert manual modifications
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true
