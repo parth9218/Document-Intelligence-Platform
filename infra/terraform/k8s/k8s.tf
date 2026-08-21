@@ -45,3 +45,29 @@ resource "kubectl_manifest" "argocd_applicationset" {
   })
   depends_on = [helm_release.argocd]
 }
+
+resource "null_resource" "wait_for_alb_dns" {
+  depends_on = [kubectl_manifest.api_gateway]
+
+  provisioner "local-exec" {
+    command = <<EOT
+      aws eks update-kubeconfig --name ${var.cluster_name} --region ${data.aws_region.current.region} >/dev/null 2>&1
+      echo "Waiting for ALB DNS to be populated on the Gateway resource..."
+      while [ -z "$(kubectl get gateway ${var.project_name}-${var.environment}-api-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null)" ]; do
+        sleep 5
+      done
+      ALB_DNS=$(kubectl get gateway ${var.project_name}-${var.environment}-api-gateway -o jsonpath='{.status.addresses[0].value}')
+      echo "ALB successfully provisioned with DNS: $ALB_DNS"
+    EOT
+  }
+}
+
+data "external" "alb_dns" {
+  depends_on = [null_resource.wait_for_alb_dns]
+  program = ["bash", "-c", <<EOT
+    aws eks update-kubeconfig --name ${var.cluster_name} --region ${data.aws_region.current.region} >/dev/null 2>&1
+    DNS=$(kubectl get gateway ${var.project_name}-${var.environment}-api-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo "")
+    echo "{\"dns\": \"$DNS\"}"
+EOT
+  ]
+}

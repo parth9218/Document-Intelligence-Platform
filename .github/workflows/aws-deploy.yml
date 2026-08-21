@@ -71,6 +71,17 @@ jobs:
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         run: terraform init -upgrade
 
+      - name: Fetch K8s API ALB DNS
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform init -upgrade
+          DNS=$(terraform output -raw api_alb_dns 2>/dev/null || echo "")
+          if [ -n "$DNS" ] && [ "$DNS" != "No outputs found" ]; then
+            echo "TF_VAR_api_alb_dns_name=$DNS" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_api_alb_dns_name=dummy.alb.dns" >> $GITHUB_ENV
+          fi
+
       - name: Terraform Apply
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         env:
