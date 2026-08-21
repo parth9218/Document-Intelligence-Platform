@@ -1,0 +1,84 @@
+name: API CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'apps/api/**'
+  pull_request:
+    types: [closed]
+    branches:
+      - dev
+    paths:
+      - 'apps/api/**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Get ECR Repo URL
+        id: get-ecr-url
+        working-directory: infra/terraform/aws/environments/dev
+        run: |
+          terraform init
+          URLS=$(terraform output -json ecr_repo_urls)
+          API_REPO_URL=$(echo $URLS | jq -r '.[] | select(endswith("-api"))')
+          echo "ECR_REPO_URL=$API_REPO_URL" >> $GITHUB_ENV
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Get Short SHA
+        run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./apps/api
+          file: ./apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}
+          build-args: |
+            ENVIRONMENT=dev
+
+      - name: Update Helm Chart Values
+        run: |
+          sed -i "s|repository: .*|repository: \"${{ env.ECR_REPO_URL }}\"|" infra/k8s/helm/api/values.dev.yaml
+          sed -i "s|tag: .*|tag: \"${{ env.SHORT_SHA }}\"|" infra/k8s/helm/api/values.dev.yaml
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/helm/api/values.dev.yaml
+          git commit -m "Update API image to ${{ env.SHORT_SHA }} [skip ci]" \
+                         -m "Triggered by: ${{ github.actor }}" \
+                         -m "Original Commit: ${{ github.sha }}" \
+                         -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              || echo "No changes to commit"
+          git push origin HEAD
+
+      - name: Trigger ArgoCD Sync
+        run: |
+          echo "Image pushed successfully to ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}."
+          echo "Manifest updated and pushed! ArgoCD should sync the changes automatically."
