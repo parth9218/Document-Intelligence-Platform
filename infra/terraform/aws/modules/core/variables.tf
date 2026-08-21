@@ -27,3 +27,8 @@ variable "admin_user_arns" {
   type    = list(string)
   default = []
 }
+variable "api_alb_dns_name" {
+  type        = string
+  description = "DNS name of the API ALB provisioned by the Kubernetes ALB controller. Set after the k8s layer creates the Gateway resource."
+}
+

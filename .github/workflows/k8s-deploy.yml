@@ -29,6 +29,17 @@ on:
       ssm_secrets_name:
         description: 'SSM Secrets Name'
         required: true
+      project_name:
+        description: 'Project name prefix'
+        required: true
+        default: 'docintel'
+      github_repository_url:
+        description: 'GitHub repository URL (for ArgoCD ApplicationSet)'
+        required: true
+      target_revision:
+        description: 'Git branch/tag ArgoCD should track'
+        required: true
+        default: 'dev'
   workflow_call:
     inputs:
       environment:
@@ -52,7 +63,16 @@ on:
       ssm_secrets_name:
         required: true
         type: string
-        
+      project_name:
+        required: true
+        type: string
+      github_repository_url:
+        required: true
+        type: string
+      target_revision:
+        required: true
+        type: string
+
 concurrency:
   group: deploy-k8s-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
@@ -157,9 +177,7 @@ jobs:
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
         working-directory: infra/terraform/k8s
         run: |
-          terraform init -upgrade\
-            -backend-config="bucket=tf-state-doc-intel-${{ env.ENV }}-389642461016-us-east-1-an" \
-            -backend-config="key=k8s/${{ env.ENV }}/terraform.tfstate"
+          terraform init -upgrade 
 
       - name: Terraform Apply
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
@@ -171,5 +189,79 @@ jobs:
             -var="api_domain=${{ env.API_DOMAIN }}" \
             -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
             -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
-            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}"
-            -var="environment=${{ env.ENV }}"
+            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}" \
+            -var="environment=${{ env.ENV }}" \
+            -var="project_name=${{ inputs.project_name || vars.TF_PROJECT_NAME }}" \
+            -var="github_repository_url=${{ inputs.github_repository_url || vars.TF_GITHUB_REPOSITORY_URL }}" \
+            -var="targetRevision=${{ inputs.target_revision || vars.TF_TARGET_REVISION }}" \
+
+      - name: Configure kubectl for EKS
+        if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ env.CLUSTER_NAME }}" \
+            --region us-east-1
+
+      - name: Wait for Gateway ALB Address
+        if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
+        id: alb-address
+        env:
+          GATEWAY_NAME: "${{ vars.TF_PROJECT_NAME }}-${{ env.ENV }}-api-gateway"
+          TIMEOUT: "300"
+          POLL_INTERVAL: "10"
+        run: |
+          echo "Waiting up to ${TIMEOUT}s for Gateway '${GATEWAY_NAME}' to receive an ALB address..."
+          ALB_DNS=""
+          ELAPSED=0
+
+          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            ALB_DNS=$(kubectl get gateway "${GATEWAY_NAME}" \
+              --namespace default \
+              --output jsonpath='{.status.addresses[0].value}' \
+              2>/dev/null || true)
+
+            if [ -n "${ALB_DNS}" ]; then
+              echo "ALB DNS resolved: ${ALB_DNS}"
+              break
+            fi
+
+            echo "  … not yet available (${ELAPSED}s elapsed). Retrying in ${POLL_INTERVAL}s."
+            sleep "${POLL_INTERVAL}"
+            ELAPSED=$(( ELAPSED + POLL_INTERVAL ))
+          done
+
+          if [ -z "${ALB_DNS}" ]; then
+            echo "Timed out after ${TIMEOUT}s waiting for Gateway '${GATEWAY_NAME}' to get an ALB address."
+            echo "Check AWS Load Balancer Controller logs:"
+            echo "  kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller"
+            exit 1
+          fi
+
+          echo "alb_dns=${ALB_DNS}" >> "$GITHUB_OUTPUT"
+
+      - name: Update CloudFront API Origin (Targeted Apply)
+        if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
+        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
+        env:
+          TF_VAR_api_alb_dns_name:       ${{ steps.alb-address.outputs.alb_dns }}
+          TF_VAR_project_name:           ${{ vars.TF_PROJECT_NAME }}
+          TF_VAR_environment:            ${{ env.ENV }}
+          TF_VAR_vpc_cidr:               ${{ vars.TF_VPC_CIDR }}
+          TF_VAR_db_name:                ${{ vars.TF_DB_NAME }}
+          TF_VAR_db_username:            ${{ secrets.TF_DB_USERNAME }}
+          TF_VAR_github_actions_ci_role: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          TF_VAR_api_hostname:           ${{ vars.TF_API_HOSTNAME }}
+          TF_VAR_admin_user_arns:        ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
+        run: |
+          echo "Updating CloudFront API origin → ${{ steps.alb-address.outputs.alb_dns }}"
+
+          if [ "${{ inputs.cluster_name }}" != "" ]; then
+            terraform init -upgrade
+          fi
+
+          terraform apply -auto-approve -input=false \
+            -target="module.core.module.storage.aws_cloudfront_distribution.frontend" \
+            -target="module.core.module.storage.aws_cloudfront_function.api_path_rewrite" \
+            -target="module.core.module.storage.random_uuid.cf_origin_verify_token"
+
+          echo "CloudFront API origin updated → ${{ steps.alb-address.outputs.alb_dns }}"
