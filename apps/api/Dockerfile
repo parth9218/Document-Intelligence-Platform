@@ -41,3 +41,4 @@ EXPOSE ${PORT}
 # Switch to the numeric UID instead of the string name
 USER 1001
 CMD ["npm", "start"]
+
