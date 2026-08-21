@@ -126,7 +126,7 @@ jobs:
         if: inputs.cluster_name == ''
         with:
           # Change to the real base branch 
-          base: test
+          base: dev
           filters: |
             aws:
               - 'infra/terraform/aws/**'

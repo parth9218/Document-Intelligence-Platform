@@ -8,12 +8,20 @@ metadata:
 spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+  hostnames:
+    - {{ .Values.gateway.hostname }}
   rules:
     - matches:
         - path:
             type: PathPrefix
             value: /api
       filters:
+        # Strip the /api prefix before forwarding to the backend service.
+        # ReplacePrefixMatch replaces only the matched prefix segment:
+        #   /api          → /
+        #   /api/documents → /documents
+        #   /api/query    → /query
         - type: URLRewrite
           urlRewrite:
             path:

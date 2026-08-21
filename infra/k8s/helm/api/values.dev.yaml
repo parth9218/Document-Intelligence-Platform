@@ -14,5 +14,8 @@ container:
 
 gateway:
   name: "docintel-dev-api-gateway"
+  namespace: "default"
+  listenerName: "https"
+  hostname: "api.dev.docintel.com"
 env: 
   NODE_ENV: "dev"
