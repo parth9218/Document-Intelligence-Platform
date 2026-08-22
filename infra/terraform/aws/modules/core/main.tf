@@ -45,6 +45,7 @@ module "storage" {
   region                 = data.aws_region.current.region
   account_id             = data.aws_caller_identity.current.account_id
   github_actions_ci_role = var.github_actions_ci_role
+  api_alb_dns_name       = var.api_alb_dns_name
 }
 
 module "ecr" {

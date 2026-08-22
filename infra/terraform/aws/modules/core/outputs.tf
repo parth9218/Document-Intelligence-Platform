@@ -31,3 +31,4 @@ output "ecr_repo_urls" {
 output "cloudfront_domain" {
   value = module.storage.cloudfront_domain
 }
+output "frontend_bucket_id" { value = module.storage.frontend_bucket_id }

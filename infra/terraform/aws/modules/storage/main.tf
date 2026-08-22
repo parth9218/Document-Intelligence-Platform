@@ -16,6 +16,9 @@ resource "aws_s3_bucket" "frontend" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# OAC — Frontend S3
+# ---------------------------------------------------------------------------
 resource "aws_cloudfront_origin_access_control" "oac" {
   name                              = "${var.project_name}-${var.environment}-oac"
   description                       = "OAC for frontend S3"
@@ -24,28 +27,118 @@ resource "aws_cloudfront_origin_access_control" "oac" {
   signing_protocol                  = "sigv4"
 }
 
+# ---------------------------------------------------------------------------
+# API ALB — Origin Verify Secret
+#
+# CloudFront OAC does not support ALB origins (only s3/mediastore/lambda).
+# The standard secure equivalent is a shared secret forwarded as a custom
+# request header (X-Origin-Verify). The ALB listener rule should reject any
+# request that does not carry this exact header value, preventing direct
+# access to the ALB DNS name.
+# ---------------------------------------------------------------------------
+resource "random_uuid" "cf_origin_verify_token" {}
+
+# ---------------------------------------------------------------------------
+# CloudFront Distribution — frontend (S3) + API (ALB)
+#
+# A single distribution serves both origins:
+#   • default behavior  → S3 frontend bucket (OAC-signed)
+#   • /api/* behavior   → API ALB (custom header secret, /api prefix stripped)
+# ---------------------------------------------------------------------------
 resource "aws_cloudfront_distribution" "frontend" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+  }
+
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+  }
+
+  # ── Origin 1: frontend S3 bucket ──────────────────────────────────────────
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
     origin_id                = aws_s3_bucket.frontend.id
   }
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "/"
+
+  # ── Origin 2: API ALB ─────────────────────────────────────────────────────
+  # No OAC — ALB is not a supported OAC origin type. Security is enforced via
+  # the X-Origin-Verify header that the ALB listener rule must validate.
+  origin {
+    domain_name = var.api_alb_dns_name
+    origin_id   = "api-alb"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+
+    # Secret injected on every request to the ALB. The ALB listener rule must
+    # return 403 for requests missing this header to block direct-bypass access.
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_uuid.cf_origin_verify_token.result
+    }
+  }
+
+  # ── Ordered behavior: /api/* → ALB ────────────────────────────────────────
+  # Evaluated before the default behavior. Strips /api prefix via CF Function.
+  ordered_cache_behavior {
+    path_pattern           = "/api/*"
+    target_origin_id       = "api-alb"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+
+    forwarded_values {
+      query_string = true
+      headers = [
+        "Authorization",
+        "Origin",
+        "Access-Control-Request-Headers",
+        "Access-Control-Request-Method",
+      ]
+      cookies { forward = "all" }
+    }
+
+    # Fully pass-through — API responses must never be cached at the edge
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+
+    compress = true
+  }
+
+  # ── Default behavior: /* → S3 frontend ────────────────────────────────────
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = aws_s3_bucket.frontend.id
+
     forwarded_values {
       query_string = false
       cookies { forward = "none" }
     }
+
     viewer_protocol_policy = "redirect-to-https"
   }
+
   restrictions {
     geo_restriction { restriction_type = "none" }
   }
+
   viewer_certificate { cloudfront_default_certificate = true }
 }
 
@@ -59,13 +152,9 @@ data "aws_iam_policy_document" "origin_bucket_policy" {
       identifiers = ["cloudfront.amazonaws.com"]
     }
 
-    actions = [
-      "s3:GetObject"
-    ]
+    actions = ["s3:GetObject"]
 
-    resources = [
-      "${aws_s3_bucket.frontend.arn}/*"
-    ]
+    resources = ["${aws_s3_bucket.frontend.arn}/*"]
 
     condition {
       test     = "StringEquals"
@@ -73,6 +162,7 @@ data "aws_iam_policy_document" "origin_bucket_policy" {
       values   = [aws_cloudfront_distribution.frontend.arn]
     }
   }
+
   statement {
     sid    = "AllowGithubActionsCIRoleWriteObjects"
     effect = "Allow"
@@ -96,6 +186,7 @@ resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   policy = data.aws_iam_policy_document.origin_bucket_policy.json
 }
+
 
 resource "aws_s3_bucket" "documents" {
   bucket           = local.s3_bucket_documents

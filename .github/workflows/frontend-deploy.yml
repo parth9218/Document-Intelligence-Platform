@@ -1,0 +1,83 @@
+name: Deploy Frontend Static Assets
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'apps/frontend/**'
+  pull_request:
+    types: [closed]
+    branches:
+      - dev
+    paths:
+      - 'apps/frontend/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-frontend:
+    if: ${{ github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:  
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Fetch Terraform Outputs
+        id: tf-outputs
+        working-directory: infra/terraform/aws/environments/dev
+        run: |
+          terraform init -upgrade
+          CF_DOMAIN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "")
+          FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_id 2>/dev/null || echo "")
+          
+          if [ -z "$CF_DOMAIN" ] || [ -z "$FRONTEND_BUCKET" ] || [[ "$CF_DOMAIN" == *"No outputs found"* ]]; then
+            echo "::error::Infrastructure does not exist yet or outputs are missing. Skipping deployment."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "cloudfront_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        if: steps.tf-outputs.outputs.skip == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install Dependencies
+        if: steps.tf-outputs.outputs.skip == 'false'
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Build Frontend
+        if: steps.tf-outputs.outputs.skip == 'false'
+        working-directory: apps/frontend
+        run: |
+          sed -i "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://${{ steps.tf-outputs.outputs.cloudfront_domain }}/api|g" .env.production
+          npm run build:prod
+
+      - name: Deploy to S3
+        if: steps.tf-outputs.outputs.skip == 'false'
+        working-directory: apps/frontend
+        run: aws s3 sync out s3://${{ steps.tf-outputs.outputs.frontend_bucket }} --delete

@@ -12,6 +12,10 @@ on:
         description: 'Environment to deploy (dev or prod)'
         required: true
         default: 'dev'
+      trigger_k8s:
+        description: 'Whether to trigger the K8s workflow (Set it to false for initial AWS infrastructure deployment)'
+        required: true
+        default: false
 
 concurrency:
   group: deploy-aws-${{ inputs.environment || 'dev' }}
@@ -71,6 +75,17 @@ jobs:
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         run: terraform init -upgrade
 
+      - name: Fetch K8s API ALB DNS
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform init -upgrade
+          DNS=$(terraform output -raw api_alb_dns 2>/dev/null || echo "")
+          if [ -n "$DNS" ] && [ "$DNS" != "No outputs found" ]; then
+            echo "TF_VAR_api_alb_dns_name=$DNS" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_api_alb_dns_name=dummy.alb.dns" >> $GITHUB_ENV
+          fi
+
       - name: Terraform Apply
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         env:
@@ -90,13 +105,18 @@ jobs:
 
   trigger-k8s:
     needs: deploy-aws
+    if: ${{ inputs.trigger_k8s != 'false' }}
     # Trigger the reusable k8s workflow, passing outputs from AWS as inputs
     uses: ./.github/workflows/k8s-deploy.yml
     with:
-      environment: ${{ inputs.environment || 'dev' }}
-      cluster_name: ${{ needs.deploy-aws.outputs.eks_cluster_name }}
-      vpc_id: ${{ needs.deploy-aws.outputs.vpc_id }}
-      api_domain: ${{ vars.TF_API_HOSTNAME }}
-      acm_cert_arn: ${{ needs.deploy-aws.outputs.acm_cert_arn }}
-      ssm_parameters_name: ${{ needs.deploy-aws.outputs.ssm_parameters_name }}
-      ssm_secrets_name: ${{ needs.deploy-aws.outputs.ssm_secrets_name }}
+      environment:            ${{ inputs.environment || 'dev' }}
+      cluster_name:           ${{ needs.deploy-aws.outputs.eks_cluster_name }}
+      vpc_id:                 ${{ needs.deploy-aws.outputs.vpc_id }}
+      api_domain:             ${{ vars.TF_API_HOSTNAME }}
+      acm_cert_arn:           ${{ needs.deploy-aws.outputs.acm_cert_arn }}
+      ssm_parameters_name:    ${{ needs.deploy-aws.outputs.ssm_parameters_name }}
+      ssm_secrets_name:       ${{ needs.deploy-aws.outputs.ssm_secrets_name }}
+      project_name:           ${{ vars.TF_PROJECT_NAME }}
+      github_repository_url:  ${{ vars.TF_GITHUB_REPOSITORY_URL }}
+      target_revision:        ${{ vars.TF_TARGET_REVISION }}
+    secrets: inherit

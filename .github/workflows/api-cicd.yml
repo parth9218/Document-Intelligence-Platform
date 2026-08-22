@@ -1,0 +1,30 @@
+name: API CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'apps/api/**'
+  pull_request:
+    types: [closed]
+    branches:
+      - dev
+    paths:
+      - 'apps/api/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  deploy-api:
+    if: ${{ github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/reusable-docker-helm-cicd.yml
+    with:
+      app_name: 'api'
+      app_path: './apps/api'
+      helm_values_path: 'infra/k8s/helm/api/values.dev.yaml'

@@ -25,3 +25,6 @@ variable "environment" {
 variable "github_repository_url" {
   type = string
 }
+variable "targetRevision" {
+  type = string
+}

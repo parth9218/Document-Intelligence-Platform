@@ -41,3 +41,4 @@ USER 1001
 
 # Run the worker daemon
 CMD ["python", "main.py"]
+

@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/tls",
       version = ">= 4.3.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.6.0"
+    }
   }
 }
 provider "aws" {
@@ -31,5 +35,6 @@ module "core" {
   api_hostname           = var.api_hostname
   github_actions_ci_role = var.github_actions_ci_role
   admin_user_arns        = var.admin_user_arns
+  api_alb_dns_name       = var.api_alb_dns_name
 }
 

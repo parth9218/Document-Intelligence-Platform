@@ -34,3 +34,5 @@ env:
 
 gateway:
   name: "docintel-dev-api-gateway"
+  namespace: "default"
+  hostname: "api.dev.docintel.com"
