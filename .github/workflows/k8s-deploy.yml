@@ -2,6 +2,8 @@ name: Deploy K8s Infrastructure
 
 on:
   push:
+    branches:
+      - dev
     paths:
       - 'infra/terraform/k8s/**'
   workflow_dispatch:
@@ -10,40 +12,6 @@ on:
         description: 'Environment to deploy (dev or prod)'
         required: true
         default: 'dev'
-      cluster_name:
-        description: 'EKS Cluster Name'
-        required: true
-        default: ${{ vars.TF_EKS_CLUSTER_NAME }}
-      vpc_id:
-        description: 'VPC ID'
-        required: true
-      api_domain:
-        description: 'API Domain'
-        required: true
-        default: ${{ vars.TF_API_HOSTNAME }}
-      acm_cert_arn:
-        description: 'ACM Certificate ARN'
-        required: true
-      ssm_parameters_name:
-        description: 'SSM Parameters Name'
-        required: true
-        default: '/docintel/dev/parameters'
-      ssm_secrets_name:
-        description: 'SSM Secrets Name'
-        required: true
-        default: '/docintel/dev/secrets'
-      project_name:
-        description: 'Project name prefix'
-        required: true
-        default: ${{ vars.TF_PROJECT_NAME }}
-      github_repository_url:
-        description: 'GitHub repository URL (for ArgoCD ApplicationSet)'
-        required: true
-        default: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
-      target_revision:
-        description: 'Git branch/tag ArgoCD should track'
-        required: true
-        default: ${{ vars.TF_TARGET_REVISION }}
   workflow_call:
     inputs:
       environment:
@@ -127,7 +95,7 @@ jobs:
       - name: Check if AWS was also modified
         uses: dorny/paths-filter@v4
         id: filter
-        if: inputs.cluster_name == ''
+        if: inputs.cluster_name == '' && github.event_name != 'workflow_dispatch'
         with:
           # Change to the real base branch 
           base: dev
@@ -135,12 +103,12 @@ jobs:
             aws:
               - 'infra/terraform/aws/**'
 
-      - name: Check AWS Infrastructure (Push Event)
+      - name: Check AWS Infrastructure
         id: aws-check
         if: inputs.cluster_name == ''
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         run: |
-          if [ "${{ steps.filter.outputs.aws }}" == "true" ]; then
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "${{ steps.filter.outputs.aws }}" == "true" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "AWS infrastructure changes detected in the same commit. Deferring to aws-deploy workflow to avoid race conditions."
             exit 0
