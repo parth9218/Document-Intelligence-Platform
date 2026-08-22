@@ -9,8 +9,6 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
-  hostnames:
-    - {{ .Values.gateway.hostname }}
   rules:
     - matches:
         - path:

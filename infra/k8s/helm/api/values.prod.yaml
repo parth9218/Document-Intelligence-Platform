@@ -15,7 +15,6 @@ gateway:
   name: "docintel-prod-api-gateway"
   namespace: "default"
   listenerName: "https"
-  hostname: "api.docintel.com"
 
 env:
   NODE_ENV: "prod"
