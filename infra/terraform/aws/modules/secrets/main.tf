@@ -26,7 +26,7 @@ resource "aws_ssm_parameter" "parameters" {
     DB_USER             = var.db_username
     DB_SSL              = "true"
     S3_BUCKET           = var.s3_bucket
-    CORS_ALLOWED_ORIGIN = var.cloudfront_domain
+    CORS_ALLOWED_ORIGIN = "https://${var.cloudfront_domain}"
 
     EMBEDDING_PROVIDER = ""
     EMBEDDING_MODEL    = ""

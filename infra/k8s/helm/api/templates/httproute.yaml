@@ -15,7 +15,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /api
+            value: {{ .Values.httproute.pathPrefix }}
       filters:
         # Strip the /api prefix before forwarding to the backend service.
         # ReplacePrefixMatch replaces only the matched prefix segment:

@@ -17,6 +17,8 @@ container:
   secrets-object: ""
   parameters-object: ""
 
+httproute:
+  pathPrefix: "/api"
 serviceAccount:
   annotations: {}
 
