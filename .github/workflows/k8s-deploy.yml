@@ -13,33 +13,37 @@ on:
       cluster_name:
         description: 'EKS Cluster Name'
         required: true
+        default: ${{ vars.TF_EKS_CLUSTER_NAME }}
       vpc_id:
         description: 'VPC ID'
         required: true
       api_domain:
         description: 'API Domain'
         required: true
-        default: 'api.docintel.com'
+        default: ${{ vars.TF_API_HOSTNAME }}
       acm_cert_arn:
         description: 'ACM Certificate ARN'
         required: true
       ssm_parameters_name:
         description: 'SSM Parameters Name'
         required: true
+        default: '/docintel/dev/parameters'
       ssm_secrets_name:
         description: 'SSM Secrets Name'
         required: true
+        default: '/docintel/dev/secrets'
       project_name:
         description: 'Project name prefix'
         required: true
-        default: 'docintel'
+        default: ${{ vars.TF_PROJECT_NAME }}
       github_repository_url:
         description: 'GitHub repository URL (for ArgoCD ApplicationSet)'
         required: true
+        default: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
       target_revision:
         description: 'Git branch/tag ArgoCD should track'
         required: true
-        default: 'dev'
+        default: ${{ vars.TF_TARGET_REVISION }}
   workflow_call:
     inputs:
       environment:
@@ -245,7 +249,7 @@ jobs:
         env:
           TF_VAR_api_alb_dns_name:       ${{ steps.alb-address.outputs.alb_dns }}
           TF_VAR_project_name:           ${{ vars.TF_PROJECT_NAME }}
-          TF_VAR_environment:            ${{ env.ENV }}
+          TF_VAR_environment:            ${{ inputs.environment || 'dev' }}
           TF_VAR_vpc_cidr:               ${{ vars.TF_VPC_CIDR }}
           TF_VAR_db_name:                ${{ vars.TF_DB_NAME }}
           TF_VAR_db_username:            ${{ secrets.TF_DB_USERNAME }}
