@@ -8,7 +8,7 @@ from app.services.storage_service import get_storage_provider
 from app.services.chunker import ChunkerService, Chunk
 from app.services.embeddings import get_embedding_provider
 from app.errors import PermanentFailure
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 
 class DocumentService:
     @staticmethod
@@ -116,7 +116,7 @@ class DocumentService:
                 try:
                     JobRepository.upsert_chunks(db, chunks_data)
                 except Exception as db_err:
-                    logger.error(
+                    log_exception(
                         f"[Service] Database persistence failed for batch {batch_idx}: {db_err}",
                         extra={"document_id": document_id}
                     )
@@ -149,4 +149,4 @@ class DocumentService:
                     os.remove(temp_path)
                     logger.info(f"[Service] Cleaned up temporary file: {temp_path}")
                 except Exception as cleanup_err:
-                    logger.error(f"[Service] Failed to delete temp file {temp_path}: {cleanup_err}")
+                    log_exception(f"[Service] Failed to delete temp file {temp_path}: {cleanup_err}")

@@ -5,7 +5,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from app.models.db import get_db
 from app.repositories.job_repository import JobRepository
 from app.services.document_service import DocumentService
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 
 from app.errors import PermanentFailure, TransientFailure
 
@@ -52,8 +52,8 @@ class JobHandler:
                 db.commit()
         except (NoResultFound, IntegrityError) as db_err:
             # Likely session expired and cascades deleted the rows
-            logger.error(
-                f"[Handler] DB Integrity issue during initialization: {db_err}", 
+            log_exception(
+                f"[Handler] DB Integrity issue during initialization: {db_err}",
                 extra={"document_id": document_id}
             )
             # Throw permanent failure to discard from SQS
@@ -74,8 +74,8 @@ class JobHandler:
             )
 
         except PermanentFailure as pf:
-            logger.error(
-                f"[Handler] Permanent failure encountered: {pf.message}", 
+            log_exception(
+                f"[Handler] Permanent failure encountered: {pf.message}",
                 extra={"document_id": document_id, "error_code": pf.error_code}
             )
             with get_db() as db:
@@ -84,8 +84,8 @@ class JobHandler:
             # Do not re-throw, handle successfully at application layer (delete from SQS)
             
         except Exception as e:
-            logger.error(
-                f"[Handler] Transient or unhandled exception encountered: {str(e)}", 
+            log_exception(
+                f"[Handler] Transient or unhandled exception encountered: {str(e)}",
                 extra={"document_id": document_id}
             )
             # Re-throw as TransientFailure to let visibility timeout expire
@@ -107,4 +107,4 @@ class JobHandler:
                 )
                 db.commit()
         except Exception as e:
-            logger.error(f"[Handler] Failed to update DB for DLQ document: {e}")
+            log_exception(f"[Handler] Failed to update DB for DLQ document: {e}")

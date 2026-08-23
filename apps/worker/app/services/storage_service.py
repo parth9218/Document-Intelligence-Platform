@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from app.clients.s3_client import S3Client
 from app.config.settings import settings
 from app.errors import PermanentFailure
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 
 class StorageProvider(ABC):
     @abstractmethod
@@ -72,7 +72,7 @@ class S3StorageProvider(StorageProvider):
             temp_file.close()
             if os.path.exists(temp_file.name):
                 os.remove(temp_file.name)
-            logger.error(f"[S3Storage] Failed to download S3 file: {e}")
+            log_exception(f"[S3Storage] Failed to download S3 file: {e}")
             raise e
 
 def get_storage_provider() -> StorageProvider:

@@ -5,9 +5,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.config.settings import settings
 from app.models.generated_models import Base
 import boto3
-import logging
-
-logger = logging.getLogger(__name__)
+from app.utils.logger import logger, log_exception
 
 # Initialize SQLAlchemy Engine
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
@@ -31,7 +29,7 @@ if settings.DB_IAM_AUTH_ENABLED:
             cparams["sslmode"] = "verify-full" if settings.DB_SSL else "disable"
             cparams["sslrootcert"] = settings.DB_SSL_ROOT_CERT if settings.DB_SSL else None
         except Exception as e:
-            logger.error(f"Failed to generate RDS IAM token: {e}")
+            log_exception(f"Failed to generate RDS IAM token: {e}")
             raise
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

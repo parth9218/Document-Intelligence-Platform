@@ -3,7 +3,7 @@ from typing import Callable
 from app.clients.sqs_client import SqsClient
 from app.handlers.job_handler import JobHandler
 from app.errors import PermanentFailure, TransientFailure
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 
 class SqsConsumer:
     def __init__(self, sqs_client: SqsClient, job_handler: JobHandler):
@@ -64,10 +64,10 @@ class SqsConsumer:
                 )
 
         except json.JSONDecodeError as je:
-            logger.error(f"[Consumer] SQS Message body is not valid JSON: {je}. Deleting message.")
+            log_exception(f"[Consumer] SQS Message body is not valid JSON: {je}. Deleting message.")
             self.client.delete_message(queue_url, receipt_handle)
         except Exception as e:
-            logger.error(f"[Consumer] Unhandled exception processing message: {e}")
+            log_exception(f"[Consumer] Unhandled exception processing message: {e}")
 
     def start_consuming(self, queue_url: str, should_shutdown: Callable[[], bool]) -> None:
         """Poll the SQS main queue continuously until shutdown is requested."""
@@ -87,7 +87,7 @@ class SqsConsumer:
                     
             except Exception as e:
                 if not should_shutdown():
-                    logger.error(f"[Consumer] Error in polling cycle: {e}")
+                    log_exception(f"[Consumer] Error in polling cycle: {e}")
                     # Brief cooling sleep to prevent aggressive loops on persistent SQS connection errors
                     import time
                     time.sleep(2)
