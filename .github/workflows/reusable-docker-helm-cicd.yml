@@ -19,6 +19,9 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      ecr_repo_url: ${{ steps.set-outputs.outputs.ecr_repo_url }}
+      short_sha: ${{ steps.set-outputs.outputs.short_sha }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -53,7 +56,23 @@ jobs:
       - name: Get Short SHA
         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
+      - name: Check if Image Tag Already Exists in ECR
+        id: ecr-check
+        run: |
+          TAG_EXISTS=$(aws ecr describe-images \
+            --repository-name "$(echo "${{ env.ECR_REPO_URL }}" | cut -d'/' -f2)" \
+            --image-ids imageTag=${{ env.SHORT_SHA }} \
+            --query 'imageDetails[0].imageTags[0]' \
+            --output text 2>/dev/null || echo "")
+          if [ "$TAG_EXISTS" = "${{ env.SHORT_SHA }}" ]; then
+            echo "Image ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }} already exists in ECR. Skipping build and push."
+            echo "skip_push=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_push=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and Push Docker Image
+        if: steps.ecr-check.outputs.skip_push == 'false'
         uses: docker/build-push-action@v4
         with:
           context: ${{ inputs.app_path }}
@@ -64,24 +83,22 @@ jobs:
           build-args: |
             ENVIRONMENT=dev
 
-      - name: Update Helm Chart Values
+      - name: Set Outputs
+        id: set-outputs
         run: |
-          sed -i "s|repository: .*|repository: \"${{ env.ECR_REPO_URL }}\"|" ${{ inputs.helm_values_path }}
-          sed -i "s|tag: .*|tag: \"${{ env.SHORT_SHA }}\"|" ${{ inputs.helm_values_path }}
+          echo "ecr_repo_url=${{ env.ECR_REPO_URL }}" >> $GITHUB_OUTPUT
+          echo "short_sha=${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
 
-      - name: Commit and Push Changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ${{ inputs.helm_values_path }}
-          git commit -m "Update ${{ inputs.app_name }} image to ${{ env.SHORT_SHA }} [skip ci]" \
-                         -m "Triggered by: ${{ github.actor }}" \
-                         -m "Original Commit: ${{ github.sha }}" \
-                         -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-              || echo "No changes to commit"
-          git push origin HEAD
-
-      - name: Trigger ArgoCD Sync
-        run: |
-          echo "Image pushed successfully to ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}."
-          echo "Manifest updated and pushed! ArgoCD should sync the changes automatically."
+  # Calls the dedicated GitOps commit workflow as a nested reusable job.
+  # The concurrency group inside gitops-commit.yml is a global string that
+  # serializes this job across ALL service workflow invocations — api, worker,
+  # or any future service — without throttling any build/push work above.
+  gitops:
+    needs: build-and-push
+    uses: ./.github/workflows/gitops-commit.yml
+    with:
+      app_name: ${{ inputs.app_name }}
+      helm_values_path: ${{ inputs.helm_values_path }}
+      ecr_repo_url: ${{ needs.build-and-push.outputs.ecr_repo_url }}
+      short_sha: ${{ needs.build-and-push.outputs.short_sha }}
+    secrets: inherit
