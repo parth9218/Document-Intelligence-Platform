@@ -57,4 +57,10 @@ resource "helm_release" "argocd" {
   create_namespace           = true
   timeout                    = 600
   disable_openapi_validation = true
+  # ArgoCD installs CRD-backed resources (Application, AppProject, etc.) that
+  # Helm cannot verify as "ready" until the CRD controllers fully initialize.
+  # This causes a false "failed" status even when all pods are healthy.
+  # Setting wait=false tells Helm to submit resources and return without
+  # blocking on readiness — ArgoCD's own health checks are the source of truth.
+  wait = false
 }
