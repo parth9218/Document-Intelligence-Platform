@@ -1,69 +1,81 @@
+import winston from 'winston';
 import { config } from '../config';
 
-export enum LogLevel {
-  DEBUG = 'DEBUG',
-  INFO = 'INFO',
-  WARN = 'WARN',
-  ERROR = 'ERROR',
-}
+// ── Formats ────────────────────────────────────────────────────────────────
 
-class StructuredLogger {
-  private getTimestamp(): string {
-    return new Date().toISOString();
-  }
+/**
+ * Production: structured JSON, one line per log record.
+ * Includes `timestamp`, `level`, `message`, and any `meta` passed by the caller.
+ */
+const jsonFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.errors({ stack: false }), // stack controlled per-call below
+  winston.format.json(),
+);
 
-  private formatMessage(level: LogLevel, message: string, meta?: any): string {
-    const logData = {
-      timestamp: this.getTimestamp(),
-      level,
-      message,
-      ...(meta ? { metadata: meta } : {}),
-    };
+/**
+ * Development: human-readable colorized output.
+ * Example: 2026-08-23T14:00:00Z [INFO ] API Server is running on port 3000
+ */
+const devFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.colorize({ all: true }),
+  winston.format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = Object.keys(meta).length ? ` | ${JSON.stringify(meta)}` : '';
+    return `[${timestamp}] ${level.padEnd(5)} | ${message}${metaStr}`;
+  }),
+);
 
-    if (config.nodeEnv === 'prod') {
-      return JSON.stringify(logData);
-    }
+// ── Winston instance ────────────────────────────────────────────────────────
 
-    // Colorized console formatting for local development
-    const colors = {
-      reset: '\x1b[0m',
-      DEBUG: '\x1b[36m', // Cyan
-      INFO: '\x1b[32m',  // Green
-      WARN: '\x1b[33m',  // Yellow
-      ERROR: '\x1b[31m', // Red
-    };
+const winstonLogger = winston.createLogger({
+  level: config.debugLog ? 'debug' : 'info',
+  format: config.nodeEnv === 'prod' ? jsonFormat : devFormat,
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
 
-    const color = colors[level] || colors.reset;
-    const metaStr = meta ? ` | Meta: ${JSON.stringify(meta)}` : '';
-    return `[${logData.timestamp}] ${color}${level.padEnd(5)}${colors.reset} | ${message}${metaStr}`;
-  }
+// ── Public logger facade ────────────────────────────────────────────────────
+// Preserves the same call signature used across the entire codebase:
+//   logger.debug(message, meta?)
+//   logger.info(message, meta?)
+//   logger.warn(message, meta?)
+//   logger.error(message, error?, meta?)
+// No import changes required in any other file.
 
-  public debug(message: string, meta?: any): void {
-    if (config.nodeEnv !== 'prod' || process.env.LOG_LEVEL === 'DEBUG') {
-      console.debug(this.formatMessage(LogLevel.DEBUG, message, meta));
-    }
-  }
+export const logger = {
+  debug(message: string, meta?: Record<string, unknown>): void {
+    winstonLogger.debug(message, meta);
+  },
 
-  public info(message: string, meta?: any): void {
-    console.info(this.formatMessage(LogLevel.INFO, message, meta));
-  }
+  info(message: string, meta?: Record<string, unknown>): void {
+    winstonLogger.info(message, meta);
+  },
 
-  public warn(message: string, meta?: any): void {
-    console.warn(this.formatMessage(LogLevel.WARN, message, meta));
-  }
+  warn(message: string, meta?: Record<string, unknown>): void {
+    winstonLogger.warn(message, meta);
+  },
 
-  public error(message: string, error?: any, meta?: any): void {
-    const errorDetails = error instanceof Error 
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : error;
+  /**
+   * Log an error. When `DEBUG_LOG=true` the full stack trace from `error` is
+   * included in the output; otherwise only `error.name` and `error.message`
+   * are emitted, keeping production logs concise.
+   */
+  error(message: string, error?: unknown, meta?: Record<string, unknown>): void {
+    const includeStack = config.debugLog;
 
-    const consolidatedMeta = {
-      ...(errorDetails ? { error: errorDetails } : {}),
-      ...(meta || {}),
-    };
+    const errorMeta: Record<string, unknown> =
+      error instanceof Error
+        ? {
+            errorName: error.name,
+            errorMessage: error.message,
+            ...(includeStack && error.stack ? { stack: error.stack } : {}),
+          }
+        : error != null
+          ? { error }
+          : {};
 
-    console.error(this.formatMessage(LogLevel.ERROR, message, consolidatedMeta));
-  }
-}
-
-export const logger = new StructuredLogger();
+    winstonLogger.error(message, { ...errorMeta, ...meta });
+  },
+};

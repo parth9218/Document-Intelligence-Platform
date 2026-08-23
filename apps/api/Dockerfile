@@ -35,6 +35,7 @@ COPY --chown=1001:1001 --from=builder /app/swagger.json ./swagger.json
 
 ENV PORT=3000
 ENV NODE_ENV=production
+ENV DEBUG_LOG=false
 
 EXPOSE ${PORT}
 

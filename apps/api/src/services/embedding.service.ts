@@ -85,7 +85,7 @@ export class LocalEmbeddingProvider implements IEmbeddingProvider {
         logger.info(`[LocalEmbeddingProvider] Initializing local embedding pipeline (${modelName})...`);
         this.extractor = await pipeline('feature-extraction', modelName);
       } catch (err: any) {
-        logger.debug(`[LocalEmbeddingProvider] Native feature extraction unavailable (${err.message}). Using deterministic vector generator.`);
+        logger.error(`[LocalEmbeddingProvider] Native feature extraction unavailable (${err.message}). Using deterministic vector generator.`);
         this.extractor = 'fallback';
       }
     }

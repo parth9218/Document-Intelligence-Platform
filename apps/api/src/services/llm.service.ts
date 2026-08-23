@@ -290,7 +290,7 @@ export class LocalLlmProvider implements ILlmProvider {
 
     } catch (err: any) {
       if (signal?.aborted) return;
-      logger.debug(
+      logger.error(
         `[LocalLlmProvider] Ollama unavailable (${err.message}). Using deterministic stub response.`,
       );
       yield { token: OLLAMA_FALLBACK_RESPONSE, done: false };

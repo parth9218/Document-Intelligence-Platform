@@ -81,4 +81,8 @@ export const config = {
     // Maximum output tokens for the LLM response
     maxTokens: parseInt(process.env.LLM_MAX_TOKENS || '1024', 10),
   },
+
+  // When true, logger.error() includes the full stack trace and the Winston
+  // log level is lowered to 'debug'. Set DEBUG_LOG=true to enable.
+  debugLog: process.env.DEBUG_LOG === 'true',
 };
