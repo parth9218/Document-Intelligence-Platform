@@ -137,9 +137,11 @@ export class BedrockLlmProvider implements ILlmProvider {
     const requestBody = JSON.stringify({
       schemaVersion: "messages-v1",
       inferenceConfig: inf_params,
-      system: {
-        text: systemPrompt
-      },
+      system: [
+        {
+          text: systemPrompt
+        }
+      ],
       messages: [
         { 
           role: 'user', 
