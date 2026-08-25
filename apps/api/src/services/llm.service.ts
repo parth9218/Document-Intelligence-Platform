@@ -127,11 +127,29 @@ export class BedrockLlmProvider implements ILlmProvider {
     userMessage: string,
     signal?: AbortSignal,
   ): AsyncGenerator<StreamChunk> {
+    const inf_params = {
+      maxTokens: config.llm.maxTokens, 
+      topP: config.llm.topP, 
+      topK: config.llm.topK, 
+      temperature: config.llm.temperature
+    }
+
     const requestBody = JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: config.llm.maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      schemaVersion: "messages-v1",
+      inferenceConfig: inf_params,
+      system: {
+        text: systemPrompt
+      },
+      messages: [
+        { 
+          role: 'user', 
+          content: [
+            {
+              text: userMessage
+            }
+          ] 
+        }
+      ]
     });
 
     const maxAttempts = 3;
