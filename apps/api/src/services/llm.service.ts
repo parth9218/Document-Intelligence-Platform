@@ -180,11 +180,21 @@ export class BedrockLlmProvider implements ILlmProvider {
 
           if (event.chunk?.bytes) {
             const decoded = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
+            logger.debug('[BedrockLlmProvider] Nova stream event', { event_keys: Object.keys(decoded) });
 
-            if (decoded.type === 'content_block_delta' && decoded.delta?.type === 'text_delta') {
-              yield { token: decoded.delta.text as string, done: false };
+            // Amazon Nova streaming format (InvokeModelWithResponseStream):
+            // Text tokens arrive as: { contentBlockDelta: { delta: { text: "..." }, contentBlockIndex: N } }
+            if (decoded.contentBlockDelta?.delta?.text !== undefined) {
+              yield { token: decoded.contentBlockDelta.delta.text as string, done: false };
             }
-            if (decoded.type === 'message_stop') break;
+
+            // Stream termination event: { messageStop: { stopReason: "end_turn" | "max_tokens" | ... } }
+            if (decoded.messageStop) {
+              logger.debug('[BedrockLlmProvider] Received messageStop from Nova', {
+                stopReason: decoded.messageStop.stopReason,
+              });
+              break;
+            }
           }
 
           if (event.internalServerException) {
