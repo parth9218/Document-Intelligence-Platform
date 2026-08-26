@@ -21,7 +21,8 @@ data "aws_iam_policy_document" "api_policy" {
   }
   statement {
     actions = [
-      "bedrock:InvokeModel"
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
     ]
     resources = ["*"]
   }
