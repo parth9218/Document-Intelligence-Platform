@@ -26,6 +26,8 @@ keda:
   queueLength: "3"
   minReplicaCount: 0
   maxReplicaCount: 5
+  pollingInterval:  30
+  cooldownPeriod:   300
 
 serviceAccount: {}
 
