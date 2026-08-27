@@ -18,3 +18,7 @@ gateway:
   listenerName: "https"
 env: 
   NODE_ENV: "dev"
+
+keda:
+  minReplicaCount: 1
+  maxReplicaCount: 5
