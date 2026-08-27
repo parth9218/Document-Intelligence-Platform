@@ -79,3 +79,19 @@ resource "helm_release" "keda" {
   }]
   wait = false
 }
+
+resource "helm_release" "keda-add-ons-http" {
+  depends_on = [helm_release.keda]
+
+  name             = "keda-add-ons-http"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda-add-ons-http"
+  create_namespace = true
+  version          = "0.15.0"
+  set = [{
+    name  = "crds.install"
+    value = true
+  }]
+
+  wait = false
+}
