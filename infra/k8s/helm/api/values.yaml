@@ -20,11 +20,6 @@ container:
 httproute:
   pathPrefix: "/api"
 
-# Change to reflect region and account-id
-aws:
-  region: us-east-1
-  accountId: "389642461016"
-
 keda:
   targetValue: 5
   window: 1m
