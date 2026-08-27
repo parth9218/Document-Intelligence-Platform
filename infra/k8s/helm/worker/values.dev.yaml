@@ -6,7 +6,7 @@ replicaCount: 1
 container: 
   image:
     repository: "389642461016.dkr.ecr.us-east-1.amazonaws.com/docintel-dev-worker"
-    tag: "0646d64"
+    tag: "5efd920"
     pullPolicy: "Always"
   secrets-provider-class: "docintel-dev-secrets-class"
   secrets-object: "docintel-dev-secrets"
