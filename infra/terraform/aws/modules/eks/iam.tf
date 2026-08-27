@@ -143,7 +143,10 @@ data "aws_iam_policy_document" "worker_assume_role_policy" {
       type        = "AWS"
       identifiers = [aws_iam_role.keda_operator_role.arn]
     }
-    actions = ["sts:AssumeRole"]
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
   }
 }
 
@@ -224,7 +227,10 @@ resource "aws_iam_role" "keda_operator_role" {
 
 data "aws_iam_policy_document" "keda_assume_workload" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
     resources = [
       aws_iam_role.worker_role.arn
     ]
