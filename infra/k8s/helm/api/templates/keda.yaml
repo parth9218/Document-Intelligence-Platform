@@ -7,6 +7,9 @@ spec:
   target:
     service: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
     port: {{ .Values.service.port }}
+  rules:
+  - paths:
+    - value: "/"
   scalingMetric:
     requestRate:
       targetValue: {{ .Values.keda.targetValue }}
