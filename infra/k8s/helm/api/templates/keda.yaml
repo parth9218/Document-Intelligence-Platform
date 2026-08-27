@@ -5,8 +5,8 @@ metadata:
   namespace: default
 spec:
   target:
-    - name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
-      port: {{ .Values.service.port }}
+    service: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
+    port: {{ .Values.service.port }}
   scalingMetric:
     requestRate:
       targetValue: {{ .Values.keda.targetValue }}
