@@ -1,13 +1,3 @@
-apiVersion: keda.sh/v1alpha1
-kind: TriggerAuthentication
-metadata:
-  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-keda-auth-aws
-  namespace: default
-spec:
-  podIdentity:
-    provider: aws
-    roleArn: "{{ if .Values.keda.roleArn }}{{ .Values.keda.roleArn }}{{ else }}arn:aws:iam::{{ .Values.aws.accountId }}:role/{{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-role{{ end }}"
----
 apiVersion: http.keda.sh/v1beta1
 kind: InterceptorRoute
 metadata:
