@@ -64,3 +64,17 @@ resource "helm_release" "argocd" {
   # blocking on readiness — ArgoCD's own health checks are the source of truth.
   wait = false
 }
+
+# KEDA 
+resource "helm_release" "keda" {
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = "2.20.2"
+  namespace        = "keda"
+  create_namespace = true
+  set = [{
+    name  = "crds.install"
+    value = true
+  }]
+}
