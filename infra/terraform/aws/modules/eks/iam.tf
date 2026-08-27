@@ -243,3 +243,10 @@ resource "aws_eks_pod_identity_association" "keda_operator" {
   service_account = "keda-operator"
   role_arn        = aws_iam_role.keda_operator_role.arn
 }
+
+resource "aws_eks_pod_identity_association" "keda_metrics_server" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "keda"
+  service_account = "keda-metrics-server"
+  role_arn        = aws_iam_role.keda_operator_role.arn
+}
