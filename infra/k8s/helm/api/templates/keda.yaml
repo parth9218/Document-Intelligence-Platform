@@ -1,0 +1,43 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-keda-auth-aws
+  namespace: default
+spec:
+  podIdentity:
+    provider: aws
+    roleArn: "{{ if .Values.keda.roleArn }}{{ .Values.keda.roleArn }}{{ else }}arn:aws:iam::{{ .Values.aws.accountId }}:role/{{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-role{{ end }}"
+---
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-interceptor-route
+  namespace: default
+spec:
+  target:
+    - name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
+      port: {{ .Values.service.port }}
+  scalingMetric:
+    requestRate:
+      targetValue: {{ .Values.keda.targetValue }}
+      window: {{ .Values.keda.window }}
+      granularity: {{ .Values.keda.granularity }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-http-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-deployment
+    kind: Deployment
+    apiVersion: apps/v1
+    envSourceContainerName: {{ .Values.appName }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-interceptor-route
