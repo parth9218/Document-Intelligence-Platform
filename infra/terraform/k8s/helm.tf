@@ -77,4 +77,5 @@ resource "helm_release" "keda" {
     name  = "crds.install"
     value = true
   }]
+  wait = false
 }
