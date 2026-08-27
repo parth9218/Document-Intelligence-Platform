@@ -127,9 +127,29 @@ data "aws_iam_policy_document" "assume-role-policy-document" {
   }
 }
 
+data "aws_iam_policy_document" "worker_assume_role_policy" {
+  statement {
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
+  }
+  statement {
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.keda_operator_role.arn]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
 resource "aws_iam_role" "worker_role" {
   name               = "${var.project_name}-${var.environment}-worker-role"
-  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
+  assume_role_policy = data.aws_iam_policy_document.worker_assume_role_policy.json
 }
 
 resource "aws_iam_role" "api_role" {
@@ -194,4 +214,32 @@ resource "aws_eks_pod_identity_association" "alb_controller" {
   namespace       = "kube-system"
   service_account = "aws-load-balancer-controller"
   role_arn        = aws_iam_role.alb_controller.arn
+}
+
+# KEDA Operator Role for assuming workload identities
+resource "aws_iam_role" "keda_operator_role" {
+  name               = "${var.project_name}-${var.environment}-keda-operator-role"
+  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
+}
+
+data "aws_iam_policy_document" "keda_assume_workload" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    resources = [
+      aws_iam_role.worker_role.arn
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "keda_assume_workload" {
+  name   = "KEDAAssumeWorkloadRole"
+  role   = aws_iam_role.keda_operator_role.id
+  policy = data.aws_iam_policy_document.keda_assume_workload.json
+}
+
+resource "aws_eks_pod_identity_association" "keda_operator" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "keda"
+  service_account = "keda-operator"
+  role_arn        = aws_iam_role.keda_operator_role.arn
 }
