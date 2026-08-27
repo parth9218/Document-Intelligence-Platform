@@ -20,5 +20,8 @@ env:
   NODE_ENV: "prod"
 
 keda:
+  targetValue: 5
+  window: 1m
+  granularity: 10s
   minReplicaCount: 1
   maxReplicaCount: 10

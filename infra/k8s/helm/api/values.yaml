@@ -26,6 +26,9 @@ aws:
   accountId: "389642461016"
 
 keda:
+  targetValue: 5
+  window: 1m
+  granularity: 10s
   minReplicaCount: 0
   maxReplicaCount: 5
 
