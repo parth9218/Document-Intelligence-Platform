@@ -18,7 +18,8 @@ container:
   parameters-object: ""
 
 serviceAccount:
-  annotations: {}
+  annotations: 
+  - eks.amazonaws.com/role-arn: "arn:aws:iam::389642461016:role/docintel-dev-worker-role"
 
 resources:
   requests:
