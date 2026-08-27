@@ -13,3 +13,8 @@ container:
 
 env:
   PYTHON_ENV: "prod"
+
+keda:
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  queueLength: "3"

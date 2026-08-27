@@ -13,3 +13,8 @@ container:
   parameters-object: "docintel-dev-parameters"
 env: 
   PYTHON_ENV: "dev"
+
+keda:
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  queueLength: "3"
