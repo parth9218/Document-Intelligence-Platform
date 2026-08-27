@@ -18,3 +18,7 @@ gateway:
 
 env:
   NODE_ENV: "prod"
+
+keda:
+  minReplicaCount: 1
+  maxReplicaCount: 10
