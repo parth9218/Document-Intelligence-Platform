@@ -15,6 +15,7 @@ on:
       trigger_k8s:
         description: 'Whether to trigger the K8s workflow (Set it to false for initial AWS infrastructure deployment)'
         required: true
+        type: boolean
         default: false
 
 concurrency:
@@ -109,7 +110,7 @@ jobs:
 
   trigger-k8s:
     needs: deploy-aws
-    if: ${{ inputs.trigger_k8s != 'false' }}
+    if: inputs.trigger_k8s == true
     # Trigger the reusable k8s workflow, passing outputs from AWS as inputs
     uses: ./.github/workflows/k8s-deploy.yml
     with:
