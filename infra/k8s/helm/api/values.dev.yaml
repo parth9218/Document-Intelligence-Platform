@@ -6,7 +6,7 @@ replicaCount: 1
 container: 
   image:
     repository: "389642461016.dkr.ecr.us-east-1.amazonaws.com/docintel-dev-api"
-    tag: "latest"
+    tag: "eb148f5"
     pullPolicy: "Always"
   secrets-provider-class: "docintel-dev-secrets-class"
   secrets-object: "docintel-dev-secrets"
@@ -16,6 +16,12 @@ gateway:
   name: "docintel-dev-api-gateway"
   namespace: "default"
   listenerName: "https"
-  hostname: "api.dev.docintel.com"
 env: 
   NODE_ENV: "dev"
+
+keda:
+  targetValue: 5
+  window: 1m
+  granularity: 10s
+  minReplicaCount: 1
+  maxReplicaCount: 5

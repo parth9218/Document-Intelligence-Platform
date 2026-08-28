@@ -1,0 +1,17 @@
+apiVersion: gateway.k8s.aws/v1
+kind: TargetGroupConfiguration
+metadata:
+  name: docintel-dev-api-tg-config
+  namespace: keda
+spec:
+  targetReference:
+    name: keda-add-ons-http-interceptor-proxy
+  defaultConfiguration:
+    healthCheckConfig:
+      healthCheckProtocol: HTTP
+      healthCheckPort: "8080"
+      healthCheckPath: /health
+      healthCheckInterval: 15
+      healthCheckTimeout: 5
+      healthyThresholdCount: 3
+      unhealthyThresholdCount: 2

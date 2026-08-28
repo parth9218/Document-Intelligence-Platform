@@ -1,3 +1,18 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-httproute-to-interceptor
+  namespace: keda
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: default
+  to:
+    - group: ""
+      kind: Service
+      name: keda-add-ons-http-interceptor-proxy
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -9,13 +24,11 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
-  hostnames:
-    - {{ .Values.gateway.hostname }}
   rules:
     - matches:
         - path:
             type: PathPrefix
-            value: /api
+            value: {{ .Values.httproute.pathPrefix }}
       filters:
         # Strip the /api prefix before forwarding to the backend service.
         # ReplacePrefixMatch replaces only the matched prefix segment:
@@ -28,5 +41,6 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-service
-          port: {{ .Values.service.port }}
+        - name: keda-add-ons-http-interceptor-proxy
+          namespace: keda
+          port: 8080

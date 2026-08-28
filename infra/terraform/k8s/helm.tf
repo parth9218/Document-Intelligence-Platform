@@ -39,6 +39,10 @@ resource "helm_release" "aws_load_balancer_controller" {
     {
       name  = "defaultLoadBalancerScheme",
       value = "internet-facing"
+    },
+    {
+      name  = "enableServiceMutatorWebhook"
+      value = "false"
     }
   ]
 
@@ -57,4 +61,39 @@ resource "helm_release" "argocd" {
   create_namespace           = true
   timeout                    = 600
   disable_openapi_validation = true
+  # ArgoCD installs CRD-backed resources (Application, AppProject, etc.) that
+  # Helm cannot verify as "ready" until the CRD controllers fully initialize.
+  # This causes a false "failed" status even when all pods are healthy.
+  # Setting wait=false tells Helm to submit resources and return without
+  # blocking on readiness — ArgoCD's own health checks are the source of truth.
+  wait = false
+}
+
+# KEDA 
+resource "helm_release" "keda" {
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = "2.20.2"
+  namespace        = "keda"
+  create_namespace = true
+  set = [{
+    name  = "crds.install"
+    value = true
+  }]
+}
+
+resource "helm_release" "keda-add-ons-http" {
+  depends_on = [helm_release.keda]
+
+  name             = "http-add-on"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda-add-ons-http"
+  namespace        = "keda"
+  create_namespace = true
+  version          = "0.15.0"
+  set = [{
+    name  = "crds.install"
+    value = true
+  }]
 }

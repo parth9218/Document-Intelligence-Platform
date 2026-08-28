@@ -17,8 +17,19 @@ container:
   secrets-object: ""
   parameters-object: ""
 
-serviceAccount:
-  annotations: {}
+# Change to reflect region and account-id
+aws:
+  region: us-east-1
+  accountId: "389642461016"
+
+keda:
+  queueLength: "3"
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  pollingInterval:  30
+  cooldownPeriod:   300
+
+serviceAccount: {}
 
 resources:
   requests:

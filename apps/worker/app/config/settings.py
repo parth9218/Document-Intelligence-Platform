@@ -52,4 +52,6 @@ class Settings:
     EMBEDDING_DIMENSIONS: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
     EMBEDDING_API_KEY: str = os.getenv("EMBEDDING_API_KEY", "")
 
+    DEBUG_LOG: bool = os.getenv("DEBUG_LOG", "false").lower() == "true"
+
 settings = Settings()

@@ -1,9 +1,9 @@
 import os
 from typing import List, Tuple
-import fitz  # PyMuPDF
+import pymupdf
 
 from app.errors import PermanentFailure
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 
 class ExtractorService:
     def __init__(self):
@@ -54,7 +54,7 @@ class ExtractorService:
         if mime_type == "application/pdf":
             try:
                 # Open PDF with PyMuPDF
-                doc = fitz.open(temp_path)
+                doc = pymupdf.open(temp_path)
                 for idx, page in enumerate(doc):
                     page_number = idx + 1
                     text = page.get_text("text")
@@ -63,7 +63,7 @@ class ExtractorService:
                         pages.append((page_number, cleaned_text))
                 doc.close()
             except Exception as e:
-                logger.error(f"[Extractor] PyMuPDF failed to parse PDF: {e}")
+                log_exception(f"[Extractor] PyMuPDF failed to parse PDF: {e}")
                 raise PermanentFailure(
                     "extraction_failed",
                     f"PDF extraction failed (possibly corrupt or encrypted file): {e}"
@@ -76,7 +76,7 @@ class ExtractorService:
                 if cleaned_text:
                     pages.append((1, cleaned_text))
             except Exception as e:
-                logger.error(f"[Extractor] Failed to read plain text file: {e}")
+                log_exception(f"[Extractor] Failed to read plain text file: {e}")
                 raise PermanentFailure(
                     "extraction_failed",
                     f"Plain text extraction failed: {e}"

@@ -5,6 +5,7 @@ import { sessionController } from './controllers/session.controller';
 import documentsRouter from './routes/documents.route';
 import queryRouter from './routes/query.route';
 import { errorHandler } from './middlewares/error-handler';
+import { requestLogger } from './middlewares/logger';
 import { config } from './config';
 
 const app = express();
@@ -56,6 +57,8 @@ app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
+// Global HTTP request logging (industry standard telemetry)
+
 // Mount OpenAPI documentation UI (conditional on environment, before session check middlewares)
 if (config.nodeEnv === "dev" || config.nodeEnv === "local") {
   const swaggerUi = require('swagger-ui-express');
@@ -90,7 +93,7 @@ app.get('/health', (req, res) => {
 });
 
 // Apply session creation/verification middleware globally to subsequent routes & fallbacks
-app.use(sessionMiddleware);
+app.use('/api', requestLogger, sessionMiddleware);
 
 // Mount active session details fetch (auto-creates session if missing)
 app.get('/api/session', (req, res, next) => sessionController.getActiveSession(req, res, next));

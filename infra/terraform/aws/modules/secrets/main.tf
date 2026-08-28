@@ -26,14 +26,14 @@ resource "aws_ssm_parameter" "parameters" {
     DB_USER             = var.db_username
     DB_SSL              = "true"
     S3_BUCKET           = var.s3_bucket
-    CORS_ALLOWED_ORIGIN = var.cloudfront_domain
+    CORS_ALLOWED_ORIGIN = "https://${var.cloudfront_domain}"
 
-    EMBEDDING_PROVIDER = ""
-    EMBEDDING_MODEL    = ""
+    EMBEDDING_PROVIDER = "bedrock"
+    EMBEDDING_MODEL    = "amazon.titan-embed-text-v2:0"
     EMBEDDING_ENDPOINT = ""
 
-    LLM_PROVIDER   = ""
-    LLM_MODEL      = ""
+    LLM_PROVIDER   = "bedrock"
+    LLM_MODEL      = "amazon.nova-lite-v1:0"
     LLM_ENDPOINT   = ""
     LLM_MAX_TOKENS = ""
 

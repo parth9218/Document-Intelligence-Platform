@@ -1,0 +1,33 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-keda-auth-aws
+  namespace: default
+spec:
+  podIdentity:
+    provider: aws
+    roleArn: "{{ if .Values.keda.roleArn }}{{ .Values.keda.roleArn }}{{ else }}arn:aws:iam::{{ .Values.aws.accountId }}:role/{{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-role{{ end }}"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-sqs-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-deployment
+    kind: Deployment
+    apiVersion: apps/v1
+    envSourceContainerName: {{ .Values.appName }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-keda-auth-aws
+      metadata:
+        queueURL: "{{ if .Values.keda.queueURL }}{{ .Values.keda.queueURL }}{{ else }}https://sqs.{{ .Values.aws.region }}.amazonaws.com/{{ .Values.aws.accountId }}/{{ .Values.projectName }}-{{ .Values.environment }}-documents-queue{{ end }}"
+        queueLength: "{{ .Values.keda.queueLength }}"
+        awsRegion: "{{ .Values.aws.region }}"

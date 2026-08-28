@@ -17,6 +17,16 @@ container:
   secrets-object: ""
   parameters-object: ""
 
+httproute:
+  pathPrefix: "/api"
+
+keda:
+  targetValue: 5
+  window: 1m
+  granularity: 10s
+  minReplicaCount: 0
+  maxReplicaCount: 5
+
 serviceAccount:
   annotations: {}
 
@@ -35,4 +45,3 @@ env:
 gateway:
   name: "docintel-dev-api-gateway"
   namespace: "default"
-  hostname: "api.dev.docintel.com"

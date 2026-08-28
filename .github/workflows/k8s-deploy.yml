@@ -114,8 +114,10 @@ jobs:
             exit 0
           fi
           
-          terraform init -upgrade 
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name || echo "")
+          terraform init -upgrade
+          # Use -json + jq so Terraform always emits valid JSON on stdout (never a warning box)
+          TF_JSON=$(terraform output -json 2>/dev/null)
+          CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name.value // empty')
           if [ -z "$CLUSTER_NAME" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "EKS cluster output missing in AWS state. Skipping K8s deploy."
@@ -126,14 +128,14 @@ jobs:
              echo "EKS cluster $CLUSTER_NAME does not exist. Skipping K8s deploy."
              exit 0
           fi
-          
+
           echo "skip=false" >> $GITHUB_OUTPUT
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "VPC_ID=$(echo "$TF_JSON" | jq -r '.vpc_id.value // empty')" >> $GITHUB_ENV
           echo "API_DOMAIN=${{ inputs.api_domain || vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
-          echo "ACM_CERT_ARN=$(terraform output -raw acm_cert_arn)" >> $GITHUB_ENV
-          echo "SSM_PARAMETERS_NAME=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_ENV
-          echo "SSM_SECRETS_NAME=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_ENV
+          echo "ACM_CERT_ARN=$(echo "$TF_JSON" | jq -r '.acm_cert_arn.value // empty')" >> $GITHUB_ENV
+          echo "SSM_PARAMETERS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name.value // empty')" >> $GITHUB_ENV
+          echo "SSM_SECRETS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_secrets_name.value // empty')" >> $GITHUB_ENV
 
       - name: Set Variables (Dispatch/Call Events)
         if: inputs.cluster_name != ''

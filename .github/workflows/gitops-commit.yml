@@ -1,0 +1,65 @@
+name: GitOps Helm Commit
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        description: 'Name of the application (e.g., api, worker)'
+        required: true
+        type: string
+      helm_values_path:
+        description: 'Path to the Helm values file to update'
+        required: true
+        type: string
+      ecr_repo_url:
+        description: 'Full ECR repository URL (without tag)'
+        required: true
+        type: string
+      short_sha:
+        description: 'Short git SHA used as the image tag'
+        required: true
+        type: string
+
+# Serializes all Helm GitOps commits across every service workflow.
+# Build + push steps in callers run fully in parallel — only this tiny
+# commit step is queued, eliminating the stale-ref race condition.
+concurrency:
+  group: helm-gitops-commit
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Pull Latest (rebase)
+        run: git pull --rebase origin ${{ github.ref_name }}
+
+      - name: Update Helm Chart Values
+        run: |
+          sed -i "s|repository: .*|repository: \"${{ inputs.ecr_repo_url }}\"|" ${{ inputs.helm_values_path }}
+          sed -i "s|tag: .*|tag: \"${{ inputs.short_sha }}\"|" ${{ inputs.helm_values_path }}
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ${{ inputs.helm_values_path }}
+          git commit -m "Update ${{ inputs.app_name }} image to ${{ inputs.short_sha }} [skip ci]" \
+                         -m "Triggered by: ${{ github.actor }}" \
+                         -m "Original Commit: ${{ github.sha }}" \
+                         -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              || echo "No changes to commit"
+          git push origin HEAD
+
+      - name: Summary
+        run: |
+          echo "ArgoCD will now sync ${{ inputs.app_name }} → ${{ inputs.ecr_repo_url }}:${{ inputs.short_sha }}"

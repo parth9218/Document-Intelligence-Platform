@@ -79,8 +79,10 @@ jobs:
         working-directory: infra/terraform/k8s
         run: |
           terraform init -upgrade
-          DNS=$(terraform output -raw api_alb_dns 2>/dev/null || echo "")
-          if [ -n "$DNS" ] && [ "$DNS" != "No outputs found" ]; then
+          # Use -json so Terraform always emits valid JSON (never a warning box on stdout).
+          # jq returns "null" as a plain string when the key is absent.
+          DNS=$(terraform output -json 2>/dev/null | jq -r '.api_alb_dns.value // empty')
+          if [ -n "$DNS" ]; then
             echo "TF_VAR_api_alb_dns_name=$DNS" >> $GITHUB_ENV
           else
             echo "TF_VAR_api_alb_dns_name=dummy.alb.dns" >> $GITHUB_ENV
@@ -97,11 +99,13 @@ jobs:
         id: tf-outputs
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
         run: |
-          echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_OUTPUT
-          echo "eks_cluster_name=$(terraform output -raw eks_cluster_name)" >> $GITHUB_OUTPUT
-          echo "acm_cert_arn=$(terraform output -raw acm_cert_arn)" >> $GITHUB_OUTPUT
-          echo "ssm_parameters_name=$(terraform output -raw ssm_parameters_name)" >> $GITHUB_OUTPUT
-          echo "ssm_secrets_name=$(terraform output -raw ssm_secrets_name)" >> $GITHUB_OUTPUT
+          # Use -json + jq so Terraform always emits valid JSON on stdout (never a warning box)
+          TF_JSON=$(terraform output -json 2>/dev/null)
+          echo "vpc_id=$(echo "$TF_JSON"              | jq -r '.vpc_id.value // empty')"              >> $GITHUB_OUTPUT
+          echo "eks_cluster_name=$(echo "$TF_JSON"    | jq -r '.eks_cluster_name.value // empty')"    >> $GITHUB_OUTPUT
+          echo "acm_cert_arn=$(echo "$TF_JSON"        | jq -r '.acm_cert_arn.value // empty')"        >> $GITHUB_OUTPUT
+          echo "ssm_parameters_name=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name.value // empty')" >> $GITHUB_OUTPUT
+          echo "ssm_secrets_name=$(echo "$TF_JSON"    | jq -r '.ssm_secrets_name.value // empty')"    >> $GITHUB_OUTPUT
 
   trigger-k8s:
     needs: deploy-aws

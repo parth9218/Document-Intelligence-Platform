@@ -127,11 +127,31 @@ export class BedrockLlmProvider implements ILlmProvider {
     userMessage: string,
     signal?: AbortSignal,
   ): AsyncGenerator<StreamChunk> {
+    const inf_params = {
+      maxTokens: config.llm.maxTokens, 
+      topP: config.llm.topP, 
+      topK: config.llm.topK, 
+      temperature: config.llm.temperature
+    }
+
     const requestBody = JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: config.llm.maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      schemaVersion: "messages-v1",
+      inferenceConfig: inf_params,
+      system: [
+        {
+          text: systemPrompt
+        }
+      ],
+      messages: [
+        { 
+          role: 'user', 
+          content: [
+            {
+              text: userMessage
+            }
+          ] 
+        }
+      ]
     });
 
     const maxAttempts = 3;
@@ -160,11 +180,21 @@ export class BedrockLlmProvider implements ILlmProvider {
 
           if (event.chunk?.bytes) {
             const decoded = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
+            logger.debug('[BedrockLlmProvider] Nova stream event', { event_keys: Object.keys(decoded) });
 
-            if (decoded.type === 'content_block_delta' && decoded.delta?.type === 'text_delta') {
-              yield { token: decoded.delta.text as string, done: false };
+            // Amazon Nova streaming format (InvokeModelWithResponseStream):
+            // Text tokens arrive as: { contentBlockDelta: { delta: { text: "..." }, contentBlockIndex: N } }
+            if (decoded.contentBlockDelta?.delta?.text !== undefined) {
+              yield { token: decoded.contentBlockDelta.delta.text as string, done: false };
             }
-            if (decoded.type === 'message_stop') break;
+
+            // Stream termination event: { messageStop: { stopReason: "end_turn" | "max_tokens" | ... } }
+            if (decoded.messageStop) {
+              logger.debug('[BedrockLlmProvider] Received messageStop from Nova', {
+                stopReason: decoded.messageStop.stopReason,
+              });
+              break;
+            }
           }
 
           if (event.internalServerException) {
@@ -290,7 +320,7 @@ export class LocalLlmProvider implements ILlmProvider {
 
     } catch (err: any) {
       if (signal?.aborted) return;
-      logger.debug(
+      logger.error(
         `[LocalLlmProvider] Ollama unavailable (${err.message}). Using deterministic stub response.`,
       );
       yield { token: OLLAMA_FALLBACK_RESPONSE, done: false };

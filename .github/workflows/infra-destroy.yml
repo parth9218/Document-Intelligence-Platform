@@ -1,0 +1,120 @@
+name: Destroy infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy (dev or prod)'
+        required: true
+        default: 'dev'
+      destroy_aws:
+        description: 'destroy aws'
+        type: boolean
+        required: true
+        default: false
+
+concurrency:
+  group: destroy-infra-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy-k8s:
+    name: Destroy K8s ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: us-east-1
+
+      - name: Extract AWS Infrastructure Outputs
+        id: aws-check
+        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        run: |
+          terraform init -upgrade
+          TF_JSON=$(terraform output -json 2>/dev/null)
+          
+          CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name.value // empty')
+          if [ -z "$CLUSTER_NAME" ]; then
+            echo "EKS cluster output missing in AWS state. Assuming already destroyed or not present."
+          else
+            echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+            echo "VPC_ID=$(echo "$TF_JSON" | jq -r '.vpc_id.value // empty')" >> $GITHUB_ENV
+            echo "API_DOMAIN=${{ vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
+            echo "ACM_CERT_ARN=$(echo "$TF_JSON" | jq -r '.acm_cert_arn.value // empty')" >> $GITHUB_ENV
+            echo "SSM_PARAMETERS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name.value // empty')" >> $GITHUB_ENV
+            echo "SSM_SECRETS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_secrets_name.value // empty')" >> $GITHUB_ENV
+          fi
+
+      - name: Terraform Init (K8s)
+        if: env.CLUSTER_NAME != ''
+        working-directory: infra/terraform/k8s
+        run: terraform init -upgrade
+
+      - name: Terraform Destroy (K8s)
+        if: env.CLUSTER_NAME != ''
+        working-directory: infra/terraform/k8s
+        run: |
+          terraform destroy -auto-approve \
+            -var="cluster_name=${{ env.CLUSTER_NAME }}" \
+            -var="vpc_id=${{ env.VPC_ID }}" \
+            -var="api_domain=${{ env.API_DOMAIN }}" \
+            -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
+            -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
+            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}" \
+            -var="environment=${{ inputs.environment }}" \
+            -var="project_name=${{ vars.TF_PROJECT_NAME }}" \
+            -var="github_repository_url=${{ vars.TF_GITHUB_REPOSITORY_URL }}" \
+            -var="targetRevision=${{ vars.TF_TARGET_REVISION }}"
+
+  destroy-aws:
+    name: Destroy AWS ${{ inputs.environment }}
+    needs: destroy-k8s
+    if: inputs.destroy_aws == true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
+      TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
+      TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
+      TF_VAR_github_actions_ci_role: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+      TF_VAR_api_hostname: ${{ vars.TF_API_HOSTNAME }}
+      TF_VAR_admin_user_arns: ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: us-east-1
+
+      - name: Terraform Init (AWS)
+        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform Destroy (AWS)
+        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        run: terraform destroy -auto-approve

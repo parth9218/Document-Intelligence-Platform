@@ -5,7 +5,7 @@ import time
 from botocore.exceptions import ClientError
 
 from app.config.settings import settings
-from app.utils.logger import logger
+from app.utils.logger import logger, log_exception
 from app.clients.bedrock_client import BedrockClient
 
 class EmbeddingProvider(ABC):
@@ -48,7 +48,7 @@ class BedrockEmbeddingProvider(EmbeddingProvider):
                 error_code = e.response.get("Error", {}).get("Code", "")
                 if error_code in ("ThrottlingException", "ServiceUnavailableException"):
                     if attempt == max_attempts:
-                        logger.error(
+                        log_exception(
                             f"[Embeddings] Transient error {error_code} hit max retries ({max_attempts}). Raising."
                         )
                         raise
@@ -59,7 +59,7 @@ class BedrockEmbeddingProvider(EmbeddingProvider):
                     time.sleep(delay)
                     delay *= backoff_multiplier
                 else:
-                    logger.error(f"[Embeddings] Permanent Bedrock error {error_code}: {e}")
+                    log_exception(f"[Embeddings] Permanent Bedrock error {error_code}: {e}")
                     raise
 
 class LocalEmbeddingProvider(EmbeddingProvider):

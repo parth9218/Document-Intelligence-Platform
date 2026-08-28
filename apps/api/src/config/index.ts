@@ -78,7 +78,14 @@ export const config = {
     provider: process.env.LLM_PROVIDER || 'bedrock',
     model: process.env.LLM_MODEL || (process.env.LLM_PROVIDER === "local" ? "llama3.2" : "anthropic.claude-3-5-sonnet-20241022-v1:0"),
     endpoint: process.env.LLM_ENDPOINT || 'http://localhost:11434',
+    topP: process.env.LLM_TOP_P || 0.9,
+    topK: process.env.LLM_TOP_K || 20,
+    temperature: process.env.LLM_TEMPERATURE || 0.7,
     // Maximum output tokens for the LLM response
     maxTokens: parseInt(process.env.LLM_MAX_TOKENS || '1024', 10),
   },
+
+  // When true, logger.error() includes the full stack trace and the Winston
+  // log level is lowered to 'debug'. Set DEBUG_LOG=true to enable.
+  debugLog: process.env.DEBUG_LOG === 'true',
 };

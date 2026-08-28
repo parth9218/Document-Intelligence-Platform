@@ -18,6 +18,7 @@ resource "kubectl_manifest" "alb_gatewayclass" {
   ]
   yaml_body = file("manifests/alb_gatewayclass.yaml")
 }
+
 resource "kubectl_manifest" "api_gateway" {
   depends_on = [kubectl_manifest.alb_gatewayclass]
   yaml_body = templatefile("manifests/api_gateway.yaml", {
@@ -43,7 +44,11 @@ resource "kubectl_manifest" "argocd_applicationset" {
     github_repository_url = var.github_repository_url,
     targetRevision        = var.targetRevision
   })
-  depends_on = [helm_release.argocd]
+  depends_on = [
+    helm_release.argocd,
+    helm_release.keda,
+    helm_release.keda-add-ons-http
+  ]
 }
 
 resource "null_resource" "wait_for_alb_dns" {
