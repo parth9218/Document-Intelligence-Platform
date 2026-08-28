@@ -39,6 +39,10 @@ resource "helm_release" "aws_load_balancer_controller" {
     {
       name  = "defaultLoadBalancerScheme",
       value = "internet-facing"
+    },
+    {
+      name  = "enableServiceMutatorWebhook"
+      value = "false"
     }
   ]
 
@@ -77,7 +81,6 @@ resource "helm_release" "keda" {
     name  = "crds.install"
     value = true
   }]
-  wait = false
 }
 
 resource "helm_release" "keda-add-ons-http" {
@@ -93,6 +96,4 @@ resource "helm_release" "keda-add-ons-http" {
     name  = "crds.install"
     value = true
   }]
-
-  wait = false
 }
