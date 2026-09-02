@@ -42,7 +42,8 @@ resource "kubectl_manifest" "argocd_applicationset" {
     project_name          = var.project_name,
     environment           = var.environment,
     github_repository_url = var.github_repository_url,
-    targetRevision        = var.targetRevision
+    targetRevisionApi     = var.targetRevision_api,
+    targetRevisionWorker  = var.targetRevision_worker
   })
   depends_on = [
     helm_release.argocd,
