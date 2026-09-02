@@ -10,8 +10,10 @@ spec:
           # Applications to be deployed by ArgoCD
           - app: "${project_name}-${environment}-api"
             path: infra/k8s/helm/api
+            targetRevision: ${targetRevisionApi}
           - app: "${project_name}-${environment}-worker"
             path: infra/k8s/helm/worker
+            targetRevision: ${targetRevisionWorker}
   template:
     metadata:
       name: '{{app}}'
@@ -21,7 +23,7 @@ spec:
       project: default
       source:
         repoURL: ${github_repository_url}
-        targetRevision: ${targetRevision}
+        targetRevision: {{ targetRevision }}
         path: '{{path}}'
         helm: 
           valueFiles:

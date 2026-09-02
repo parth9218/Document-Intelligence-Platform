@@ -41,8 +41,11 @@ on:
       github_repository_url:
         required: true
         type: string
-      target_revision:
-        required: true
+      target_revision_api:
+        required: false
+        type: string
+      target_revision_worker:
+        required: false
         type: string
 
 concurrency:
@@ -167,7 +170,8 @@ jobs:
             -var="environment=${{ env.ENV }}" \
             -var="project_name=${{ inputs.project_name || vars.TF_PROJECT_NAME }}" \
             -var="github_repository_url=${{ inputs.github_repository_url || vars.TF_GITHUB_REPOSITORY_URL }}" \
-            -var="targetRevision=${{ inputs.target_revision || vars.TF_TARGET_REVISION }}" \
+            -var="targetRevision_api=${{ inputs.target_revision_api || vars.TF_TARGET_REVISION_API }}" \
+            -var="targetRevision_worker=${{ inputs.target_revision_worker || vars.TF_TARGET_REVISION_WORKER }}" \
 
       - name: Configure kubectl for EKS
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'

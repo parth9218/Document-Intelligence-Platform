@@ -1,7 +1,7 @@
 apiVersion: gateway.k8s.aws/v1
 kind: TargetGroupConfiguration
 metadata:
-  name: docintel-dev-api-tg-config
+  name: {{ .Values.projectName }}-{{ .Values.environment }}-{{ .Values.appName }}-tg-config
   namespace: keda
 spec:
   targetReference:
