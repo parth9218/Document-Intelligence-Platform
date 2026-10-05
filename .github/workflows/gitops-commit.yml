@@ -1,3 +1,18 @@
+# ==============================================================================
+# GitOps Helm Value Commit Workflow
+# ==============================================================================
+# Purpose:
+#   Updates Helm values files (`infra/k8s/helm/<service>/values.dev.yaml`) with
+#   newly built image repository URLs and Short SHA image tags, then commits and
+#   pushes back to Git to trigger ArgoCD auto-sync.
+#
+# Concurrency Mechanics:
+#   Uses `concurrency.group: helm-gitops-commit` across ALL caller microservice workflows.
+#   This guarantees that while Docker container builds run in parallel, all Git commits
+#   and pushes are strictly serialized. This eliminates git ref lock contention and
+#   avoids merge conflicts when multiple microservices build simultaneously.
+# ==============================================================================
+
 name: GitOps Helm Commit
 
 on:
@@ -30,12 +45,13 @@ concurrency:
 permissions:
   contents: write
 
-jobs:
+jobs:   
   commit:
+    name: Commit Updated Helm Values
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.ref }}
@@ -63,3 +79,4 @@ jobs:
       - name: Summary
         run: |
           echo "ArgoCD will now sync ${{ inputs.app_name }} → ${{ inputs.ecr_repo_url }}:${{ inputs.short_sha }}"
+

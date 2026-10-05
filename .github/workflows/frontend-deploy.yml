@@ -1,3 +1,24 @@
+# ==============================================================================
+# Frontend Static Asset Deployment Workflow
+# ==============================================================================
+# Purpose:
+#   Compiles the React frontend application (`apps/frontend`) and synchronizes
+#   the build artifacts (`out/`) directly into the AWS S3 static frontend bucket
+#   which is served globally via AWS CloudFront CDN.
+#
+# Trigger Conditions:
+#   - Push to `dev` branch with changes under `apps/frontend/**`.
+#   - Merged pull requests targeting `dev` branch with changes under `apps/frontend/**`.
+#   - Manual `workflow_dispatch`.
+#
+# Key Features & Operational Logic:
+#   - Dynamic Infrastructure Output Lookup: Retrieves CloudFront domain and S3 bucket ID
+#     from Terraform state (`infra/terraform/aws/environments/dev`).
+#   - Graceful Skip: Skips build and sync steps if AWS infrastructure has not been deployed yet.
+#   - Production API Configuration: Injects `NEXT_PUBLIC_API_URL` pointing to the CloudFront
+#     API gateway endpoint during build step.
+# ==============================================================================
+
 name: Deploy Frontend Static Assets
 
 on:
@@ -15,35 +36,85 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
+  id-token: write # Required for AWS OIDC role assumption
   contents: read
 
 jobs:
   deploy-frontend:
+    name: Build & Deploy Static Frontend
     if: ${{ github.event_name == 'push' || 
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
       github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:  
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+    
+      # ------------------------------------------------------------------------
+      # Local Execution (ACT) Setup: Download & Cache NodeJS & AWS CLI
+      # ------------------------------------------------------------------------
+      - name: Install NodeJS and AWS CLI for ACT
+        if: ${{ env.ACT }}
+        run: |
+          mkdir -p /tmp/.act-tools-cache
+          if [ ! -f /usr/bin/node ] || [ ! -f /usr/bin/npm ]; then
+            if [ ! -f /tmp/.act-tools-cache/node-v22.14.0-linux-x64.tar.xz ]; then
+              echo "Downloading NodeJS to local cache..."
+              curl -sL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz" -o /tmp/.act-tools-cache/node-v22.14.0-linux-x64.tar.xz
+            fi
+            echo "Installing NodeJS from local cache..."
+            tar -xJf /tmp/.act-tools-cache/node-v22.14.0-linux-x64.tar.xz -C /usr/local --strip-components=1
+            ln -sf /usr/local/bin/node /usr/bin/node
+            ln -sf /usr/local/bin/npm /usr/bin/npm
+            ln -sf /usr/local/bin/npx /usr/bin/npx
+          fi
+          if ! command -v aws &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/awscliv2.zip ]; then
+              echo "Downloading AWS CLI to local cache..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/.act-tools-cache/awscliv2.zip
+            fi
+            echo "Installing AWS CLI from local cache..."
+            unzip -q /tmp/.act-tools-cache/awscliv2.zip -d /tmp/aws-tmp
+            /tmp/aws-tmp/aws/install --update
+            rm -rf /tmp/aws-tmp
+          fi
+          echo "/usr/local/bin" >> $GITHUB_PATH
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
         with:
           role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      # ------------------------------------------------------------------------
+      # Retrieve Infrastructure Outputs (CloudFront Domain & S3 Bucket ID)
+      # ------------------------------------------------------------------------
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
         with:
-          terraform_version: "1.15.0"
+          terraform_version: "v1.16.4"
+          terraform_wrapper: false
+
+      - name: Create Terraform Cache Directory
+        run: |
+          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+
+      - name: Use terraform cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - name: Fetch Terraform Outputs
         id: tf-outputs
         working-directory: infra/terraform/aws/environments/dev
         run: |
-          terraform init -upgrade
+          terraform init
           CF_DOMAIN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "")
           FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_id 2>/dev/null || echo "")
           
@@ -57,9 +128,12 @@ jobs:
           echo "cloudfront_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
 
+      # ------------------------------------------------------------------------
+      # Install Node.js & Compile React Frontend Production Bundle
+      # ------------------------------------------------------------------------
       - name: Setup Node.js
-        if: steps.tf-outputs.outputs.skip == 'false'
-        uses: actions/setup-node@v4
+        if: ${{ !env.ACT && steps.tf-outputs.outputs.skip == 'false' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020   # v7.0.0
         with:
           node-version: 24
           cache: 'npm'
@@ -73,11 +147,16 @@ jobs:
       - name: Build Frontend
         if: steps.tf-outputs.outputs.skip == 'false'
         working-directory: apps/frontend
-        run: |
-          sed -i "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://${{ steps.tf-outputs.outputs.cloudfront_domain }}/api|g" .env.production
-          npm run build:prod
+        env:
+          NEXT_PUBLIC_API_URL: https://${{ steps.tf-outputs.outputs.cloudfront_domain }}/api
+        run: npm run build:prod
 
+      # ------------------------------------------------------------------------
+      # Synchronize Static Assets to S3 Bucket
+      # ------------------------------------------------------------------------
       - name: Deploy to S3
         if: steps.tf-outputs.outputs.skip == 'false'
         working-directory: apps/frontend
         run: aws s3 sync out s3://${{ steps.tf-outputs.outputs.frontend_bucket }} --delete
+
+

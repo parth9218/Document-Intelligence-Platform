@@ -1,3 +1,20 @@
+# ==============================================================================
+# Worker Service CI/CD Pipeline Workflow
+# ==============================================================================
+# Purpose:
+#   Triggers container image build, push to ECR, and GitOps Helm release updates
+#   for the Python async processing daemon worker service (`apps/worker`).
+#
+# Trigger Conditions:
+#   - Push to `dev` branch with changes under `apps/worker/**`.
+#   - Merged pull requests targeting `dev` branch with changes under `apps/worker/**`.
+#   - Manual `workflow_dispatch`.
+#
+# Modular Architecture:
+#   Delegates execution to the reusable workflow `.github/workflows/reusable-docker-helm-cicd.yml`
+#   passing service-specific inputs (`app_name`, `app_path`, `helm_values_path`).
+# ==============================================================================
+
 name: Worker CI/CD Workflow
 
 on:
@@ -15,11 +32,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
-  contents: write
+  id-token: write # Required for AWS OIDC role assumption
+  contents: read
 
 jobs:
   deploy-worker:
+    name: Build & Deploy Worker Service
     if: ${{ github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || 
       github.event_name == 'workflow_dispatch' }}
@@ -29,3 +47,4 @@ jobs:
       app_path: './apps/worker'
       helm_values_path: 'infra/k8s/helm/worker/values.dev.yaml'
     secrets: inherit
+
