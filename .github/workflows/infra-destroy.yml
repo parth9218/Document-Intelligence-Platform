@@ -114,7 +114,8 @@ jobs:
             -var="environment=${{ inputs.environment }}" \
             -var="project_name=${{ vars.TF_PROJECT_NAME }}" \
             -var="github_repository_url=${{ vars.TF_GITHUB_REPOSITORY_URL }}" \
-            -var="targetRevision=${{ vars.TF_TARGET_REVISION }}"
+            -var="targetRevision_api=${{ vars.TF_TARGET_REVISION_API }}" \
+            -var="targetRevision_worker=${{ vars.TF_TARGET_REVISION_WORKER }}"
 
   # ----------------------------------------------------------------------------
   # Phase 2: Destroy Core AWS Infrastructure (Runs after K8s phase finishes)
