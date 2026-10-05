@@ -5,23 +5,26 @@ metadata:
   namespace: argocd
 spec:
   generators:
-    - list:
-        elements:
-          # Applications to be deployed by ArgoCD
-          - app: "${project_name}-${environment}-api"
-            path: infra/k8s/helm/api
-          - app: "${project_name}-${environment}-worker"
-            path: infra/k8s/helm/worker
+    - git:
+        repoURL: '${github_repository_url}'
+        revision: '${targetRevision_api}'
+        files:
+          - path: "infra/k8s/argocd/${environment}/api/config.json"
+    - git:
+        repoURL: '${github_repository_url}'
+        revision: '${targetRevision_worker}'
+        files:
+          - path: "infra/k8s/argocd/${environment}/worker/config.json"
   template:
     metadata:
-      name: '{{app}}'
+      name: '${project_name}-${environment}-{{app}}'
       annotations:
         argocd.argoproj.io/sync-wave: "10" # Workloads deployed after core infrastructure
     spec:
       project: default
       source:
         repoURL: ${github_repository_url}
-        targetRevision: ${targetRevision}
+        targetRevision: '{{target_commit}}'
         path: '{{path}}'
         helm: 
           valueFiles:
