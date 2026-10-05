@@ -1,5 +1,9 @@
 locals {
   eks_name = "${var.project_name}-${var.environment}-eks-cluster"
+  # Filter out caller identity from admin_user_arns since enable_cluster_creator_admin_permissions handles it
+  filtered_admin_user_arns = [
+    for arn in var.admin_user_arns : arn if arn != data.aws_caller_identity.current.arn
+  ]
 }
 
 data "aws_iam_policy_document" "node_role_boundary" {
@@ -23,13 +27,12 @@ module "eks" {
   version = "~> 21.0"
 
   name               = local.eks_name
-  kubernetes_version = "1.36"
+  kubernetes_version = "1.37"
 
   # Optional
   endpoint_public_access = true
 
   # Optional: Adds the current caller identity as an administrator via cluster access entry
-  # Comment if deploying via Github Actions as we are providing admin ARNs in access_entries
   enable_cluster_creator_admin_permissions = true
 
   compute_config = {
@@ -64,7 +67,7 @@ module "eks" {
 
   # Add admin user ARNs to cluster access entries for AWS Console access
   access_entries = {
-    for arn in var.admin_user_arns : arn => {
+    for arn in local.filtered_admin_user_arns : arn => {
       principal_arn = arn
       policy_associations = {
         admin = {
