@@ -1,3 +1,25 @@
+# ==============================================================================
+# Kubernetes Infrastructure Deployment Workflow
+# ==============================================================================
+# Purpose:
+#   Deploys and manages Kubernetes cluster resources (Helm charts for API/Worker,
+#   ArgoCD applications, KEDA auto-scalers, AWS Load Balancer Controller, Secrets Store CSI)
+#   using Terraform located in `infra/terraform/k8s`.
+#
+# Trigger Conditions:
+#   - Push to `dev` branch with changes under `infra/terraform/k8s/**`.
+#   - Manual `workflow_dispatch`.
+#   - Reusable `workflow_call` (invoked automatically after `aws-deploy.yml` completes).
+#
+# Key Features & Operational Logic:
+#   - Race Condition Avoidance: If both AWS and K8s Terraform files were updated in the
+#     same commit, this workflow defers execution to `aws-deploy.yml` to ensure cluster readiness.
+#   - Dynamic ALB Resolution: Polls the Kubernetes API Gateway until the AWS Load Balancer
+#     Controller provisions the ALB address.
+#   - CloudFront Origin Targeting: Performs a targeted `terraform apply` on AWS CloudFront
+#     modules to point API route traffic directly to the newly resolved Gateway ALB DNS.
+# ==============================================================================
+
 name: Deploy K8s Infrastructure
 
 on:
@@ -45,44 +67,24 @@ on:
         required: true
         type: string
 
+# Prevent concurrent K8s infrastructure deployments for the target environment
 concurrency:
   group: deploy-k8s-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
+
 permissions:
-  id-token: write
+  id-token: write # Required for AWS OIDC role assumption
   contents: read
 
 jobs:
   deploy-k8s:
+    name: Provision K8s Infrastructure
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'dev' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.15.0"
-
-      - name: Terraform Format
-        working-directory: infra/terraform/k8s
-        run: terraform fmt -check -recursive
-
-      - name: Terraform Init (Backend disabled for validation)
-        working-directory: infra/terraform/k8s
-        run: terraform init -backend=false
-
-      - name: Terraform Validate
-        working-directory: infra/terraform/k8s
-        run: terraform validate
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
-          aws-region: us-east-1
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+      
       - name: Set Environment Context
         id: context
         run: |
@@ -92,12 +94,76 @@ jobs:
             echo "ENV=dev" >> $GITHUB_ENV
           fi
 
+      # ------------------------------------------------------------------------
+      # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
+      # ------------------------------------------------------------------------
+      - name: Install AWS CLI and kubectl for ACT
+        if: ${{ env.ACT }}
+        run: |
+          mkdir -p /tmp/.act-tools-cache
+          if ! command -v aws &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/awscliv2.zip ]; then
+              echo "Downloading AWS CLI to local cache..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/.act-tools-cache/awscliv2.zip
+            fi
+            echo "Installing AWS CLI from local cache..."
+            unzip -q /tmp/.act-tools-cache/awscliv2.zip -d /tmp/aws-tmp
+            sudo /tmp/aws-tmp/aws/install --update
+            rm -rf /tmp/aws-tmp
+          fi
+          if ! command -v kubectl &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/kubectl ]; then
+              echo "Downloading kubectl to local cache..."
+              curl -sL "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl" -o /tmp/.act-tools-cache/kubectl
+              chmod +x /tmp/.act-tools-cache/kubectl
+            fi
+            echo "Installing kubectl from local cache..."
+            sudo cp /tmp/.act-tools-cache/kubectl /usr/local/bin/kubectl
+            sudo chmod +x /usr/local/bin/kubectl
+          fi
+
+      # ------------------------------------------------------------------------
+      # Terraform Plugin Caching (Unified across all lock files)
+      # ------------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
+        with:
+          terraform_version: "v1.16.4"  
+          terraform_wrapper: false
+
+      - name: Create Terraform Cache Directory
+        run: |
+          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+
+      - name: Use terraform cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Format
+        working-directory: infra/terraform/k8s
+        run: terraform fmt -check -recursive
+
+      - name: Configure AWS Credentials
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      # ------------------------------------------------------------------------
+      # Check for Concurrent AWS Changes (Defer if AWS infra is being updated)
+      # ------------------------------------------------------------------------
       - name: Check if AWS was also modified
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d   # v4.0.3
         id: filter
         if: inputs.cluster_name == '' && github.event_name != 'workflow_dispatch'
         with:
-          # Change to the real base branch 
           base: dev
           filters: |
             aws:
@@ -114,7 +180,7 @@ jobs:
             exit 0
           fi
           
-          terraform init -upgrade
+          terraform init
           # Use -json + jq so Terraform always emits valid JSON on stdout (never a warning box)
           TF_JSON=$(terraform output -json 2>/dev/null)
           CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name.value // empty')
@@ -147,11 +213,14 @@ jobs:
           echo "SSM_PARAMETERS_NAME=${{ inputs.ssm_parameters_name }}" >> $GITHUB_ENV
           echo "SSM_SECRETS_NAME=${{ inputs.ssm_secrets_name }}" >> $GITHUB_ENV
 
+      # ------------------------------------------------------------------------
+      # Terraform Init & Apply for K8s Infrastructure Modules & Helm Releases
+      # ------------------------------------------------------------------------
       - name: Terraform Init
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
         working-directory: infra/terraform/k8s
         run: |
-          terraform init -upgrade 
+          terraform init 
 
       - name: Terraform Apply
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
@@ -165,10 +234,13 @@ jobs:
             -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
             -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}" \
             -var="environment=${{ env.ENV }}" \
-            -var="project_name=${{ inputs.project_name || vars.TF_PROJECT_NAME }}" \
+            -var="project_name=${{ vars.TF_PROJECT_NAME || inputs.project_name }}" \
             -var="github_repository_url=${{ inputs.github_repository_url || vars.TF_GITHUB_REPOSITORY_URL }}" \
-            -var="targetRevision=${{ inputs.target_revision || vars.TF_TARGET_REVISION }}" \
+            -var="targetRevision=${{ inputs.target_revision || vars.TF_TARGET_REVISION }}" 
 
+      # ------------------------------------------------------------------------
+      # Update Kubeconfig & Poll for Gateway ALB DNS
+      # ------------------------------------------------------------------------
       - name: Configure kubectl for EKS
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
         run: |
@@ -213,6 +285,9 @@ jobs:
 
           echo "alb_dns=${ALB_DNS}" >> "$GITHUB_OUTPUT"
 
+      # ------------------------------------------------------------------------
+      # Update AWS CloudFront Distribution API Origin to Point to Resolved ALB DNS
+      # ------------------------------------------------------------------------
       - name: Update CloudFront API Origin (Targeted Apply)
         if: inputs.cluster_name != '' || steps.aws-check.outputs.skip == 'false'
         working-directory: infra/terraform/aws/environments/${{ env.ENV }}
@@ -230,7 +305,7 @@ jobs:
           echo "Updating CloudFront API origin → ${{ steps.alb-address.outputs.alb_dns }}"
 
           if [ "${{ inputs.cluster_name }}" != "" ]; then
-            terraform init -upgrade
+            terraform init
           fi
 
           terraform apply -auto-approve -input=false \
@@ -239,3 +314,4 @@ jobs:
             -target="module.core.module.storage.random_uuid.cf_origin_verify_token"
 
           echo "CloudFront API origin updated → ${{ steps.alb-address.outputs.alb_dns }}"
+

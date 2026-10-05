@@ -1,4 +1,19 @@
-name: Destroy infrastructure
+# ==============================================================================
+# Infrastructure Destruction Workflow
+# ==============================================================================
+# Purpose:
+#   Tears down deployed cloud infrastructure in reverse dependency order:
+#   1. `destroy-k8s`: Destroys Kubernetes workloads, Helm releases, and Gateway resources.
+#   2. `destroy-aws`: Destroys underlying AWS resources (EKS, RDS, VPC, S3, SQS).
+#
+# Trigger Conditions:
+#   - Manual `workflow_dispatch` only (safeguarded operation).
+#   - Parameters:
+#       * `environment`: dev or prod (default: dev).
+#       * `destroy_aws`: boolean flag to confirm destroying root AWS infrastructure.
+# ==============================================================================
+
+name: Destroy Infrastructure
 
 on:
   workflow_dispatch:
@@ -8,44 +23,64 @@ on:
         required: true
         default: 'dev'
       destroy_aws:
-        description: 'destroy aws'
+        description: 'Destroy root AWS infrastructure'
         type: boolean
         required: true
         default: false
 
+# Prevent concurrent destruction runs on the same environment
 concurrency:
   group: destroy-infra-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 permissions:
-  id-token: write
+  id-token: write # Required for AWS OIDC role assumption
   contents: read
 
 jobs:
+  # ----------------------------------------------------------------------------
+  # Phase 1: Destroy Kubernetes Infrastructure & Workloads
+  # ----------------------------------------------------------------------------
   destroy-k8s:
-    name: Destroy K8s ${{ inputs.environment }}
+    name: Destroy K8s (${{ inputs.environment || 'dev' }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'dev' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
         with:
-          terraform_version: "1.15.0"
+          terraform_version: "v1.16.4"  
+          terraform_wrapper: false
+
+      - name: Create Terraform Cache Directory
+        run: |
+          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+
+      - name: Use terraform cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
         with:
           role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
 
       - name: Extract AWS Infrastructure Outputs
         id: aws-check
         working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
         run: |
-          terraform init -upgrade
+          terraform init
           TF_JSON=$(terraform output -json 2>/dev/null)
           
           CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name.value // empty')
@@ -63,7 +98,7 @@ jobs:
       - name: Terraform Init (K8s)
         if: env.CLUSTER_NAME != ''
         working-directory: infra/terraform/k8s
-        run: terraform init -upgrade
+        run: terraform init
 
       - name: Terraform Destroy (K8s)
         if: env.CLUSTER_NAME != ''
@@ -81,12 +116,15 @@ jobs:
             -var="github_repository_url=${{ vars.TF_GITHUB_REPOSITORY_URL }}" \
             -var="targetRevision=${{ vars.TF_TARGET_REVISION }}"
 
+  # ----------------------------------------------------------------------------
+  # Phase 2: Destroy Core AWS Infrastructure (Runs after K8s phase finishes)
+  # ----------------------------------------------------------------------------
   destroy-aws:
-    name: Destroy AWS ${{ inputs.environment }}
+    name: Destroy AWS (${{ inputs.environment || 'dev' }})
     needs: destroy-k8s
     if: inputs.destroy_aws == true
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'dev' }}
     env:
       TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME }}
       TF_VAR_environment: ${{ inputs.environment }}
@@ -98,18 +136,34 @@ jobs:
       TF_VAR_admin_user_arns: ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
         with:
-          terraform_version: "1.15.0"
+          terraform_version: "v1.16.4"  
+          terraform_wrapper: false
+
+      - name: Create Terraform Cache Directory
+        run: |
+          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+
+      - name: Use terraform cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
         with:
           role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
 
       - name: Terraform Init (AWS)
         working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
@@ -118,3 +172,4 @@ jobs:
       - name: Terraform Destroy (AWS)
         working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
         run: terraform destroy -auto-approve
+

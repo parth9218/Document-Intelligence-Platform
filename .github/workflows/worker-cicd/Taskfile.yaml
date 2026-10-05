@@ -1,0 +1,28 @@
+version: "3"
+
+env:
+    AWS_ACCESS_KEY_ID:
+        sh: aws configure get aws_access_key_id
+    AWS_SECRET_ACCESS_KEY:
+        sh: aws configure get aws_secret_access_key 
+    AWS_REGION:
+        sh: aws configure get region || echo "us-east-1"
+
+tasks:
+  trigger-workflow:
+    desc: Trigger worker-cicd workflow for dev locally using act
+    cmds:
+      - |
+        act workflow_dispatch \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/worker-cicd.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache -u 0" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/worker-cicd/.env \
+          -e ./.github/workflows/worker-cicd/event.json
