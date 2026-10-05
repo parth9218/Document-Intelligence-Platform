@@ -20,7 +20,7 @@ container:
 # Change to reflect region and account-id
 aws:
   region: us-east-1
-  accountId: "389642461016"
+  accountId: "793140949744"
 
 keda:
   queueLength: "3"
