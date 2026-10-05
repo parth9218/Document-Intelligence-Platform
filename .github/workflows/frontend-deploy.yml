@@ -117,16 +117,18 @@ jobs:
           terraform init
           CF_DOMAIN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "")
           FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_id 2>/dev/null || echo "")
+          CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
           
           if [ -z "$CF_DOMAIN" ] || [ -z "$FRONTEND_BUCKET" ] || [[ "$CF_DOMAIN" == *"No outputs found"* ]]; then
             echo "::error::Infrastructure does not exist yet or outputs are missing. Skipping deployment."
             echo "skip=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           echo "skip=false" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
 
       # ------------------------------------------------------------------------
       # Install Node.js & Compile React Frontend Production Bundle
@@ -158,5 +160,17 @@ jobs:
         if: steps.tf-outputs.outputs.skip == 'false'
         working-directory: apps/frontend
         run: aws s3 sync out s3://${{ steps.tf-outputs.outputs.frontend_bucket }} --delete
+
+      # ------------------------------------------------------------------------
+      # Invalidate CloudFront CDN Cache
+      # ------------------------------------------------------------------------
+      - name: Invalidate CloudFront Cache
+        if: steps.tf-outputs.outputs.skip == 'false' && steps.tf-outputs.outputs.cloudfront_distribution_id != '' && steps.tf-outputs.outputs.cloudfront_distribution_id != 'None'
+        run: |
+          echo "Creating CloudFront cache invalidation for distribution: ${{ steps.tf-outputs.outputs.cloudfront_distribution_id }}"
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.tf-outputs.outputs.cloudfront_distribution_id }} \
+            --paths "/*"
+
 
 

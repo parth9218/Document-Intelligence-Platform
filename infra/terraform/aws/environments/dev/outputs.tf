@@ -28,4 +28,7 @@ output "ecr_repo_urls" {
 output "cloudfront_domain" {
   value = module.core.cloudfront_domain
 }
+output "cloudfront_distribution_id" {
+  value = module.core.cloudfront_distribution_id
+}
 output "frontend_bucket_id" { value = module.core.frontend_bucket_id }
