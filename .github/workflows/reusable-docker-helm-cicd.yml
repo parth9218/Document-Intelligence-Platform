@@ -10,9 +10,11 @@
 #   - `app_name`: Target application name (e.g., 'api', 'worker').
 #   - `app_path`: Path to application context & Dockerfile (e.g., './apps/api').
 #   - `helm_values_path`: Path to Helm values file (e.g., 'infra/k8s/helm/api/values.dev.yaml').
+#   - `image_to_deploy`: Optional image variant tag ('full' or 'slim') to output for GitOps release.
 #
 # Features:
-#   - ECR Image Deduplication: Checks if an image tag (git short SHA) already exists in ECR before building.
+#   - Single Runner VM Execution: Reuses runner environment and local Docker layer cache across variant builds.
+#   - ECR Image Deduplication: Checks if an image tag (git short SHA / SHA-slim) already exists in ECR before building.
 #   - Docker BuildX & GHA Cache: Accelerates builds using GitHub Actions cache (`cache-from/to: type=gha`).
 #   - Global GitOps Serialization: Delegates commit execution to `gitops-commit.yml` which locks commits
 #     serially to eliminate race conditions on git refs across concurrent builds.
@@ -35,6 +37,11 @@ on:
         description: 'Path to the Helm values file (e.g., infra/k8s/helm/api/values.dev.yaml)'
         required: true
         type: string
+      image_to_deploy:
+        description: 'Which image variant to deploy (full or slim)'
+        required: false
+        type: string
+        default: 'full'
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -46,6 +53,7 @@ jobs:
     outputs:
       ecr_repo_url: ${{ steps.set-outputs.outputs.ecr_repo_url }}
       short_sha: ${{ steps.set-outputs.outputs.short_sha }}
+      image_tag: ${{ steps.set-outputs.outputs.image_tag }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
@@ -127,15 +135,18 @@ jobs:
       - name: Get Short SHA
         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      # Check if image tag already exists in ECR registry to skip duplicate compilation
-      - name: Check if Image Tag Already Exists in ECR
-        id: ecr-check
+      # ------------------------------------------------------------------------
+      # 1. Build & Push Full Container Image (TAG: ${SHORT_SHA})
+      # ------------------------------------------------------------------------
+      - name: Check if Full Image Tag Exists in ECR
+        id: ecr-check-full
         run: |
           TAG_EXISTS=$(aws ecr describe-images \
             --repository-name "$(echo "${{ env.ECR_REPO_URL }}" | cut -d'/' -f2)" \
             --image-ids imageTag=${{ env.SHORT_SHA }} \
             --query 'imageDetails[0].imageTags[0]' \
             --output text 2>/dev/null || echo "")
+
           if [ "$TAG_EXISTS" = "${{ env.SHORT_SHA }}" ]; then
             echo "Image ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }} already exists in ECR. Skipping build and push."
             echo "skip_push=true" >> $GITHUB_OUTPUT
@@ -143,12 +154,13 @@ jobs:
             echo "skip_push=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build and Push Docker Image
-        if: steps.ecr-check.outputs.skip_push == 'false'
+      - name: Build and Push Full Docker Image
+        if: steps.ecr-check-full.outputs.skip_push == 'false'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.app_path }}
           file: ${{ inputs.app_path }}/Dockerfile
+          target: runner
           platforms: linux/amd64
           push: true
           tags: ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}
@@ -157,11 +169,51 @@ jobs:
           build-args: |
             ENVIRONMENT=dev
 
+      # ------------------------------------------------------------------------
+      # 2. Build & Push Slim Container Image (TAG: ${SHORT_SHA}-slim) [API Only]
+      # ------------------------------------------------------------------------
+      - name: Check if Slim Image Tag Exists in ECR
+        if: ${{ inputs.app_name == 'api' }}
+        id: ecr-check-slim
+        run: |
+          TAG_EXISTS=$(aws ecr describe-images \
+            --repository-name "$(echo "${{ env.ECR_REPO_URL }}" | cut -d'/' -f2)" \
+            --image-ids imageTag=${{ env.SHORT_SHA }}-slim \
+            --query 'imageDetails[0].imageTags[0]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ "$TAG_EXISTS" = "${{ env.SHORT_SHA }}-slim" ]; then
+            echo "Image ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}-slim already exists in ECR. Skipping build and push."
+            echo "skip_push=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_push=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and Push Slim Docker Image
+        if: ${{ inputs.app_name == 'api' && steps.ecr-check-slim.outputs.skip_push == 'false' }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.app_path }}
+          file: ${{ inputs.app_path }}/Dockerfile
+          target: runner
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.ECR_REPO_URL }}:${{ env.SHORT_SHA }}-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            ENVIRONMENT=prod
+
       - name: Set Outputs
         id: set-outputs
         run: |
           echo "ecr_repo_url=${{ env.ECR_REPO_URL }}" >> $GITHUB_OUTPUT
           echo "short_sha=${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.image_to_deploy }}" = "slim" ]; then
+            echo "image_tag=${{ env.SHORT_SHA }}-slim" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
+          fi
 
   # ----------------------------------------------------------------------------
   # Phase 2: Delegate GitOps Commit Execution
@@ -179,5 +231,6 @@ jobs:
       helm_values_path: ${{ inputs.helm_values_path }}
       ecr_repo_url: ${{ needs.build-and-push.outputs.ecr_repo_url }}
       short_sha: ${{ needs.build-and-push.outputs.short_sha }}
+      image_tag: ${{ needs.build-and-push.outputs.image_tag }}
     secrets: inherit
 
