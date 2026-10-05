@@ -30,6 +30,15 @@ on:
     paths:
       - 'apps/api/**'
   workflow_dispatch:
+    inputs:
+      image-to-deploy:
+        description: 'Select image variant to deploy (full or slim)'
+        required: false
+        type: choice
+        options:
+          - 'full'
+          - 'slim'
+        default: 'full'
 
 permissions:
   id-token: write # Required for AWS OIDC role assumption
@@ -46,5 +55,6 @@ jobs:
       app_name: 'api'
       app_path: './apps/api'
       helm_values_path: 'infra/k8s/helm/api/values.dev.yaml'
+      image_to_deploy: ${{ inputs.image-to-deploy || 'full' }}
     secrets: inherit
 

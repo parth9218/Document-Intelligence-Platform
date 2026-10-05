@@ -31,7 +31,11 @@ on:
         required: true
         type: string
       short_sha:
-        description: 'Short git SHA used as the image tag'
+        description: 'Short git SHA'
+        required: true
+        type: string
+      image_tag:
+        description: 'final image tag'
         required: true
         type: string
 
@@ -62,14 +66,14 @@ jobs:
       - name: Update Helm Chart Values
         run: |
           sed -i "s|repository: .*|repository: \"${{ inputs.ecr_repo_url }}\"|" ${{ inputs.helm_values_path }}
-          sed -i "s|tag: .*|tag: \"${{ inputs.short_sha }}\"|" ${{ inputs.helm_values_path }}
+          sed -i "s|tag: .*|tag: \"${{ inputs.image_tag }}\"|" ${{ inputs.helm_values_path }}
 
       - name: Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ${{ inputs.helm_values_path }}
-          git commit -m "Update ${{ inputs.app_name }} image to ${{ inputs.short_sha }} [skip ci]" \
+          git commit -m "Update ${{ inputs.app_name }} image to ${{ inputs.image_tag }} [skip ci]" \
                          -m "Triggered by: ${{ github.actor }}" \
                          -m "Original Commit: ${{ github.sha }}" \
                          -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
@@ -78,5 +82,5 @@ jobs:
 
       - name: Summary
         run: |
-          echo "ArgoCD will now sync ${{ inputs.app_name }} → ${{ inputs.ecr_repo_url }}:${{ inputs.short_sha }}"
+          echo "ArgoCD will now sync ${{ inputs.app_name }} → ${{ inputs.ecr_repo_url }}:${{ inputs.image_tag }}"
 
