@@ -25,7 +25,7 @@ spec:
       source:
         repoURL: ${github_repository_url}
         targetRevision: '{{target_commit}}'
-        path: '{{path}}'
+        path: '{{helm_path}}'
         helm: 
           valueFiles:
           - values.yaml

@@ -1,5 +1,5 @@
 {
     "target_commit": "2bfe65f2c2da41e1dbe7afb587f65b4921cf8768",
     "app": "worker",
-    "path": "infra/k8s/helm/worker"
+    "helm_path": "infra/k8s/helm/worker"
 }
