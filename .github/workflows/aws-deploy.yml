@@ -57,16 +57,42 @@ permissions:
 
 jobs:
   # ----------------------------------------------------------------------------
+  # Phase 0: Target Environment Resolution
+  # ----------------------------------------------------------------------------
+  detect-env:
+    name: Resolve Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.resolve.outputs.env }}
+    steps:
+      - name: Parse Environment
+        id: resolve
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev" ]]; then
+            TARGET_ENV="dev"
+          else
+            TARGET_ENV="${{ inputs.environment || 'dev' }}"
+          fi
+          echo "Target environment resolved: $TARGET_ENV"
+          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
+
+  # ----------------------------------------------------------------------------
   # Phase 1: Terraform Plan & State Validation
   # ----------------------------------------------------------------------------
   plan-aws:
-    name: Plan AWS Infrastructure
+    name: Plan AWS Infrastructure (${{ needs.detect-env.outputs.env }})
+    needs: detect-env
     runs-on: ubuntu-latest
+    environment: ${{ needs.detect-env.outputs.env }}
     outputs:
-      env: ${{ steps.set-env.outputs.env }}
+      env: ${{ needs.detect-env.outputs.env }}
       api_alb_dns: ${{ steps.resolve-alb.outputs.api_alb_dns }}
     env:
+      ENV: ${{ needs.detect-env.outputs.env }}
       TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
+      TF_VAR_environment: ${{ needs.detect-env.outputs.env }}
       TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
       TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
       TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
@@ -79,21 +105,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      # ------------------------------------------------------------------------
-      # Environment Resolution from Tag or Input
-      # ------------------------------------------------------------------------
-      - name: Resolve Target Environment
-        id: set-env
-        run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
-          else
-            TARGET_ENV="${{ inputs.environment || 'dev' }}"
-          fi
-          echo "ENV=$TARGET_ENV" >> $GITHUB_ENV
-          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
-          echo "Target environment resolved: $TARGET_ENV"
 
       # ------------------------------------------------------------------------
       # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
@@ -200,15 +211,13 @@ jobs:
 
       - name: Terraform Plan
         working-directory: infra/terraform/aws
-        env:
-          TF_VAR_environment: ${{ env.ENV }}
         run: terraform plan -out=tfplan
 
       - name: Upload Terraform Plan Artifact
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: aws-tfplan-${{ steps.set-env.outputs.env }}
+          name: aws-tfplan-${{ needs.detect-env.outputs.env }}
           path: infra/terraform/aws/tfplan
           retention-days: 1
 
