@@ -34,6 +34,10 @@
 - [ ] **Task 404**: KEDA Autoscaling ── _Incomplete_
 - [ ] **Task 405**: Security Hardening ── _Incomplete_
 
+## Backend Phase 5: CI/CD & Multi-Environment Automation
+
+- [ ] **Task 501**: Infrastructure CI/CD Pipelines (AWS & K8s) ── _Incomplete_
+
 ---
 
 ## Frontend Phase 1: Foundation, Tailwind & Hybrid Mocking
