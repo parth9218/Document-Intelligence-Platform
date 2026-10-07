@@ -29,12 +29,10 @@ variable "api_hostname" {
 variable "github_actions_ci_role" {
   type = string
 }
-
 variable "admin_user_arns" {
   type    = list(string)
   default = []
 }
-
 variable "api_alb_dns_name" {
   type        = string
   description = "DNS name of the ALB provisioned for the API Gateway by the k8s Terraform layer. Run `kubectl get gateway -n default` to retrieve this value after the k8s layer is applied."
