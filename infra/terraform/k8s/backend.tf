@@ -1,8 +1,8 @@
 terraform {
   backend "s3" {
     # These are dummy values to satisfy 'terraform validate'. They are overridden by -backend-config in the CI/CD pipeline.
-    bucket       = "tf-state-doc-intel-dev-793140949744-us-east-1-an"
-    key          = "k8s/dev/terraform.tfstate"
+    bucket       = ""
+    key          = ""
     region       = "us-east-1"
     encrypt      = true
     use_lockfile = true
