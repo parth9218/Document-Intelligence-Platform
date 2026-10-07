@@ -4,64 +4,69 @@
 # Purpose:
 #   Provisions and updates core AWS cloud infrastructure (VPC, RDS PostgreSQL,
 #   S3 buckets, SQS queues, EKS cluster, CloudFront distribution, SSM parameters)
-#   using Terraform located in `infra/terraform/aws/environments/<env>`.
+#   using Terraform located in `infra/terraform/aws`.
 #
 # Trigger Conditions:
-#   - Push to `dev` branch with changes under `infra/terraform/aws/**` (excluding prod).
-#   - Manual `workflow_dispatch` (allows selecting target environment and optional K8s deployment trigger).
+#   - Push to `dev` branch with changes under `infra/terraform/aws/**`.
+#   - Push tags matching `stg-infra-aws-v*` or `prod-infra-aws-v*`.
+#   - Manual `workflow_dispatch` (select target environment).
 #
-# Key Features & Operational Logic:
-#   - Local Testing Parity: Employs local binary caching under `env.ACT` for local `act` runner execution.
-#   - Unified Plugin Cache: Restores and caches all Terraform provider binaries using a single unified key
-#     hashed from all lock files across `infra/terraform/**/.terraform.lock.hcl`.
-#   - Output Propagation: Emits key infrastructure outputs (VPC ID, EKS Cluster Name, ACM Cert ARN, SSM Names)
-#     which can be passed directly to downstream workflow calls (`k8s-deploy.yml`).
+# Operational Pipeline Architecture:
+#   1. plan-aws:
+#      - Resolves target environment (dev, stg, prod).
+#      - Dynamically queries K8s remote state via `infra/terraform/query` for Gateway ALB DNS.
+#      - Initializes Terraform with `environments/<env>/backend.config.hcl`.
+#      - Runs `terraform plan` with `environments/<env>/<env>.tfvars` and saves `tfplan` artifact.
+#   2. apply-aws:
+#      - Binds to GitHub Environment (`dev`, `stg`, `prod`) to enforce manual approval gates.
+#      - Applies the planned changes safely.
+#      - On release tags, executes selective snapshot commit to `{env}/infra-aws` tracking branch.
 # ==============================================================================
 
 name: Deploy AWS Infrastructure
 
 on:
   push:
+    branches:
+      - dev
     paths:
       - 'infra/terraform/aws/**'
-      # Do not trigger dev deployment if changes are exclusively in the prod environment folder
-      - '!infra/terraform/aws/environments/prod/**'
+    tags:
+      - 'stg-infra-aws-v*'
+      - 'prod-infra-aws-v*'
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy (dev or prod)'
+        description: 'Environment to deploy (dev, stg, or prod)'
         required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
         default: 'dev'
-      trigger_k8s:
-        description: 'Whether to trigger the K8s workflow (Set it to false for initial AWS infrastructure deployment)'
-        required: true
-        type: boolean
-        default: false
 
 # Prevent concurrent AWS infrastructure runs for the same target environment
 concurrency:
-  group: deploy-aws-${{ inputs.environment || 'dev' }}
+  group: deploy-aws-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   id-token: write # Required for AWS OIDC role assumption
-  contents: read
+  contents: write # Required for selective release tracking branch commits
 
 jobs:
-  deploy-aws:
-    name: Provision AWS Infrastructure
+  # ----------------------------------------------------------------------------
+  # Phase 1: Terraform Plan & State Validation
+  # ----------------------------------------------------------------------------
+  plan-aws:
+    name: Plan AWS Infrastructure
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'dev' }}
     outputs:
-      vpc_id: ${{ steps.tf-outputs.outputs.vpc_id }}
-      eks_cluster_name: ${{ steps.tf-outputs.outputs.eks_cluster_name }}
-      acm_cert_arn: ${{ steps.tf-outputs.outputs.acm_cert_arn }}
-      ssm_parameters_name: ${{ steps.tf-outputs.outputs.ssm_parameters_name }}
-      ssm_secrets_name: ${{ steps.tf-outputs.outputs.ssm_secrets_name }}
+      env: ${{ steps.set-env.outputs.env }}
+      api_alb_dns: ${{ steps.resolve-alb.outputs.api_alb_dns }}
     env:
-      ENV: ${{ inputs.environment || 'dev' }}
-      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME }}
-      TF_VAR_environment: ${{ inputs.environment || 'dev' }}
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
       TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
       TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
       TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
@@ -71,7 +76,24 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------------
+      # Environment Resolution from Tag or Input
+      # ------------------------------------------------------------------------
+      - name: Resolve Target Environment
+        id: set-env
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
+          else
+            TARGET_ENV="${{ inputs.environment || 'dev' }}"
+          fi
+          echo "ENV=$TARGET_ENV" >> $GITHUB_ENV
+          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
+          echo "Target environment resolved: $TARGET_ENV"
 
       # ------------------------------------------------------------------------
       # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
@@ -102,12 +124,17 @@ jobs:
           fi
 
       # ------------------------------------------------------------------------
-      # Terraform Plugin Caching (Unified across AWS and K8s provider locks)
+      # Terraform Plugin Caching (Unified across all lock files)
       # ------------------------------------------------------------------------
       - name: Create Terraform Cache Directory
         run: |
-          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
-          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          if [ -n "$ACT" ]; then
+            mkdir -p /tmp/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=/tmp/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          else
+            mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          fi
 
       - name: Use terraform cache
         if: ${{ !env.ACT }}
@@ -118,67 +145,159 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-terraform-
 
-      # ------------------------------------------------------------------------
-      # Terraform Environment Setup & Formatting Checks
-      # ------------------------------------------------------------------------
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e    # v4.0.1
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: "v1.16.4"  
+          terraform_version: "v1.16.4"
           terraform_wrapper: false
-
-      - name: Terraform Format
-        working-directory: infra/terraform/aws
-        run: terraform fmt -check -recursive
 
       - name: Configure AWS Credentials
         if: ${{ !env.ACT }}
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ env.TF_VAR_github_actions_ci_role }}
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      - name: Terraform Init
-        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
-        run: terraform init
-
-      - name: Terraform Validate
-        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
-        run: terraform validate
-
       # ------------------------------------------------------------------------
-      # Read existing K8s state to retrieve API Gateway ALB DNS (if present)
+      # Dynamic ALB Origin Resolution via Lightweight query Module
       # ------------------------------------------------------------------------
-      - name: Fetch K8s API ALB DNS
-        working-directory: infra/terraform/k8s
+      - name: Query Existing K8s Gateway ALB DNS
+        id: resolve-alb
+        working-directory: infra/terraform/query
         run: |
           terraform init
-          # Use -json so Terraform always emits valid JSON (never a warning box on stdout).
-          # jq returns "null" as a plain string when the key is absent.
-          DNS=$(terraform output -json 2>/dev/null | jq -r '.api_alb_dns.value // empty')
-          if [ -n "$DNS" ]; then
-            echo "TF_VAR_api_alb_dns_name=$DNS" >> $GITHUB_ENV
+          K8S_CONFIG="../k8s/environments/${{ env.ENV }}/backend.config.hcl"
+          ALB_DNS=""
+          if [ -f "$K8S_CONFIG" ]; then
+            terraform apply -auto-approve -input=false -var-file="$K8S_CONFIG" || true
+            ALB_DNS=$(terraform output -json outputs 2>/dev/null | jq -r '.api_alb_dns // empty')
+          fi
+
+          if [ -n "$ALB_DNS" ]; then
+            echo "Resolved active K8s ALB DNS: $ALB_DNS"
+            echo "TF_VAR_api_alb_dns_name=$ALB_DNS" >> $GITHUB_ENV
+            echo "api_alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
           else
-            echo "TF_VAR_api_alb_dns_name=dummy.alb.dns" >> $GITHUB_ENV
+            echo "No active K8s ALB found in state. Falling back to placeholder."
+            echo "TF_VAR_api_alb_dns_name=placeholder.elb.amazonaws.com" >> $GITHUB_ENV
+            echo "api_alb_dns=placeholder.elb.amazonaws.com" >> $GITHUB_OUTPUT
           fi
 
       # ------------------------------------------------------------------------
-      # Apply AWS Terraform Infrastructure
+      # Terraform Format, Init, Validate, and Plan
       # ------------------------------------------------------------------------
-      - name: Terraform Apply
-        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
-        env:
-          TF_LOG: ${{ env.TF_LOG }}
-        run: terraform apply -auto-approve -input=false
+      - name: Terraform Format Check
+        working-directory: infra/terraform/aws
+        run: terraform fmt -check -recursive
 
+      - name: Terraform Init
+        working-directory: infra/terraform/aws
+        run: terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
+
+      - name: Terraform Validate
+        working-directory: infra/terraform/aws
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: infra/terraform/aws
+        env:
+          TF_VAR_environment: ${{ env.ENV }}
+        run: terraform plan -out=tfplan
+
+      - name: Upload Terraform Plan Artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aws-tfplan-${{ steps.set-env.outputs.env }}
+          path: infra/terraform/aws/tfplan
+          retention-days: 1
+
+  # ----------------------------------------------------------------------------
+  # Phase 2: Manual Approval Gate & Apply
+  # ----------------------------------------------------------------------------
+  apply-aws:
+    name: Apply AWS Infrastructure (${{ needs.plan-aws.outputs.env }})
+    needs: plan-aws
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan-aws.outputs.env }}
+    outputs:
+      vpc_id: ${{ steps.tf-outputs.outputs.vpc_id }}
+      eks_cluster_name: ${{ steps.tf-outputs.outputs.eks_cluster_name }}
+      acm_cert_arn: ${{ steps.tf-outputs.outputs.acm_cert_arn }}
+      ssm_parameters_name: ${{ steps.tf-outputs.outputs.ssm_parameters_name }}
+      ssm_secrets_name: ${{ steps.tf-outputs.outputs.ssm_secrets_name }}
+    env:
+      ENV: ${{ needs.plan-aws.outputs.env }}
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
+      TF_VAR_environment: ${{ needs.plan-aws.outputs.env }}
+      TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
+      TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
+      TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
+      TF_VAR_github_actions_ci_role: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+      TF_VAR_api_hostname: ${{ vars.TF_API_HOSTNAME }}
+      TF_VAR_admin_user_arns: ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
+      TF_VAR_api_alb_dns_name: ${{ needs.plan-aws.outputs.api_alb_dns }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      
       # ------------------------------------------------------------------------
-      # Export Infrastructure Variables for Downstream Steps/Workflows
+      # Terraform Plugin Caching (Unified across all lock files)
       # ------------------------------------------------------------------------
+      - name: Create Terraform Cache Directory
+        run: |
+          if [ -n "$ACT" ]; then
+            mkdir -p /tmp/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=/tmp/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          else
+            mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          fi
+
+      - name: Use terraform cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "v1.16.4"
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Download Terraform Plan Artifact
+        if: ${{ !env.ACT }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aws-tfplan-${{ env.ENV }}
+          path: infra/terraform/aws
+
+      - name: Terraform Init
+        working-directory: infra/terraform/aws
+        run: terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
+
+      - name: Terraform Apply Plan
+        working-directory: infra/terraform/aws
+        run: terraform apply -auto-approve tfplan
+
       - name: Extract Terraform Outputs
         id: tf-outputs
-        working-directory: infra/terraform/aws/environments/${{ env.ENV }}
+        working-directory: infra/terraform/aws
         run: |
-          # Use -json + jq so Terraform always emits valid JSON on stdout (never a warning box)
           TF_JSON=$(terraform output -json 2>/dev/null)
           echo "vpc_id=$(echo "$TF_JSON"              | jq -r '.vpc_id.value // empty')"              >> $GITHUB_OUTPUT
           echo "eks_cluster_name=$(echo "$TF_JSON"    | jq -r '.eks_cluster_name.value // empty')"    >> $GITHUB_OUTPUT
@@ -186,26 +305,26 @@ jobs:
           echo "ssm_parameters_name=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name.value // empty')" >> $GITHUB_OUTPUT
           echo "ssm_secrets_name=$(echo "$TF_JSON"    | jq -r '.ssm_secrets_name.value // empty')"    >> $GITHUB_OUTPUT
 
-  # ----------------------------------------------------------------------------
-  # Downstream K8s Workflow Triggering (Optional)
-  # ----------------------------------------------------------------------------
-  trigger-k8s:
-    name: Trigger Kubernetes Deployment
-    needs: deploy-aws
-    if: inputs.trigger_k8s == true
-    # Trigger the reusable k8s workflow, passing outputs from AWS as inputs
-    uses: ./.github/workflows/k8s-deploy.yml
-    with:
-      environment:            ${{ inputs.environment || 'dev' }}
-      cluster_name:           ${{ needs.deploy-aws.outputs.eks_cluster_name }}
-      vpc_id:                 ${{ needs.deploy-aws.outputs.vpc_id }}
-      api_domain:             ${{ vars.TF_API_HOSTNAME }}
-      acm_cert_arn:           ${{ needs.deploy-aws.outputs.acm_cert_arn }}
-      ssm_parameters_name:    ${{ needs.deploy-aws.outputs.ssm_parameters_name }}
-      ssm_secrets_name:       ${{ needs.deploy-aws.outputs.ssm_secrets_name }}
-      project_name:           ${{ vars.TF_PROJECT_NAME }}
-      github_repository_url:  ${{ vars.TF_GITHUB_REPOSITORY_URL }}
-      target_revision_api:    ${{ vars.TF_TARGET_REVISION_API }}
-      target_revision_worker: ${{ vars.TF_TARGET_REVISION_WORKER }}
-    secrets: inherit
+      # ------------------------------------------------------------------------
+      # Selective Release Branch Tracking (Executed only on release tags)
+      # ------------------------------------------------------------------------
+      - name: Update Selective Release Tracking Branch
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          TARGET_BRANCH="${{ env.ENV }}/infra-aws"
+          echo "Updating release tracking branch: $TARGET_BRANCH"
+          git fetch origin "${TARGET_BRANCH}:${TARGET_BRANCH}" 2>/dev/null || git branch "$TARGET_BRANCH"
+          git checkout "$TARGET_BRANCH"
+          git rm -rf . 2>/dev/null || true
+          git checkout "tags/${{ github.ref_name }}" -- \
+            infra/terraform/aws \
+            infra/terraform/query
 
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Release ${{ github.ref_name }} [skip ci]" \
+            -m "Original Commit: ${{ github.sha }}" \
+            -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            || echo "No changes to commit"
+          git push origin "$TARGET_BRANCH"

@@ -43,14 +43,11 @@ infra/terraform/
 │   ├── modules/                   # Environment-agnostic modules (core, vpc, eks, storage, etc.)
 │   └── environments/
 │       ├── dev/
-│       │   ├── backend.config.hcl # dev S3 bucket, key, and region
-│       │   └── dev.tfvars         # dev-specific parameter overrides
+│       │   └── backend.config.hcl # dev S3 bucket, key, and region
 │       ├── stg/
-│       │   ├── backend.config.hcl # stg S3 bucket, key, and region
-│       │   └── stg.tfvars         # stg-specific parameter overrides
+│       │   └── backend.config.hcl # stg S3 bucket, key, and region
 │       └── prod/
-│           ├── backend.config.hcl # prod S3 bucket, key, and region
-│           └── prod.tfvars        # prod-specific parameter overrides
+│           └── backend.config.hcl # prod S3 bucket, key, and region
 ├── k8s/
 │   ├── main.tf                    # Root K8s/Helm provider configurations
 │   ├── helm.tf                    # Helm releases (ALB Controller, ArgoCD, KEDA)
@@ -61,14 +58,11 @@ infra/terraform/
 │   ├── manifests/                 # Kubernetes manifest templates
 │   └── environments/
 │       ├── dev/
-│       │   ├── backend.config.hcl # dev S3 backend config for K8s state
-│       │   └── dev.tfvars         # dev-specific K8s variables
+│       │   └── backend.config.hcl # dev S3 backend config for K8s state
 │       ├── stg/
-│       │   ├── backend.config.hcl # stg S3 backend config for K8s state
-│       │   └── stg.tfvars         # stg-specific K8s variables
+│       │   └── backend.config.hcl # stg S3 backend config for K8s state
 │       └── prod/
-│           ├── backend.config.hcl # prod S3 backend config for K8s state
-│           └── prod.tfvars        # prod-specific K8s variables
+│           └── backend.config.hcl # prod S3 backend config for K8s state
 └── query/
     ├── main.tf                    # data.terraform_remote_state reader (zero external providers)
     └── variables.tf               # bucket, key, region variables
@@ -114,7 +108,7 @@ sequenceDiagram
     Query-->>GH: ALB DNS resolved
     
     GH->>AWS: terraform init -backend-config=...
-    GH->>AWS: terraform plan -var-file=... -out=tfplan
+    GH->>AWS: terraform plan (governed via TF_VAR_* env vars) -out=tfplan
     
     rect rgb(255, 245, 230)
         Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)
@@ -170,7 +164,7 @@ sequenceDiagram
     end
     
     GH->>K8s: terraform init -backend-config=...
-    GH->>K8s: terraform plan -var-file=... -out=tfplan
+    GH->>K8s: terraform plan (governed via TF_VAR_* env vars) -out=tfplan
     
     rect rgb(255, 245, 230)
         Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)

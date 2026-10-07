@@ -64,7 +64,8 @@ echo "ENV=$ENV" >> $GITHUB_ENV
    * Change `working-directory` to `infra/terraform/aws`.
    * `terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"`.
 3. **Plan Phase (`plan-aws` job)**:
-   * Run `terraform plan -var-file="environments/${{ env.ENV }}/${{ env.ENV }}.tfvars" -out=tfplan`.
+   * Populate `TF_VAR_*` variables from GitHub Actions vars, secrets, environment context, and dynamic outputs.
+   * Run `terraform plan -out=tfplan`.
    * Upload `tfplan` as workflow artifact.
 4. **Approval Gate & Apply Phase (`apply-aws` job)**:
    * Binds to `environment: ${{ env.ENV }}`.
@@ -104,7 +105,8 @@ echo "ENV=$ENV" >> $GITHUB_ENV
    * Change `working-directory` to `infra/terraform/k8s`.
    * `terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"`.
 4. **Plan Phase (`plan-k8s` job)**:
-   * Run `terraform plan -var-file="environments/${{ env.ENV }}/${{ env.ENV }}.tfvars" -out=tfplan`.
+   * Populate `TF_VAR_*` variables from GitHub Actions vars, environment context, and validated AWS outputs.
+   * Run `terraform plan -out=tfplan`.
    * Upload `tfplan` as workflow artifact.
 5. **Approval Gate & Apply Phase (`apply-k8s` job)**:
    * Binds to `environment: ${{ env.ENV }}`.
@@ -125,13 +127,13 @@ echo "ENV=$ENV" >> $GITHUB_ENV
 
 ## 4. Acceptance Criteria
 
-- [ ] `.gitignore` contains `*.tfstate*` and `.terraform/`.
-- [ ] `aws-deploy.yml` triggers on push to `dev` (aws paths) and tags `stg-infra-aws-v*` / `prod-infra-aws-v*`.
-- [ ] `k8s-deploy.yml` triggers on push to `dev` (k8s paths) and tags `stg-infra-k8s-v*` / `prod-infra-k8s-v*`.
-- [ ] Both workflows point `working-directory` to `infra/terraform/aws` and `infra/terraform/k8s` respectively.
-- [ ] Both workflows leverage `environments/{env}/backend.config.hcl` for backend initialization.
-- [ ] `infra/terraform/query` is utilized for cross-stack reading without downloading extra providers.
-- [ ] Manual approval gates are enforced for `stg` and `prod` via GitHub Environments.
-- [ ] Selective release branch commits run only on successful apply for tagged executions with `[skip ci]`.
-- [ ] Pre-flight checks in `k8s-deploy.yml` fail cleanly if AWS prerequisites are absent.
-- [ ] No cross-stack targeted applies violate the blast radius boundary.
+- [x] `.gitignore` contains `*.tfstate*` and `.terraform/`.
+- [x] `aws-deploy.yml` triggers on push to `dev` (aws paths) and tags `stg-infra-aws-v*` / `prod-infra-aws-v*`.
+- [x] `k8s-deploy.yml` triggers on push to `dev` (k8s paths) and tags `stg-infra-k8s-v*` / `prod-infra-k8s-v*`.
+- [x] Both workflows point `working-directory` to `infra/terraform/aws` and `infra/terraform/k8s` respectively.
+- [x] Both workflows leverage `environments/{env}/backend.config.hcl` for backend initialization.
+- [x] `infra/terraform/query` is utilized for cross-stack reading without downloading extra providers.
+- [x] Manual approval gates are enforced for `stg` and `prod` via GitHub Environments.
+- [x] Selective release branch commits run only on successful apply for tagged executions with `[skip ci]`.
+- [x] Pre-flight checks in `k8s-deploy.yml` fail cleanly if AWS prerequisites are absent.
+- [x] No cross-stack targeted applies violate the blast radius boundary.

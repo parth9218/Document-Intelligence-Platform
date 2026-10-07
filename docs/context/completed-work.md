@@ -269,3 +269,9 @@ This document lists completed tasks and code files created.
   - Updated `secrets-provider-class.yaml` and integrated RDS IAM Authentication configs (`DB_IAM_AUTH_ENABLED`) using `@aws-sdk/rds-signer` in the API and IAM auth in the Worker.
   - Created `argocd-applicationset.yaml` template for ArgoCD deployments of the API and Worker applications.
   - Configured IAM policy in Terraform (`infra/terraform/aws/modules/eks/iam.tf`) to grant `rds-db:connect` permission for IAM database authentication.
+- **Infrastructure CI/CD Pipelines (Task 501)**:
+  - Formulated comprehensive multi-environment, tag-driven CI/CD architecture in [infrastructure-cicd-spec.md](file:///Users/parth/RAG/Document%20Intelligence%20Platform/docs/context/infrastructure-cicd-spec.md).
+  - Configured Git ignores for `*.tfstate*` and `.terraform/` in `.gitignore` to prevent local state leaks.
+  - Updated AWS deployment workflow [.github/workflows/aws-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/aws-deploy.yml) to support push to dev, tag triggers (`stg-infra-aws-v*`, `prod-infra-aws-v*`), dynamic K8s ALB DNS resolution via `infra/terraform/query`, manual approval gates via GitHub Environments, and selective release tracking branch commits to `{env}/infra-aws`.
+  - Updated K8s deployment workflow [.github/workflows/k8s-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/k8s-deploy.yml) with pre-flight AWS state output validation, removal of outdated cross-stack path filters and targeted applies, manual approval gates via GitHub Environments, ALB drift alerts against CloudFront, and selective release tracking branch commits to `{env}/infra-k8s`.
+  - Created staging and production environment parameter files (`stg.tfvars`, `prod.tfvars`) across AWS and K8s Terraform configurations.
