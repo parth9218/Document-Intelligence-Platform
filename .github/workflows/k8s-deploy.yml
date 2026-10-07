@@ -180,7 +180,7 @@ jobs:
         id: aws-validate
         working-directory: infra/terraform/query
         run: |
-          terraform init
+          terraform init -lockfile=readonly
           AWS_CONFIG="../aws/environments/${{ env.ENV }}/backend.config.hcl"
 
           if [ ! -f "$AWS_CONFIG" ]; then
@@ -235,7 +235,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: infra/terraform/k8s
-        run: terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
+        run: terraform init -lockfile=readonly -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
 
       - name: Terraform Validate
         working-directory: infra/terraform/k8s
@@ -326,7 +326,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: infra/terraform/k8s
-        run: terraform init -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
+        run: terraform init -lockfile=readonly -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
 
       - name: Terraform Apply Plan
         working-directory: infra/terraform/k8s
@@ -381,7 +381,7 @@ jobs:
       - name: Verify ALB Alignment with CloudFront Origin
         working-directory: infra/terraform/query
         run: |
-          terraform init
+          terraform init -lockfile=readonly
           AWS_CONFIG="../aws/environments/${{ env.ENV }}/backend.config.hcl"
           terraform apply -auto-approve -input=false -var-file="$AWS_CONFIG"
           CF_DOMAIN=$(terraform output -json outputs | jq -r '.cloudfront_domain // empty')
@@ -398,6 +398,8 @@ jobs:
         run: |
           TARGET_BRANCH="${{ env.ENV }}/infra-k8s"
           echo "Updating release tracking branch: $TARGET_BRANCH"
+          git restore . 
+          git clean -fdx
           git fetch origin "${TARGET_BRANCH}:${TARGET_BRANCH}" 2>/dev/null || git branch "$TARGET_BRANCH"
           git checkout "$TARGET_BRANCH"
           git rm -rf . 2>/dev/null || true
