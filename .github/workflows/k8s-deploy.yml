@@ -66,38 +66,49 @@ permissions:
 
 jobs:
   # ----------------------------------------------------------------------------
+  # Phase 0: Target Environment Resolution
+  # ----------------------------------------------------------------------------
+  detect-env:
+    name: Resolve Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.resolve.outputs.env }}
+    steps:
+      - name: Parse Environment
+        id: resolve
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev" ]]; then
+            TARGET_ENV="dev"
+          else
+            TARGET_ENV="${{ inputs.environment || 'dev' }}"
+          fi
+          echo "Target environment resolved: $TARGET_ENV"
+          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
+
+  # ----------------------------------------------------------------------------
   # Phase 1: Pre-flight AWS State Validation & Terraform Plan
   # ----------------------------------------------------------------------------
   plan-k8s:
-    name: Plan K8s Infrastructure
+    name: Plan K8s Infrastructure (${{ needs.detect-env.outputs.env }})
+    needs: detect-env
     runs-on: ubuntu-latest
+    environment: ${{ needs.detect-env.outputs.env }}
     outputs:
-      env: ${{ steps.set-env.outputs.env }}
+      env: ${{ needs.detect-env.outputs.env }}
       cluster_name: ${{ steps.aws-validate.outputs.cluster_name }}
       vpc_id: ${{ steps.aws-validate.outputs.vpc_id }}
       acm_cert_arn: ${{ steps.aws-validate.outputs.acm_cert_arn }}
       ssm_parameters_name: ${{ steps.aws-validate.outputs.ssm_parameters_name }}
       ssm_secrets_name: ${{ steps.aws-validate.outputs.ssm_secrets_name }}
+    env:
+      ENV: ${{ needs.detect-env.outputs.env }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      # ------------------------------------------------------------------------
-      # Environment Resolution from Tag or Input
-      # ------------------------------------------------------------------------
-      - name: Resolve Target Environment
-        id: set-env
-        run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
-          else
-            TARGET_ENV="${{ inputs.environment || 'dev' }}"
-          fi
-          echo "ENV=$TARGET_ENV" >> $GITHUB_ENV
-          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
-          echo "Target environment resolved: $TARGET_ENV"
 
       # ------------------------------------------------------------------------
       # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
@@ -240,17 +251,17 @@ jobs:
           TF_VAR_ssm_secrets_name: ${{ steps.aws-validate.outputs.ssm_secrets_name }}
           TF_VAR_api_domain: ${{ vars.TF_API_HOSTNAME }}
           TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
-          TF_VAR_environment: ${{ steps.set-env.outputs.env }}
+          TF_VAR_environment: ${{ needs.detect-env.outputs.env }}
           TF_VAR_github_repository_url: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
-          TF_VAR_targetRevision_api: ${{ vars.TF_TARGET_REVISION_API || steps.set-env.outputs.env }}
-          TF_VAR_targetRevision_worker: ${{ vars.TF_TARGET_REVISION_WORKER || steps.set-env.outputs.env }}
+          TF_VAR_targetRevision_api: ${{ vars.TF_TARGET_REVISION_API || needs.detect-env.outputs.env }}
+          TF_VAR_targetRevision_worker: ${{ vars.TF_TARGET_REVISION_WORKER || needs.detect-env.outputs.env }}
         run: terraform plan -out=tfplan
 
       - name: Upload Terraform Plan 
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: k8s-tfplan-${{ steps.set-env.outputs.env }}
+          name: k8s-tfplan-${{ needs.detect-env.outputs.env }}
           path: infra/terraform/k8s/tfplan
           retention-days: 1
 

@@ -127,14 +127,18 @@ sequenceDiagram
 ```
 
 ### Key Operational Rules:
-1. **CloudFront ↔ Dynamic ALB Handshake**:
+1. **Target Environment Resolution (`detect-env`)**:
+   - Resolves target environment (`dev`, `stg`, `prod`) from git tag, push branch, or dispatch input.
+   - Emits `outputs.env` so that downstream jobs (`plan-aws`, `apply-aws`) bind to `environment: ${{ needs.detect-env.outputs.env }}` before executing.
+   - This ensures that repository environment variables (`vars.*`) and secrets (`secrets.*`) are scoped to the exact target environment during both plan and apply stages.
+2. **CloudFront ↔ Dynamic ALB Handshake**:
    - Queries `infra/terraform/query` against the K8s backend config for the target environment.
    - If K8s has already deployed the Gateway, its ALB DNS is passed to `TF_VAR_api_alb_dns_name`.
    - If K8s has not yet been deployed (e.g. greenfield environment), a placeholder DNS is supplied so CloudFront provisions without blocking.
-2. **Two-Stage Execution (Plan -> Gate -> Apply)**:
-   - `plan`: Generates execution plan and uploads artifact `tfplan`.
-   - `apply`: Binds to `environment: ${{ env.ENV }}`. In `stg` and `prod`, GitHub Environment protection rules require manual approval before proceeding.
-3. **Selective Audit Commit**:
+3. **Execution Stages (`plan` -> Manual Approval Gate -> `apply`)**:
+   - `plan`: Runs in the target GitHub Environment to read scoped variables, generates execution plan, and uploads artifact `tfplan`.
+   - `apply`: Binds to the target GitHub Environment to enforce required reviewer approvals for `stg` and `prod` before applying `tfplan`.
+4. **Selective Audit Commit**:
    - Updates the target `{env}/infra-aws` tracking branch with only `infra/terraform/aws/**` and `infra/terraform/modules/**` from the release tag.
 
 ---
@@ -191,13 +195,15 @@ sequenceDiagram
 ```
 
 ### Key Operational Rules:
-1. **Pre-flight AWS Output Validation**:
+1. **Target Environment Resolution (`detect-env`)**:
+   - Resolves target environment (`dev`, `stg`, `prod`) and binds `plan-k8s` and `apply-k8s` jobs to `environment: ${{ needs.detect-env.outputs.env }}` so that scoped repository environment variables (`vars.*`) are accessible.
+2. **Pre-flight AWS Output Validation**:
    - Uses `infra/terraform/query` with `backend.config.hcl` from AWS to assert that `vpc_id`, `eks_cluster_name`, `acm_cert_arn`, `ssm_parameters_name`, and `ssm_secrets_name` exist in the remote state.
    - If any are missing, the workflow aborts with an actionable error.
-2. **Blast-Radius Isolation (No Direct AWS Applies)**:
+3. **Blast-Radius Isolation (No Direct AWS Applies)**:
    - K8s workflow **never** performs targeted `terraform apply` on AWS storage or CloudFront modules.
    - If the dynamically generated ALB DNS changed from what CloudFront is currently targeting, K8s alerts the user to cut an AWS release tag to update the origin.
-3. **Selective Audit Commit**:
+4. **Selective Audit Commit**:
    - Updates `{env}/infra-k8s` with `infra/terraform/k8s/**` snapshots.
 
 ---
