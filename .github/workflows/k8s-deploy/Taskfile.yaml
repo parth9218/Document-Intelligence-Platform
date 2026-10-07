@@ -1,16 +1,48 @@
 version: "3"
 
 env:
-    AWS_ACCESS_KEY_ID:
-        sh: aws configure get aws_access_key_id
-    AWS_SECRET_ACCESS_KEY:
-        sh: aws configure get aws_secret_access_key 
-    AWS_REGION:
-        sh: aws configure get region || echo "us-east-1"
+  AWS_ACCESS_KEY_ID:
+    sh: aws configure get aws_access_key_id
+  AWS_SECRET_ACCESS_KEY:
+    sh: aws configure get aws_secret_access_key 
+  AWS_REGION:
+    sh: aws configure get region || echo "us-east-1"
 
 tasks:
-  trigger-workflow:
-    desc: Trigger aws-deploy workflow for dev
+  list:
+    desc: List all available jobs in k8s-deploy workflow
+    cmds:
+      - |
+        act workflow_dispatch \
+          --container-architecture linux/amd64 \
+          -W .github/workflows/k8s-deploy.yml \
+          -C ../../.. \
+          --list
+
+  # --------------------------------------------------------------------------
+  # Development Environment (workflow_dispatch & push)
+  # --------------------------------------------------------------------------
+  plan-dev:
+    desc: Run plan-k8s for DEV environment via workflow_dispatch
+    cmds:
+      - |
+        act workflow_dispatch \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/dev.json
+
+  apply-dev:
+    desc: Run full k8s-deploy pipeline (plan + apply) for DEV environment
     cmds:
       - |
         act workflow_dispatch \
@@ -19,8 +51,111 @@ tasks:
           -C ../../.. \
           -W .github/workflows/k8s-deploy.yml \
           --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
           --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
           --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
           --env AWS_REGION="$AWS_REGION" \
           --var-file ./.github/workflows/k8s-deploy/.env \
-          -e ./.github/workflows/k8s-deploy/event.json
+          -e ./.github/workflows/k8s-deploy/events/dev.json
+
+  push-dev:
+    desc: Simulate git push to dev branch triggering k8s-deploy
+    cmds:
+      - |
+        act push \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/push-dev.json
+
+  # --------------------------------------------------------------------------
+  # Staging Environment (workflow_dispatch & tag trigger)
+  # --------------------------------------------------------------------------
+  plan-stg:
+    desc: Run plan-k8s for STAGING environment via workflow_dispatch
+    cmds:
+      - |
+        act workflow_dispatch \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/stg.json
+
+  tag-stg:
+    desc: Simulate pushing release tag stg-infra-k8s-v1.0.0
+    cmds:
+      - |
+        act push \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/tag-stg.json
+
+  # --------------------------------------------------------------------------
+  # Production Environment (workflow_dispatch & tag trigger)
+  # --------------------------------------------------------------------------
+  plan-prod:
+    desc: Run plan-k8s for PRODUCTION environment via workflow_dispatch
+    cmds:
+      - |
+        act workflow_dispatch \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/prod.json
+
+  tag-prod:
+    desc: Simulate pushing release tag prod-infra-k8s-v1.0.0
+    cmds:
+      - |
+        act push \
+          -j plan-k8s \
+          --container-architecture linux/amd64 \
+          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+          -C ../../.. \
+          -W .github/workflows/k8s-deploy.yml \
+          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
+          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          --env AWS_REGION="$AWS_REGION" \
+          --var-file ./.github/workflows/k8s-deploy/.env \
+          -e ./.github/workflows/k8s-deploy/events/tag-prod.json
