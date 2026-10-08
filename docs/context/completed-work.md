@@ -275,3 +275,20 @@ This document lists completed tasks and code files created.
   - Updated AWS deployment workflow [.github/workflows/aws-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/aws-deploy.yml) to support push to dev, tag triggers (`stg-infra-aws-v*`, `prod-infra-aws-v*`), dynamic K8s ALB DNS resolution via `infra/terraform/query`, manual approval gates via GitHub Environments, and selective release tracking branch commits to `{env}/infra-aws`.
   - Updated K8s deployment workflow [.github/workflows/k8s-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/k8s-deploy.yml) with pre-flight AWS state output validation, removal of outdated cross-stack path filters and targeted applies, manual approval gates via GitHub Environments, ALB drift alerts against CloudFront, and selective release tracking branch commits to `{env}/infra-k8s`.
   - Created staging and production environment parameter files (`stg.tfvars`, `prod.tfvars`) across AWS and K8s Terraform configurations.
+- **Infrastructure Teardown Pipeline (Task 502)**:
+  - Implemented [.github/workflows/infra-destroy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/infra-destroy.yml) orchestrating reverse-dependency teardowns (`destroy-k8s` followed by optional `destroy-aws`).
+  - Added support for checkout semantics (`dev` trunk checkout, strict semantic tag checkouts for `stg` and `prod`), pre-flight state validation, and selective AWS destruction flags.
+- **Frontend Runtime Configuration Decoupling (Task 503)**:
+  - Injected `<Script src="/config.js" strategy="beforeInteractive" />` into root [layout.tsx](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/app/layout.tsx).
+  - Extended global TypeScript `Window` interface with `__APP_CONFIG__` in [config.d.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/types/config.d.ts).
+  - Added generic fallback template [config.js](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/public/config.js).
+  - Refactored [api-client.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/lib/api-client.ts) and [api-routing.ts](file:///Users/parth/RAG/Document%20Intelligence%20Platform/apps/frontend/src/config/api-routing.ts) to resolve runtime `window.__APP_CONFIG__` endpoints before compile-time fallbacks.
+  - Consolidated `package.json` build scripts into a unified `npm run build` command.
+- **Multi-Environment Frontend CI/CD Pipeline (Task 504)**:
+  - Implemented [.github/workflows/frontend-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/frontend-deploy.yml) executing the "Build once in dev, promote identical immutable artifacts to stg/prod" pattern using a shared S3 artifact bucket (`vars.ARTIFACT_BUCKET_NAME`).
+  - Integrated dynamic infrastructure output resolution via `infra/terraform/query`.
+  - Configured pipeline to generate and inject `out/config.js` into the target frontend bucket with edge-cached and browser-revalidating headers (`public, max-age=0, s-maxage=86400, must-revalidate`).
+  - Integrated CloudFront cache invalidation (`/*`) and selective tracking branch commits to `{env}/frontend` with `[skip ci]`.
+  - Pinned all imported GitHub Actions to exact full-length commit SHAs.
+  - Implemented local testing fixtures (`events/dev.json`, `events/push-dev.json`, `events/tag-stg.json`, `events/tag-prod.json`) and Taskfile commands (`Taskfile.yaml`) for local runner verification via `act`.
+
