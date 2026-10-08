@@ -218,3 +218,23 @@ sequenceDiagram
 | **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
 | **K8s Infra (stg)** | Push tag: `stg-infra-k8s-v*` | `deploy-k8s-stg` | `stg` (Reviewer required) | `stg/infra-k8s` |
 | **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*` | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s` |
+
+---
+
+## 6. Infrastructure Teardown Workflow (`infra-destroy.yml`)
+
+The infrastructure teardown pipeline tears down cloud resources in reverse dependency order (`destroy-k8s` followed by optional `destroy-aws`).
+
+### 6.1 Invocation & Parameters:
+- **`environment`**: `dev`, `stg`, or `prod`.
+- **`destroy_aws`**: Boolean toggle indicating whether to destroy root AWS infrastructure after Kubernetes teardown finishes.
+- **`aws_release_tag`**: Release tag (format `{env}-infra-aws-v{major}.{minor}.{patch}`) indicating the exact commit to checkout for AWS teardown in `stg` and `prod`.
+- **`k8s_release_tag`**: Release tag (format `{env}-infra-k8s-v{major}.{minor}.{patch}`) indicating the exact commit to checkout for K8s teardown in `stg` and `prod`.
+
+### 6.2 Checkout Semantics:
+- **`dev` Environment**: Directly checks out the trunk branch (`dev`).
+- **`stg` / `prod` Environments**: Validates release tag formatting and checks out the exact git tag references before executing `terraform destroy`.
+
+### 6.3 State Query & Variables:
+- Reads prerequisite AWS cluster parameters via `infra/terraform/query` against the environment's `backend.config.hcl`.
+- Injects all variables strictly through `TF_VAR_*` environment variables bound to the resolved GitHub Environment scope.

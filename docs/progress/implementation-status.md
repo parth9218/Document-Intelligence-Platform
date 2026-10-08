@@ -37,6 +37,7 @@
 ## Backend Phase 5: CI/CD & Multi-Environment Automation
 
 - [x] **Task 501**: Infrastructure CI/CD Pipelines (AWS & K8s) ── _Complete_
+- [x] **Task 502**: Infrastructure Teardown Pipeline ── _Complete_
 
 ---
 
