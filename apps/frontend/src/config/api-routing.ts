@@ -7,7 +7,15 @@ export interface ApiRoutingConfig {
   query: EndpointMode;
 }
 
-const defaultMode = (process.env.NEXT_PUBLIC_API_MODE || 'hybrid') as 'api' | 'mock' | 'hybrid';
+export function getDefaultApiMode(): 'api' | 'mock' | 'hybrid' {
+  return (
+    (typeof window !== 'undefined' && window.__APP_CONFIG__?.API_MODE) ||
+    process.env.NEXT_PUBLIC_API_MODE ||
+    'hybrid'
+  ) as 'api' | 'mock' | 'hybrid';
+}
+
+const defaultMode = getDefaultApiMode();
 
 // In hybrid mode, everything defaults to mock unless explicitly set
 export const apiRouting: ApiRoutingConfig = {

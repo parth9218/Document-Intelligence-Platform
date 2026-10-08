@@ -38,7 +38,7 @@
 
 - [x] **Task 501**: Infrastructure CI/CD Pipelines (AWS & K8s) ── _Complete_
 - [x] **Task 502**: Infrastructure Teardown Pipeline ── _Complete_
-- [ ] **Task 503**: Frontend Runtime Configuration Decoupling (`config.js`) ── _Incomplete_
+- [x] **Task 503**: Frontend Runtime Configuration Decoupling (`config.js`) ── _Complete_
 - [ ] **Task 504**: Multi-Environment Frontend CI/CD Pipeline (`frontend-deploy.yml`) ── _Incomplete_
 
 ---

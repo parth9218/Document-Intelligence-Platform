@@ -159,10 +159,10 @@ Consolidate build scripts to use a single, environment-agnostic command:
 
 ## 6. Acceptance Criteria
 
-- [ ] `apps/frontend/src/types/config.d.ts` extends global `Window` with `__APP_CONFIG__`.
-- [ ] `apps/frontend/public/config.js` exists with generic default values.
-- [ ] `apps/frontend/src/app/layout.tsx` includes `<Script src="/config.js" strategy="beforeInteractive" />`.
-- [ ] `api-client.ts`, `api-routing.ts`, and `dev-toolbar.tsx` resolve runtime values before environment fallbacks.
-- [ ] `package.json` provides a single universal `"build": "next build"` command.
-- [ ] Local dev mode (`npm run dev:local`) runs without errors or missing config warnings.
-- [ ] Static export (`npm run build`) builds cleanly into `out/` with zero TypeScript or linting errors.
+- [x] `apps/frontend/src/types/config.d.ts` extends global `Window` with `__APP_CONFIG__`.
+- [x] `apps/frontend/public/config.js` exists with generic default values.
+- [x] `apps/frontend/src/app/layout.tsx` includes `<Script src="/config.js" strategy="beforeInteractive" />`.
+- [x] `api-client.ts`, `api-routing.ts`, and `dev-toolbar.tsx` resolve runtime values before environment fallbacks.
+- [x] `package.json` provides a single universal `"build": "next build"` command.
+- [x] Local dev mode (`npm run dev:local`) runs without errors or missing config warnings.
+- [x] Static export (`npm run build`) builds cleanly into `out/` with zero TypeScript or linting errors.
