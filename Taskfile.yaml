@@ -122,3 +122,42 @@ tasks:
     dir: .github/workflows/infra-destroy
     cmds:
       - task destroy-all-dev
+
+  # --------------------------------------------------------------------------
+  # Frontend Deployment Workflows (.github/workflows/frontend-deploy)
+  # --------------------------------------------------------------------------
+  frontend-list:
+    desc: List Frontend deployment workflow jobs
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task list
+
+  frontend-plan-dev:
+    desc: Test Frontend build-and-promote for DEV locally
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task plan-dev
+
+  frontend-apply-dev:
+    desc: Test full Frontend pipeline (build + deploy) for DEV locally
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task apply-dev
+
+  frontend-push-dev:
+    desc: Test Frontend push-to-dev event locally
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task push-dev
+
+  frontend-tag-stg:
+    desc: Test Frontend tag release event for STG locally
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task tag-stg
+
+  frontend-tag-prod:
+    desc: Test Frontend tag release event for PROD locally
+    dir: .github/workflows/frontend-deploy
+    cmds:
+      - task tag-prod
