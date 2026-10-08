@@ -79,26 +79,8 @@ tasks:
           -e ./.github/workflows/k8s-deploy/events/push-dev.json
 
   # --------------------------------------------------------------------------
-  # Staging Environment (workflow_dispatch & tag trigger)
+  # Staging Environment (tag trigger)
   # --------------------------------------------------------------------------
-  plan-stg:
-    desc: Run plan-k8s for STAGING environment via workflow_dispatch
-    cmds:
-      - |
-        act workflow_dispatch \
-          -j plan-k8s \
-          --container-architecture linux/amd64 \
-          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
-          -C ../../.. \
-          -W .github/workflows/k8s-deploy.yml \
-          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
-          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_REGION="$AWS_REGION" \
-          --var-file ./.github/workflows/k8s-deploy/.env \
-          -e ./.github/workflows/k8s-deploy/events/stg.json
 
   tag-stg:
     desc: Simulate pushing release tag stg-infra-k8s-v1.0.0
@@ -120,27 +102,8 @@ tasks:
           -e ./.github/workflows/k8s-deploy/events/tag-stg.json
 
   # --------------------------------------------------------------------------
-  # Production Environment (workflow_dispatch & tag trigger)
+  # Production Environment (tag trigger)
   # --------------------------------------------------------------------------
-  plan-prod:
-    desc: Run plan-k8s for PRODUCTION environment via workflow_dispatch
-    cmds:
-      - |
-        act workflow_dispatch \
-          -j plan-k8s \
-          --container-architecture linux/amd64 \
-          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
-          -C ../../.. \
-          -W .github/workflows/k8s-deploy.yml \
-          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
-          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_REGION="$AWS_REGION" \
-          --var-file ./.github/workflows/k8s-deploy/.env \
-          -e ./.github/workflows/k8s-deploy/events/prod.json
-
   tag-prod:
     desc: Simulate pushing release tag prod-infra-k8s-v1.0.0
     cmds:

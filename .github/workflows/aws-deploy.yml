@@ -9,14 +9,14 @@
 # Trigger Conditions:
 #   - Push to `dev` branch with changes under `infra/terraform/aws/**`.
 #   - Push tags matching `stg-infra-aws-v*` or `prod-infra-aws-v*`.
-#   - Manual `workflow_dispatch` (select target environment).
+#   - Manual `workflow_dispatch` (triggers dev environment).
 #
 # Operational Pipeline Architecture:
 #   1. plan-aws:
-#      - Resolves target environment (dev, stg, prod).
+#      - Resolves target environment (dev via push/dispatch, stg/prod via tags).
 #      - Dynamically queries K8s remote state via `infra/terraform/query` for Gateway ALB DNS.
 #      - Initializes Terraform with `environments/<env>/backend.config.hcl`.
-#      - Runs `terraform plan` with `environments/<env>/<env>.tfvars` and saves `tfplan` artifact.
+#      - Runs `terraform plan` and saves `tfplan` artifact.
 #   2. apply-aws:
 #      - Binds to GitHub Environment (`dev`, `stg`, `prod`) to enforce manual approval gates.
 #      - Applies the planned changes safely.
@@ -35,16 +35,6 @@ on:
       - 'stg-infra-aws-v*'
       - 'prod-infra-aws-v*'
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (dev, stg, or prod)'
-        required: true
-        type: choice
-        options:
-          - dev
-          - stg
-          - prod
-        default: 'dev'
 
 # Prevent concurrent AWS infrastructure runs for the same target environment
 concurrency:
@@ -70,10 +60,8 @@ jobs:
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev" ]]; then
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev") || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TARGET_ENV="dev"
-          else
-            TARGET_ENV="${{ inputs.environment || 'dev' }}"
           fi
           echo "Target environment resolved: $TARGET_ENV"
           echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT

@@ -1,6 +1,0 @@
-{
-    "inputs": {
-        "environment": "dev",
-        "trigger_k8s": false
-    }
-}

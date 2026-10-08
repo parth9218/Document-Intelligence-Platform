@@ -100,8 +100,8 @@ sequenceDiagram
     participant S3 as AWS S3 Remote State
     participant Git as Release Branch ({env}/infra-aws)
 
-    Dev->>GH: Push Tag `{env}-infra-aws-v*` or Dispatch
-    GH->>GH: Parse tag: ENV, CONCERN, VERSION
+    Dev->>GH: Push Tag `{env}-infra-aws-v*` or Dev Dispatch
+    GH->>GH: Parse tag: ENV, CONCERN, VERSION (or default to dev on push/dispatch)
     GH->>Query: Query K8s state for existing api_alb_dns
     Query->>S3: Read K8s state
     S3-->>Query: Return ALB DNS (or fallback to placeholder)
@@ -128,7 +128,7 @@ sequenceDiagram
 
 ### Key Operational Rules:
 1. **Target Environment Resolution (`detect-env`)**:
-   - Resolves target environment (`dev`, `stg`, `prod`) from git tag, push branch, or dispatch input.
+   - Resolves target environment (`stg`, `prod` strictly via git release tags; `dev` via dev push or manual `workflow_dispatch`).
    - Emits `outputs.env` so that downstream jobs (`plan-aws`, `apply-aws`) bind to `environment: ${{ needs.detect-env.outputs.env }}` before executing.
    - This ensures that repository environment variables (`vars.*`) and secrets (`secrets.*`) are scoped to the exact target environment during both plan and apply stages.
 2. **CloudFront ↔ Dynamic ALB Handshake**:
@@ -155,8 +155,8 @@ sequenceDiagram
     participant Cluster as EKS Cluster / Gateway
     participant Git as Release Branch ({env}/infra-k8s)
 
-    Dev->>GH: Push Tag `{env}-infra-k8s-v*` or Dispatch
-    GH->>GH: Parse tag: ENV, CONCERN, VERSION
+    Dev->>GH: Push Tag `{env}-infra-k8s-v*` or Dev Dispatch
+    GH->>GH: Parse tag: ENV, CONCERN, VERSION (or default to dev on push/dispatch)
     
     rect rgb(255, 230, 230)
         Note over GH, Query: Pre-Flight AWS Output Validation
@@ -196,7 +196,7 @@ sequenceDiagram
 
 ### Key Operational Rules:
 1. **Target Environment Resolution (`detect-env`)**:
-   - Resolves target environment (`dev`, `stg`, `prod`) and binds `plan-k8s` and `apply-k8s` jobs to `environment: ${{ needs.detect-env.outputs.env }}` so that scoped repository environment variables (`vars.*`) are accessible.
+   - Resolves target environment (`stg`, `prod` strictly via git release tags; `dev` via dev push or manual `workflow_dispatch`) and binds `plan-k8s` and `apply-k8s` jobs to `environment: ${{ needs.detect-env.outputs.env }}` so that scoped repository environment variables (`vars.*`) are accessible.
 2. **Pre-flight AWS Output Validation**:
    - Uses `infra/terraform/query` with `backend.config.hcl` from AWS to assert that `vpc_id`, `eks_cluster_name`, `acm_cert_arn`, `ssm_parameters_name`, and `ssm_secrets_name` exist in the remote state.
    - If any are missing, the workflow aborts with an actionable error.
@@ -212,9 +212,9 @@ sequenceDiagram
 
 | Pipeline | Trigger Pattern | Concurrency Group | Environment Gate | Selective Tracking Branch |
 | :--- | :--- | :--- | :--- | :--- |
-| **AWS Infra (dev)** | Push to `dev` under `infra/terraform/aws/**` | `deploy-aws-dev` | None (Automatic) | N/A (Trunk tracked) |
+| **AWS Infra (dev)** | Push to `dev` under `infra/terraform/aws/**` or `workflow_dispatch` | `deploy-aws-dev` | None (Automatic) | N/A (Trunk tracked) |
 | **AWS Infra (stg)** | Push tag: `stg-infra-aws-v*` | `deploy-aws-stg` | `stg` (Reviewer required) | `stg/infra-aws` |
 | **AWS Infra (prod)** | Push tag: `prod-infra-aws-v*` | `deploy-aws-prod` | `prod` (Reviewer required) | `prod/infra-aws` |
-| **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
+| **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
 | **K8s Infra (stg)** | Push tag: `stg-infra-k8s-v*` | `deploy-k8s-stg` | `stg` (Reviewer required) | `stg/infra-k8s` |
 | **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*` | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s` |
