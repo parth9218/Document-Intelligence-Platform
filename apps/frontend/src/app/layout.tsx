@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Outfit, JetBrains_Mono } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import { AppShell } from '@/components/layout/app-shell';
@@ -31,6 +32,10 @@ export default function RootLayout({
       className={`${outfit.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
+        <Script
+          src="/config.js"
+          strategy="beforeInteractive"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `

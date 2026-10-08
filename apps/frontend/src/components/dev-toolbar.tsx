@@ -63,7 +63,11 @@ export function DevToolbar() {
 
   const hasChanges = () => {
     if (!config) return false;
-    const defaultMode = (process.env.NEXT_PUBLIC_API_MODE || 'hybrid') as 'api' | 'mock' | 'hybrid';
+    const defaultMode = (
+      (typeof window !== 'undefined' && window.__APP_CONFIG__?.API_MODE) ||
+      process.env.NEXT_PUBLIC_API_MODE ||
+      'hybrid'
+    ) as 'api' | 'mock' | 'hybrid';
     const expectedDefault = defaultMode === 'api' ? 'api' : 'mock';
     return (
       config.session !== expectedDefault ||

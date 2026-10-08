@@ -1,6 +1,12 @@
 import { apiRouting } from '../config/api-routing';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+export function getBackendUrl(): string {
+  return (
+    (typeof window !== 'undefined' && window.__APP_CONFIG__?.API_URL) ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://localhost:3000'
+  );
+}
 
 /**
  * Returns the resolved URL for an endpoint depending on its routing mode.
@@ -10,7 +16,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 export function getEndpointUrl(endpoint: keyof typeof apiRouting, path: string): string {
   const mode = apiRouting[endpoint];
   if (mode === 'api') {
-    return `${BACKEND_URL}${path}`;
+    return `${getBackendUrl()}${path}`;
   }
   // For mock mode, keep relative so MSW running on the same host intercepts it cleanly
   return path;
