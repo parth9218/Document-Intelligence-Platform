@@ -34,10 +34,12 @@
 - [ ] **Task 404**: KEDA Autoscaling ── _Incomplete_
 - [ ] **Task 405**: Security Hardening ── _Incomplete_
 
-## Backend Phase 5: CI/CD & Multi-Environment Automation
+## Phase 5: CI/CD & Multi-Environment Automation
 
 - [x] **Task 501**: Infrastructure CI/CD Pipelines (AWS & K8s) ── _Complete_
 - [x] **Task 502**: Infrastructure Teardown Pipeline ── _Complete_
+- [ ] **Task 503**: Frontend Runtime Configuration Decoupling (`config.js`) ── _Incomplete_
+- [ ] **Task 504**: Multi-Environment Frontend CI/CD Pipeline (`frontend-deploy.yml`) ── _Incomplete_
 
 ---
 
