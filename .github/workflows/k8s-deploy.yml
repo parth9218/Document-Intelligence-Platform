@@ -9,12 +9,11 @@
 # Trigger Conditions:
 #   - Push to `dev` branch with changes under `infra/terraform/k8s/**`.
 #   - Push tags matching `stg-infra-k8s-v*` or `prod-infra-k8s-v*`.
-#   - Manual `workflow_dispatch` (select target environment).
-#   - Reusable `workflow_call` (invoked with environment input).
+#   - Manual `workflow_dispatch` (triggers dev environment).
 #
 # Operational Pipeline Architecture:
 #   1. plan-k8s:
-#      - Resolves target environment (dev, stg, prod).
+#      - Resolves target environment (dev via push/dispatch, stg/prod via tags).
 #      - Executes pre-flight validation against AWS remote state via `infra/terraform/query`.
 #      - Fails fast if required AWS prerequisites (VPC, EKS cluster, ACM, SSM) are missing.
 #      - Initializes Terraform with `environments/<env>/backend.config.hcl`.
@@ -39,21 +38,6 @@ on:
       - 'stg-infra-k8s-v*'
       - 'prod-infra-k8s-v*'
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (dev, stg, or prod)'
-        required: true
-        type: choice
-        options:
-          - dev
-          - stg
-          - prod
-        default: 'dev'
-  workflow_call:
-    inputs:
-      environment:
-        required: true
-        type: string
 
 # Prevent concurrent K8s infrastructure deployments for the target environment
 concurrency:
@@ -79,13 +63,15 @@ jobs:
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev" ]]; then
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev") || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TARGET_ENV="dev"
-          else
-            TARGET_ENV="${{ inputs.environment || 'dev' }}"
           fi
           echo "Target environment resolved: $TARGET_ENV"
           echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
+          if [[ "$TARGET_ENV" != "dev" && "$TARGET_ENV" != "stg" && "$TARGET_ENV" != "prod" ]]; then
+            echo "Error: Unrecognized environment '$TARGET_ENV'"
+            exit 1
+          fi
 
   # ----------------------------------------------------------------------------
   # Phase 1: Pre-flight AWS State Validation & Terraform Plan

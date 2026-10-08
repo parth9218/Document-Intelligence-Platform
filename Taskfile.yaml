@@ -33,23 +33,11 @@ tasks:
     cmds:
       - task push-dev
 
-  aws-plan-stg:
-    desc: Test AWS infrastructure plan for STG locally
-    dir: .github/workflows/aws-deploy
-    cmds:
-      - task plan-stg
-
   aws-tag-stg:
     desc: Test AWS infrastructure tag release event for STG locally
     dir: .github/workflows/aws-deploy
     cmds:
       - task tag-stg
-
-  aws-plan-prod:
-    desc: Test AWS infrastructure plan for PROD locally
-    dir: .github/workflows/aws-deploy
-    cmds:
-      - task plan-prod
 
   aws-tag-prod:
     desc: Test AWS infrastructure tag release event for PROD locally
@@ -84,23 +72,11 @@ tasks:
     cmds:
       - task push-dev
 
-  k8s-plan-stg:
-    desc: Test K8s infrastructure plan for STG locally
-    dir: .github/workflows/k8s-deploy
-    cmds:
-      - task plan-stg
-
   k8s-tag-stg:
     desc: Test K8s infrastructure tag release event for STG locally
     dir: .github/workflows/k8s-deploy
     cmds:
       - task tag-stg
-
-  k8s-plan-prod:
-    desc: Test K8s infrastructure plan for PROD locally
-    dir: .github/workflows/k8s-deploy
-    cmds:
-      - task plan-prod
 
   k8s-tag-prod:
     desc: Test K8s infrastructure tag release event for PROD locally

@@ -40,17 +40,16 @@ Implement the multi-environment, tag-driven CI/CD pipelines for **AWS Infrastruc
 * **Push Tags**: Trigger on tags matching patterns:
   * `stg-infra-aws-v*` (targets `stg` environment)
   * `prod-infra-aws-v*` (targets `prod` environment)
-* **Manual `workflow_dispatch`**: Inputs: `environment` (`dev`, `stg`, `prod`), `auto_approve` (boolean, default false for dev, false for stg/prod).
+* **Manual `workflow_dispatch`**: Triggers `dev` environment only (no environment inputs).
 
 #### Dynamic Environment Resolution:
-Extract environment from tag or input:
+Extract environment from release tag (`stg`/`prod`), dev push, or workflow dispatch (`dev`):
 ```bash
 if [[ "${{ github.ref_type }}" == "tag" ]]; then
-  ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
-else
-  ENV="${{ inputs.environment || 'dev' }}"
+  TARGET_ENV=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
+elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "dev") || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+  TARGET_ENV="dev"
 fi
-echo "ENV=$ENV" >> $GITHUB_ENV
 ```
 
 #### Step Updates:
@@ -88,7 +87,7 @@ echo "ENV=$ENV" >> $GITHUB_ENV
 * **Push Tags**: Trigger on tags matching patterns:
   * `stg-infra-k8s-v*` (targets `stg` environment)
   * `prod-infra-k8s-v*` (targets `prod` environment)
-* **Manual `workflow_dispatch`**: Inputs: `environment` (`dev`, `stg`, `prod`).
+* **Manual `workflow_dispatch`**: Triggers `dev` environment only (no environment inputs).
 
 #### Step Updates:
 1. **Pre-flight AWS Output Validation**:

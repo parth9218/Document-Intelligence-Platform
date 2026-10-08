@@ -83,28 +83,8 @@ tasks:
           -e ./.github/workflows/aws-deploy/events/push-dev.json
 
   # --------------------------------------------------------------------------
-  # Staging Environment (workflow_dispatch & tag trigger)
+  # Staging Environment (tag trigger)
   # --------------------------------------------------------------------------
-  plan-stg:
-    desc: Run plan-aws for STAGING environment via workflow_dispatch
-    cmds:
-      - |
-        act workflow_dispatch \
-          -j plan-aws \
-          --container-architecture linux/amd64 \
-          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
-          -C ../../.. \
-          -W .github/workflows/aws-deploy.yml \
-          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
-          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --secret TF_DB_USERNAME="$TF_DB_USERNAME" \
-          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_REGION="$AWS_REGION" \
-          --var-file ./.github/workflows/aws-deploy/.env \
-          -e ./.github/workflows/aws-deploy/events/stg.json
-
   tag-stg:
     desc: Simulate pushing release tag stg-infra-aws-v1.0.0
     cmds:
@@ -126,28 +106,8 @@ tasks:
           -e ./.github/workflows/aws-deploy/events/tag-stg.json
 
   # --------------------------------------------------------------------------
-  # Production Environment (workflow_dispatch & tag trigger)
+  # Production Environment (tag trigger)
   # --------------------------------------------------------------------------
-  plan-prod:
-    desc: Run plan-aws for PRODUCTION environment via workflow_dispatch
-    cmds:
-      - |
-        act workflow_dispatch \
-          -j plan-aws \
-          --container-architecture linux/amd64 \
-          -P ubuntu-latest=catthehacker/ubuntu:act-latest \
-          -C ../../.. \
-          -W .github/workflows/aws-deploy.yml \
-          --container-options "-v $HOME/.terraform.d/plugin-cache:/tmp/.terraform.d/plugin-cache -v $HOME/.cache/act-tools:/tmp/.act-tools-cache --memory=4g" \
-          --secret AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --secret AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --secret TF_DB_USERNAME="$TF_DB_USERNAME" \
-          --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-          --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-          --env AWS_REGION="$AWS_REGION" \
-          --var-file ./.github/workflows/aws-deploy/.env \
-          -e ./.github/workflows/aws-deploy/events/prod.json
-
   tag-prod:
     desc: Simulate pushing release tag prod-infra-aws-v1.0.0
     cmds:
