@@ -83,3 +83,42 @@ tasks:
     dir: .github/workflows/k8s-deploy
     cmds:
       - task tag-prod
+
+  # --------------------------------------------------------------------------
+  # Infrastructure Destruction Workflows (.github/workflows/infra-destroy)
+  # --------------------------------------------------------------------------
+  destroy-list:
+    desc: List Infrastructure teardown workflow jobs
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task list
+
+  destroy-validate-dev:
+    desc: Non-destructive test of validate-and-resolve phase for DEV locally
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task validate-dev
+
+  destroy-validate-stg:
+    desc: Non-destructive test of validate-and-resolve phase for STG locally
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task validate-stg
+
+  destroy-validate-prod:
+    desc: Non-destructive test of validate-and-resolve phase for PROD locally
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task validate-prod
+
+  destroy-dev-k8s:
+    desc: Test K8s teardown for DEV locally
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task destroy-k8s-dev
+
+  destroy-dev-all:
+    desc: Test full teardown pipeline (K8s + AWS) for DEV locally
+    dir: .github/workflows/infra-destroy
+    cmds:
+      - task destroy-all-dev

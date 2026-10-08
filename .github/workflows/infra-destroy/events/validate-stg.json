@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "environment": "stg",
+    "destroy_aws": true,
+    "aws_release_tag": "stg-infra-aws-v1.0.0",
+    "k8s_release_tag": "stg-infra-k8s-v1.0.0"
+  }
+}

@@ -9,8 +9,17 @@
 # Trigger Conditions:
 #   - Manual `workflow_dispatch` only (safeguarded operation).
 #   - Parameters:
-#       * `environment`: dev or prod (default: dev).
+#       * `environment`: dev, stg, or prod (default: dev).
+#       * `aws_release_tag`: Tag format {env}-infra-aws-v{major}.{minor}.{patch} (required for stg/prod).
+#       * `k8s_release_tag`: Tag format {env}-infra-k8s-v{major}.{minor}.{patch} (required for stg/prod).
 #       * `destroy_aws`: boolean flag to confirm destroying root AWS infrastructure.
+#
+# Execution Semantics:
+#   - For `dev`: Checks out the `dev` branch.
+#   - For `stg` or `prod`: Checks out the exact commits pointed to by the respective release tags
+#     before running Terraform destroy for each infrastructure layer.
+#   - Leverages `infra/terraform/query` for lightweight cross-stack state queries.
+#   - Passes variables strictly via environment-scoped TF_VAR_* definitions.
 # ==============================================================================
 
 name: Destroy Infrastructure
@@ -19,9 +28,24 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to destroy (dev or prod)'
+        description: 'Environment to destroy (dev, stg, or prod)'
         required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
         default: 'dev'
+      aws_release_tag:
+        description: 'AWS Release Tag (required for stg/prod, e.g. stg-infra-aws-v1.0.0)'
+        required: false
+        type: string
+        default: ''
+      k8s_release_tag:
+        description: 'K8s Release Tag (required for stg/prod, e.g. stg-infra-k8s-v1.0.0)'
+        required: false
+        type: string
+        default: ''
       destroy_aws:
         description: 'Destroy root AWS infrastructure'
         type: boolean
@@ -39,26 +63,125 @@ permissions:
 
 jobs:
   # ----------------------------------------------------------------------------
+  # Phase 0: Validate Inputs & Resolve Git Target References
+  # ----------------------------------------------------------------------------
+  validate-and-resolve:
+    name: Validate Inputs & Resolve Refs
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.resolve.outputs.env }}
+      destroy_aws: ${{ steps.resolve.outputs.destroy_aws }}
+      aws_ref: ${{ steps.resolve.outputs.aws_ref }}
+      k8s_ref: ${{ steps.resolve.outputs.k8s_ref }}
+    steps:
+      - name: Validate Release Tags and Assign Refs
+        id: resolve
+        env:
+          ENV: ${{ inputs.environment }}
+          AWS_TAG: ${{ inputs.aws_release_tag }}
+          K8S_TAG: ${{ inputs.k8s_release_tag }}
+          DESTROY_AWS: ${{ inputs.destroy_aws }}
+        run: |
+          echo "Target Environment: $ENV"
+          echo "Destroy AWS: $DESTROY_AWS"
+
+          if [[ "$ENV" == "dev" ]]; then
+            echo "Environment is dev: checking out 'dev' branch for both layers."
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "destroy_aws=$DESTROY_AWS" >> $GITHUB_OUTPUT
+            echo "aws_ref=dev" >> $GITHUB_OUTPUT
+            echo "k8s_ref=dev" >> $GITHUB_OUTPUT
+          else
+            # For stg and prod, require validated release tags
+            if [[ -z "$K8S_TAG" ]]; then
+              echo "::error::k8s_release_tag is required when destroying environment '$ENV'!"
+              exit 1
+            fi
+
+            # Check format: {env}-infra-k8s-v{major}.{minor}.{patch}
+            if ! [[ "$K8S_TAG" =~ ^${ENV}-infra-k8s-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9a-zA-Z._-]+)?$ ]]; then
+              echo "::error::Invalid k8s_release_tag format: '$K8S_TAG'. Expected format: '${ENV}-infra-k8s-v{major}.{minor}.{patch}'."
+              exit 1
+            fi
+
+            if [[ "$DESTROY_AWS" == "true" ]]; then
+              if [[ -z "$AWS_TAG" ]]; then
+                echo "::error::aws_release_tag is required when destroying AWS infrastructure for environment '$ENV'!"
+                exit 1
+              fi
+              if ! [[ "$AWS_TAG" =~ ^${ENV}-infra-aws-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9a-zA-Z._-]+)?$ ]]; then
+                echo "::error::Invalid aws_release_tag format: '$AWS_TAG'. Expected format: '${ENV}-infra-aws-v{major}.{minor}.{patch}'."
+                exit 1
+              fi
+            fi
+
+            echo "Validated K8s Release Tag: $K8S_TAG"
+            echo "Validated AWS Release Tag: ${AWS_TAG:-none}"
+
+            echo "env=$ENV" >> $GITHUB_OUTPUT
+            echo "destroy_aws=$DESTROY_AWS" >> $GITHUB_OUTPUT
+            echo "aws_ref=${AWS_TAG:-dev}" >> $GITHUB_OUTPUT
+            echo "k8s_ref=$K8S_TAG" >> $GITHUB_OUTPUT
+          fi
+
+  # ----------------------------------------------------------------------------
   # Phase 1: Destroy Kubernetes Infrastructure & Workloads
   # ----------------------------------------------------------------------------
   destroy-k8s:
-    name: Destroy K8s (${{ inputs.environment || 'dev' }})
+    name: Destroy K8s (${{ needs.validate-and-resolve.outputs.env }})
+    needs: validate-and-resolve
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'dev' }}
+    environment: ${{ needs.validate-and-resolve.outputs.env }}
+    env:
+      ENV: ${{ needs.validate-and-resolve.outputs.env }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
+      - name: Checkout Code at Target Ref (${{ needs.validate-and-resolve.outputs.k8s_ref }})
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          terraform_version: "v1.16.4"  
-          terraform_wrapper: false
+          ref: ${{ needs.validate-and-resolve.outputs.k8s_ref }}
+          fetch-depth: 0
 
+      # ------------------------------------------------------------------------
+      # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
+      # ------------------------------------------------------------------------
+      - name: Install AWS CLI and kubectl for ACT
+        if: ${{ env.ACT }}
+        run: |
+          mkdir -p /tmp/.act-tools-cache
+          if ! command -v aws &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/awscliv2.zip ]; then
+              echo "Downloading AWS CLI to local cache..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/.act-tools-cache/awscliv2.zip
+            fi
+            echo "Installing AWS CLI from local cache..."
+            unzip -q /tmp/.act-tools-cache/awscliv2.zip -d /tmp/aws-tmp
+            sudo /tmp/aws-tmp/aws/install --update
+            rm -rf /tmp/aws-tmp
+          fi
+          if ! command -v kubectl &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/kubectl ]; then
+              echo "Downloading kubectl to local cache..."
+              curl -sL "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl" -o /tmp/.act-tools-cache/kubectl
+              chmod +x /tmp/.act-tools-cache/kubectl
+            fi
+            echo "Installing kubectl from local cache..."
+            sudo cp /tmp/.act-tools-cache/kubectl /usr/local/bin/kubectl
+            sudo chmod +x /usr/local/bin/kubectl
+          fi
+
+      # ------------------------------------------------------------------------
+      # Terraform Plugin Caching
+      # ------------------------------------------------------------------------
       - name: Create Terraform Cache Directory
         run: |
-          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
-          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          if [ -n "$ACT" ]; then
+            mkdir -p /tmp/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=/tmp/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          else
+            mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          fi
 
       - name: Use terraform cache
         if: ${{ !env.ACT }}
@@ -69,86 +192,154 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-terraform-
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "v1.16.4"
+          terraform_wrapper: false
+
       - name: Configure AWS Credentials
         if: ${{ !env.ACT }}
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
           aws-region: ${{ env.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Extract AWS Infrastructure Outputs
+      # ------------------------------------------------------------------------
+      # Extract AWS Infrastructure Outputs via query Module
+      # ------------------------------------------------------------------------
+      - name: Query AWS Infrastructure Remote State
         id: aws-check
-        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        working-directory: infra/terraform/query
         run: |
-          terraform init
-          TF_JSON=$(terraform output -json 2>/dev/null)
-          
-          CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name.value // empty')
-          if [ -z "$CLUSTER_NAME" ]; then
-            echo "EKS cluster output missing in AWS state. Assuming already destroyed or not present."
-          else
-            echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-            echo "VPC_ID=$(echo "$TF_JSON" | jq -r '.vpc_id.value // empty')" >> $GITHUB_ENV
-            echo "API_DOMAIN=${{ vars.TF_API_HOSTNAME }}" >> $GITHUB_ENV
-            echo "ACM_CERT_ARN=$(echo "$TF_JSON" | jq -r '.acm_cert_arn.value // empty')" >> $GITHUB_ENV
-            echo "SSM_PARAMETERS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name.value // empty')" >> $GITHUB_ENV
-            echo "SSM_SECRETS_NAME=$(echo "$TF_JSON" | jq -r '.ssm_secrets_name.value // empty')" >> $GITHUB_ENV
+          terraform init -lockfile=readonly
+          AWS_CONFIG="../aws/environments/${{ env.ENV }}/backend.config.hcl"
+
+          if [ ! -f "$AWS_CONFIG" ]; then
+            echo "::warning::AWS backend config not found at $AWS_CONFIG. Assuming AWS already destroyed."
+            echo "has_cluster=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
+          if ! terraform apply -auto-approve -input=false -var-file="$AWS_CONFIG"; then
+            echo "::warning::Unable to read AWS remote state. Assuming cluster already destroyed."
+            echo "has_cluster=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TF_JSON=$(terraform output -json outputs 2>/dev/null || echo "{}")
+          CLUSTER_NAME=$(echo "$TF_JSON" | jq -r '.eks_cluster_name // empty')
+          VPC_ID=$(echo "$TF_JSON" | jq -r '.vpc_id // empty')
+          ACM_CERT_ARN=$(echo "$TF_JSON" | jq -r '.acm_cert_arn // empty')
+          SSM_PARAMS=$(echo "$TF_JSON" | jq -r '.ssm_parameters_name // empty')
+          SSM_SECRETS=$(echo "$TF_JSON" | jq -r '.ssm_secrets_name // empty')
+
+          if [ -z "$CLUSTER_NAME" ]; then
+            echo "::warning::EKS cluster output missing in AWS state. Assuming already destroyed."
+            echo "has_cluster=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found active EKS cluster: $CLUSTER_NAME"
+            echo "has_cluster=true" >> $GITHUB_OUTPUT
+            echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+            echo "vpc_id=$VPC_ID" >> $GITHUB_OUTPUT
+            echo "acm_cert_arn=$ACM_CERT_ARN" >> $GITHUB_OUTPUT
+            echo "ssm_parameters_name=$SSM_PARAMS" >> $GITHUB_OUTPUT
+            echo "ssm_secrets_name=$SSM_SECRETS" >> $GITHUB_OUTPUT
+          fi
+
+      # ------------------------------------------------------------------------
+      # Terraform Init & Destroy (K8s Layer)
+      # ------------------------------------------------------------------------
       - name: Terraform Init (K8s)
-        if: env.CLUSTER_NAME != ''
+        if: steps.aws-check.outputs.has_cluster == 'true'
         working-directory: infra/terraform/k8s
-        run: terraform init
+        run: terraform init -lockfile=readonly -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
 
       - name: Terraform Destroy (K8s)
-        if: env.CLUSTER_NAME != ''
+        if: steps.aws-check.outputs.has_cluster == 'true'
         working-directory: infra/terraform/k8s
-        run: |
-          terraform destroy -auto-approve \
-            -var="cluster_name=${{ env.CLUSTER_NAME }}" \
-            -var="vpc_id=${{ env.VPC_ID }}" \
-            -var="api_domain=${{ env.API_DOMAIN }}" \
-            -var="acm_cert_arn=${{ env.ACM_CERT_ARN }}" \
-            -var="ssm_parameters_name=${{ env.SSM_PARAMETERS_NAME }}" \
-            -var="ssm_secrets_name=${{ env.SSM_SECRETS_NAME }}" \
-            -var="environment=${{ inputs.environment }}" \
-            -var="project_name=${{ vars.TF_PROJECT_NAME }}" \
-            -var="github_repository_url=${{ vars.TF_GITHUB_REPOSITORY_URL }}" \
-            -var="targetRevision_api=${{ vars.TF_TARGET_REVISION_API }}" \
-            -var="targetRevision_worker=${{ vars.TF_TARGET_REVISION_WORKER }}"
+        env:
+          TF_VAR_cluster_name: ${{ steps.aws-check.outputs.cluster_name }}
+          TF_VAR_vpc_id: ${{ steps.aws-check.outputs.vpc_id }}
+          TF_VAR_acm_cert_arn: ${{ steps.aws-check.outputs.acm_cert_arn }}
+          TF_VAR_ssm_parameters_name: ${{ steps.aws-check.outputs.ssm_parameters_name }}
+          TF_VAR_ssm_secrets_name: ${{ steps.aws-check.outputs.ssm_secrets_name }}
+          TF_VAR_api_domain: ${{ vars.TF_API_HOSTNAME }}
+          TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
+          TF_VAR_environment: ${{ env.ENV }}
+          TF_VAR_github_repository_url: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
+          TF_VAR_targetRevision_api: ${{ vars.TF_TARGET_REVISION_API || env.ENV }}
+          TF_VAR_targetRevision_worker: ${{ vars.TF_TARGET_REVISION_WORKER || env.ENV }}
+        run: terraform destroy -auto-approve
 
   # ----------------------------------------------------------------------------
   # Phase 2: Destroy Core AWS Infrastructure (Runs after K8s phase finishes)
   # ----------------------------------------------------------------------------
   destroy-aws:
-    name: Destroy AWS (${{ inputs.environment || 'dev' }})
-    needs: destroy-k8s
-    if: inputs.destroy_aws == true
+    name: Destroy AWS (${{ needs.validate-and-resolve.outputs.env }})
+    needs: [validate-and-resolve, destroy-k8s]
+    if: needs.validate-and-resolve.outputs.destroy_aws == 'true'
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'dev' }}
+    environment: ${{ needs.validate-and-resolve.outputs.env }}
     env:
-      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME }}
-      TF_VAR_environment: ${{ inputs.environment }}
+      ENV: ${{ needs.validate-and-resolve.outputs.env }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
+      TF_VAR_environment: ${{ needs.validate-and-resolve.outputs.env }}
       TF_VAR_vpc_cidr: ${{ vars.TF_VPC_CIDR }}
       TF_VAR_db_name: ${{ vars.TF_DB_NAME }}
       TF_VAR_db_username: ${{ secrets.TF_DB_USERNAME }}
       TF_VAR_github_actions_ci_role: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
       TF_VAR_api_hostname: ${{ vars.TF_API_HOSTNAME }}
       TF_VAR_admin_user_arns: ${{ vars.TF_ADMIN_USER_ARNS || '[]' }}
+      TF_VAR_api_alb_dns_name: "placeholder.elb.amazonaws.com"
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e   # v4.0.1
+      - name: Checkout Code at Target Ref (${{ needs.validate-and-resolve.outputs.aws_ref }})
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          terraform_version: "v1.16.4"  
-          terraform_wrapper: false
+          ref: ${{ needs.validate-and-resolve.outputs.aws_ref }}
+          fetch-depth: 0
 
+      # ------------------------------------------------------------------------
+      # Local Execution (ACT) Setup: Download & Cache AWS CLI + Kubectl
+      # ------------------------------------------------------------------------
+      - name: Install AWS CLI and kubectl for ACT
+        if: ${{ env.ACT }}
+        run: |
+          mkdir -p /tmp/.act-tools-cache
+          if ! command -v aws &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/awscliv2.zip ]; then
+              echo "Downloading AWS CLI to local cache..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/.act-tools-cache/awscliv2.zip
+            fi
+            echo "Installing AWS CLI from local cache..."
+            unzip -q /tmp/.act-tools-cache/awscliv2.zip -d /tmp/aws-tmp
+            sudo /tmp/aws-tmp/aws/install --update
+            rm -rf /tmp/aws-tmp
+          fi
+          if ! command -v kubectl &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/kubectl ]; then
+              echo "Downloading kubectl to local cache..."
+              curl -sL "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl" -o /tmp/.act-tools-cache/kubectl
+              chmod +x /tmp/.act-tools-cache/kubectl
+            fi
+            echo "Installing kubectl from local cache..."
+            sudo cp /tmp/.act-tools-cache/kubectl /usr/local/bin/kubectl
+            sudo chmod +x /usr/local/bin/kubectl
+          fi
+
+      # ------------------------------------------------------------------------
+      # Terraform Plugin Caching
+      # ------------------------------------------------------------------------
       - name: Create Terraform Cache Directory
         run: |
-          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
-          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          if [ -n "$ACT" ]; then
+            mkdir -p /tmp/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=/tmp/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          else
+            mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+            echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+          fi
 
       - name: Use terraform cache
         if: ${{ !env.ACT }}
@@ -159,18 +350,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-terraform-
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "v1.16.4"
+          terraform_wrapper: false
+
       - name: Configure AWS Credentials
         if: ${{ !env.ACT }}
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd   # v6.3.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
           aws-region: ${{ env.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
 
+      # ------------------------------------------------------------------------
+      # Terraform Init & Destroy (AWS Layer)
+      # ------------------------------------------------------------------------
       - name: Terraform Init (AWS)
-        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
-        run: terraform init
+        working-directory: infra/terraform/aws
+        run: terraform init -lockfile=readonly -backend-config="environments/${{ env.ENV }}/backend.config.hcl"
 
       - name: Terraform Destroy (AWS)
-        working-directory: infra/terraform/aws/environments/${{ inputs.environment }}
+        working-directory: infra/terraform/aws
         run: terraform destroy -auto-approve
-
