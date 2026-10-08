@@ -208,7 +208,80 @@ sequenceDiagram
 
 ---
 
-## 5. Branch & Tag Trigger Summary Matrix
+## 5. Frontend Static Asset Deployment Workflow (`frontend-deploy.yml`)
+
+The frontend CI/CD pipeline implements an enterprise-grade "Build once in dev, promote identical immutable artifacts to stg/prod" model. Built React/Next.js static bundles (`out/`) are compiled strictly once per commit in `dev`, uploaded to a shared S3 artifact bucket (`vars.ARTIFACT_BUCKET_NAME`), and promoted sequentially into higher environments upon semantic tag releases without re-compilation.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer / Release Engineer
+    participant GH as GitHub Actions (frontend-deploy.yml)
+    participant ArtS3 as Shared S3 Artifact Bucket
+    participant Query as infra/terraform/query
+    participant EnvS3 as Target Env S3 Bucket
+    participant CF as CloudFront CDN
+    participant Git as Release Branch ({env}/frontend)
+
+    Dev->>GH: Push dev or Push tag `{env}-frontend-v*`
+    GH->>GH: Job 1 (detect-env): Resolve ENV, VERSION, COMMIT_SHA
+
+    rect rgb(240, 245, 255)
+        Note over GH, ArtS3: Job 2 (build-and-promote): Build / Promote Artifacts
+        alt Environment is DEV
+            GH->>GH: Install Node 24 & npm run build
+            GH->>ArtS3: Upload builds/${COMMIT_SHA}.tar.gz
+        else Environment is STG
+            GH->>ArtS3: Copy builds/${COMMIT_SHA}.tar.gz -> releases/stg/${VERSION}.tar.gz
+        else Environment is PROD
+            GH->>ArtS3: Copy releases/stg/${VERSION}.tar.gz -> releases/prod/${VERSION}.tar.gz
+        end
+    end
+
+    rect rgb(255, 245, 230)
+        Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)
+        GH-->>Dev: Prompt for Approval before Deploying to S3
+        Dev->>GH: Approve Deployment
+    end
+
+    rect rgb(240, 255, 240)
+        Note over GH, EnvS3: Job 3 (deploy-frontend): Deploy to Environment S3
+        GH->>ArtS3: Download current env artifact (builds or releases)
+        GH->>Query: Query AWS State (frontend_bucket_id, cloudfront_dist_id, cloudfront_domain)
+        Query-->>GH: Return Target Infrastructure Outputs
+        GH->>EnvS3: aws s3 sync out/ s3://${FRONTEND_BUCKET_ID} --delete (exclude config.js)
+        GH->>GH: Generate runtime out/config.js (API_URL, API_MODE, APP_VERSION)
+        GH->>EnvS3: aws s3 cp config.js with public, max-age=0, s-maxage=86400, must-revalidate
+        GH->>CF: Invalidate CloudFront Cache (/*)
+    end
+
+    opt Staging or Production Release Tag
+        Note over GH, Git: Immutable Release History
+        GH->>Git: Selective checkout & commit apps/frontend/
+        GH->>Git: git push origin {env}/frontend [skip ci]
+    end
+```
+
+### Key Operational Rules:
+1. **Decoupled Pre-Deployment Artifact Preparation (`build-and-promote`)**:
+   - Compiles dev builds or promotes release artifacts immediately upon tag/commit trigger without pausing for approval.
+   - For `dev`, compiles Next.js bundle (`npm run build`) and uploads to `s3://${ARTIFACT_BUCKET_NAME}/builds/${COMMIT_SHA}.tar.gz`.
+   - For `stg` and `prod`, re-uses a parameterized promotion step with environment variables (`SOURCE_KEY`, `DEST_KEY`, `SOURCE_DESC`), copying `builds/${COMMIT_SHA}.tar.gz` to `releases/stg/${VERSION}.tar.gz`, and `releases/stg/${VERSION}.tar.gz` to `releases/prod/${VERSION}.tar.gz`.
+2. **Approval Gate Prior to Environment S3 Publishing (`deploy-frontend`)**:
+   - The deployment job binds to `environment: ${{ needs.detect-env.outputs.env }}`, pausing execution on `stg` and `prod` to enforce reviewer approvals *after* the artifact is verified/promoted, but *before* static assets are pushed to the live frontend bucket.
+3. **Runtime Configuration Decoupling (`config.js`)**:
+   - Static bundles contain no environment-specific backend URLs or feature toggles.
+   - The pipeline dynamically generates `config.js` prior to S3 upload, injecting `NEXT_PUBLIC_API_URL` (resolved from CloudFront domain via `infra/terraform/query`), `NEXT_PUBLIC_API_MODE`, and `APP_VERSION`.
+   - Injected synchronously via `<Script src="/config.js" strategy="beforeInteractive" />` into the Next.js HTML head before hydration.
+4. **CloudFront & Edge Caching Semantics**:
+   - Static assets (`_next/static/**`, images) are hashed and cached long-term (`Cache-Control: public, max-age=31536000, immutable`).
+   - `config.js` is uploaded with `Cache-Control: public, max-age=0, s-maxage=86400, must-revalidate`. CloudFront edge locations cache the file for 24 hours (`s-maxage`), but browser clients revalidate on every request (`max-age=0, must-revalidate`). When a new deployment occurs, CloudFront invalidation clears the edge cache instantly.
+5. **Selective Audit Tracking**:
+   - Staging and production releases selectively checkout and commit `apps/frontend/` to the `{env}/frontend` branch with `[skip ci]`, maintaining an immutable audit history of frontend code deployed to each environment.
+
+---
+
+## 6. Branch & Tag Trigger Summary Matrix
 
 | Pipeline | Trigger Pattern | Concurrency Group | Environment Gate | Selective Tracking Branch |
 | :--- | :--- | :--- | :--- | :--- |
@@ -218,10 +291,13 @@ sequenceDiagram
 | **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
 | **K8s Infra (stg)** | Push tag: `stg-infra-k8s-v*` | `deploy-k8s-stg` | `stg` (Reviewer required) | `stg/infra-k8s` |
 | **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*` | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s` |
+| **Frontend (dev)** | Push to `dev` under `apps/frontend/**` or `workflow_dispatch` | `deploy-frontend-dev` | None (Automatic) | N/A (Trunk tracked) |
+| **Frontend (stg)** | Push tag: `stg-frontend-v*` | `deploy-frontend-stg` | `stg` (Reviewer required) | `stg/frontend` |
+| **Frontend (prod)** | Push tag: `prod-frontend-v*` | `deploy-frontend-prod` | `prod` (Reviewer required) | `prod/frontend` |
 
 ---
 
-## 6. Infrastructure Teardown Workflow (`infra-destroy.yml`)
+## 7. Infrastructure Teardown Workflow (`infra-destroy.yml`)
 
 The infrastructure teardown pipeline tears down cloud resources in reverse dependency order (`destroy-k8s` followed by optional `destroy-aws`).
 
