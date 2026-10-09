@@ -7,15 +7,17 @@ This specification document details the infrastructural and manifest design impl
 ## 1. Architectural Motivation & Principles
 
 Previously, ArgoCD tracked Helm charts directly from Git paths, coupling Kubernetes manifests and application Docker image releases into a single deployment unit. This created several operational friction points:
+
 1. **Coupled Release Cycles**: Updating Helm templates required triggering application workflows or vice-versa.
 2. **Tag Mutation & Non-Standard Packaging**: Standard Helm tooling expects OCI registries (`helm push oci://...`) where the chart name matches the repository leaf.
 3. **Immutability Vulnerability**: Direct branch tracking risks unreviewed manifest drift.
 
 ### Core Design Principles
-* **Decoupled Lifecycle via ArgoCD Multiple Sources (`$ref`)**: Source 1 pulls versioned Helm charts from AWS ECR as an OCI registry (`targetRevision: '{{chart_version}}'`). Source 2 pulls values files from the Git repository pinned to immutable commit SHAs (`ref: app_values`, `targetRevision: '{{target_commit}}'`).
-* **Hierarchical ECR Repository Naming**: ECR repositories are named `${project_name}/${environment}/${app}` (e.g. `docintel/dev/api`). This matches the `name: api` declared in `Chart.yaml`, allowing native `helm push` without mutating chart metadata.
-* **IAM Authentication via EKS Pod Identity**: ArgoCD `argocd-repo-server` authenticates dynamically with AWS ECR using an EKS Pod Identity association and ArgoCD's native ECR credential helper, avoiding 12-hour credential expiry issues.
-* **Matrix Generator Git Discovery**: An ArgoCD `ApplicationSet` uses dual-generator matrix joins to independently resolve `{app}` releases from `{env}/app` tracking paths and chart versions from `{env}/helm` tracking paths.
+
+- **Decoupled Lifecycle via ArgoCD Multiple Sources (`$ref`)**: Source 1 pulls versioned Helm charts from AWS ECR as an OCI registry (`targetRevision: '{{chart_version}}'`). Source 2 pulls values files from the Git repository pinned to immutable commit SHAs (`ref: app_values`, `targetRevision: '{{target_commit}}'`).
+- **Hierarchical ECR Repository Naming**: ECR repositories are named `${project_name}/${environment}/${app}` (e.g. `docintel/dev/api`). This matches the `name: api` declared in `Chart.yaml`, allowing native `helm push` without mutating chart metadata.
+- **IAM Authentication via EKS Pod Identity**: ArgoCD `argocd-repo-server` authenticates dynamically with AWS ECR using an EKS Pod Identity association and ArgoCD's native ECR credential helper, avoiding 12-hour credential expiry issues.
+- **Matrix Generator Git Discovery**: An ArgoCD `ApplicationSet` uses dual-generator matrix joins to independently resolve `{app}` releases from `{env}/app` tracking paths and chart versions from `{env}/helm` tracking paths.
 
 ---
 
@@ -106,50 +108,50 @@ spec:
     - matrix:
         generators:
           - git:
-              repoURL: '${github_repository_url}'
-              revision: '${targetRevision_app}'
+              repoURL: "${github_repository_url}"
+              revision: "${targetRevision_app}"
               files:
                 - path: "infra/k8s/argocd/${environment}/api/config.json"
           - git:
-              repoURL: '${github_repository_url}'
-              revision: '${targetRevision_helm}'
+              repoURL: "${github_repository_url}"
+              revision: "${targetRevision_helm}"
               files:
                 - path: "infra/k8s/argocd/${environment}/helm-api/config.json"
     - matrix:
         generators:
           - git:
-              repoURL: '${github_repository_url}'
-              revision: '${targetRevision_app}'
+              repoURL: "${github_repository_url}"
+              revision: "${targetRevision_app}"
               files:
                 - path: "infra/k8s/argocd/${environment}/worker/config.json"
           - git:
-              repoURL: '${github_repository_url}'
-              revision: '${targetRevision_helm}'
+              repoURL: "${github_repository_url}"
+              revision: "${targetRevision_helm}"
               files:
                 - path: "infra/k8s/argocd/${environment}/helm-worker/config.json"
 
   template:
     metadata:
-      name: '${project_name}-${environment}-{{app}}'
+      name: "${project_name}-${environment}-{{app}}"
     spec:
       project: default
       sources:
         # Source 1: Helm Chart from ECR OCI Registry
-        - repoURL: '${ecr_registry_url}/${project_name}/${environment}'
-          chart: '{{chart_name}}'
-          targetRevision: '{{chart_version}}'
+        - repoURL: "${ecr_registry_url}/${project_name}/${environment}"
+          chart: "{{chart_name}}"
+          targetRevision: "{{chart_version}}"
           helm:
             valueFiles:
               - values.yaml
               - $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml
 
         # Source 2: Application Values & Image Tags from Git
-        - repoURL: '${github_repository_url}'
-          targetRevision: '{{target_commit}}'
+        - repoURL: "${github_repository_url}"
+          targetRevision: "{{target_commit}}"
           ref: app_values
 
       destination:
-        server: 'https://kubernetes.default.svc'
+        server: "https://kubernetes.default.svc"
         namespace: default
 ```
 
@@ -158,11 +160,12 @@ spec:
 ## 5. Security & Authentication Architecture
 
 ### EKS Pod Identity for ArgoCD Repo Server
+
 Instead of static AWS IAM Access Keys or legacy IRSA mutating webhooks, authentication uses **EKS Pod Identity Association**:
 
 1. **IAM Policy** (`argocd_repo_server_ecr_policy`):
-   * `ecr:GetAuthorizationToken` on `*` (standard AWS requirement for ECR token retrieval).
-   * `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` scoped exclusively to the project's ECR repository ARNs.
+   - `ecr:GetAuthorizationToken` on `*` (standard AWS requirement for ECR token retrieval).
+   - `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` scoped exclusively to the project's ECR repository ARNs.
 2. **Trust Relationship**: Trust policy authorizes the `pods.eks.amazonaws.com` service principal with `sts:AssumeRole` and `sts:TagSession`.
 3. **EKS Pod Identity Association**: Associates IAM role `argocd_repo_server_role` to ServiceAccount `argocd-repo-server` in namespace `argocd`.
 4. **Credential Helper**: ArgoCD Helm release in `infra/terraform/k8s/helm.tf` enables `configs.params.reposerver\.ecr\.credential\.helper = "true"`. The repo-server natively uses the AWS SDK to retrieve short-lived authorization tokens on demand.
@@ -242,28 +245,28 @@ sequenceDiagram
 ### 6.2 Key Pipeline Mechanics
 
 1. **Trigger Modalities**:
-   * **Push to `dev`** (`paths: ['infra/k8s/helm/**']`): Runs `git diff` against `HEAD~1` to dynamically detect changed charts and constructs matrix `["api"]`, `["worker"]`, or `["api", "worker"]`.
-   * **Manual `workflow_dispatch`**: Exclusively available for `dev` testing; accepts chart target input (`all`, `api`, or `worker`).
-   * **Release Tags**: Pushing tags matching `{env}-helm-{app}-v{semver}` (e.g. `stg-helm-api-v1.0.0` or `prod-helm-worker-v1.2.0`) isolates the release to a single targeted app matrix.
+   - **Push to `dev`** (`paths: ['infra/k8s/helm/**']`): Runs `git diff` against `HEAD~1` to dynamically detect changed charts and constructs matrix `["api"]`, `["worker"]`, or `["api", "worker"]`.
+   - **Manual `workflow_dispatch`**: Exclusively available for `dev` testing; accepts chart target input (`all`, `api`, or `worker`).
+   - **Release Tags**: Pushing tags matching `{env}-helm-{app}-v{semver}` (e.g. `stg-helm-api-v1.0.0` or `prod-helm-worker-v1.2.0`) isolates the release to a single targeted app matrix.
 
 2. **Zero In-Tree Mutation (`Chart.yaml` Immutability)**:
-   * `Chart.yaml` files committed in git remain untouched at all times.
-   * Dynamic version compilation in `dev` uses `helm package --version "0.0.0-${SHORT_SHA}"`.
-   * Staging promotion unpacks the pre-tested archive (`tar -xzf`) in ephemeral memory and repacks with `--version "{semver}"`.
-   * Production promotion performs a direct `helm pull` and `helm push` of the exact `{semver}` archive with zero rebuilding.
+   - `Chart.yaml` files committed in git remain untouched at all times.
+   - Dynamic version compilation in `dev` uses `helm package --version "0.0.0-${SHORT_SHA}"`.
+   - Staging promotion unpacks the spre-tested archive (`tar -xzf`) in ephemeral memory and repacks with `--version "{semver}"`.
+   - Production promotion performs a direct `helm pull` and `helm push` of the exact `{semver}` archive with zero rebuilding.
 
 3. **Dynamic Infrastructure Query & Fail-Fast State Validation**:
-   * ECR repository URLs are never hardcoded or manually constructed.
-   * The pipeline invokes `infra/terraform/query` against `infra/terraform/aws/environments/${env}/backend.config.hcl` to retrieve actual outputs from remote Terraform state (`ecr_repo_urls`).
-   * If remote state is inaccessible or a repo URL is not present, the pipeline immediately exits with code 1, enforcing that infrastructure must be deployed prior to deploying application charts.
+   - ECR repository URLs are never hardcoded or manually constructed.
+   - The pipeline invokes `infra/terraform/query` against `infra/terraform/aws/environments/${env}/backend.config.hcl` to retrieve actual outputs from remote Terraform state (`ecr_repo_urls`).
+   - If remote state is inaccessible or a repo URL is not present, the pipeline immediately exits with code 1, enforcing that infrastructure must be deployed prior to deploying application charts.
 
 4. **Serialized Downstream GitOps Commits (`gitops-commit`)**:
-   * Chart packaging and promotion run in parallel across the matrix.
-   * Metadata artifacts (`chart-metadata-${app}`) are passed to a single downstream serialized job.
-   * Employs concurrency groups:
+   - Chart packaging and promotion run in parallel across the matrix.
+   - Metadata artifacts (`chart-metadata-${app}`) are passed to a single downstream serialized job.
+   - Employs concurrency groups:
      - `git-commit-dev` for `dev` (shared with Docker build pipelines).
      - `git-commit-${env}-helm` for higher environments.
-   * Updates `infra/k8s/argocd/${env}/helm-${app}/config.json` pointers:
+   - Updates `infra/k8s/argocd/${env}/helm-${app}/config.json` pointers:
      ```json
      {
        "app": "${app}",
@@ -271,5 +274,4 @@ sequenceDiagram
        "chart_version": "${chart_version}"
      }
      ```
-   * Executes atomic git commit and pushes to tracking branches (`dev` or `{env}/helm`) with automatic pull-rebase loops to prevent push conflicts.
-
+   - Executes atomic git commit and pushes to tracking branches (`dev` or `{env}/helm`) with automatic pull-rebase loops to prevent push conflicts.

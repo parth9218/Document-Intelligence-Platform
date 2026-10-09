@@ -1,0 +1,7 @@
+# Patterns to ignore when packaging Helm chart
+.DS_Store
+.git/
+.gitignore
+*.tgz
+*.tar.gz
+values.*.yaml

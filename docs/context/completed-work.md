@@ -320,7 +320,3 @@ This document lists completed tasks and code files created.
     - `gitops-commit`: Downstream serialized promotion job enforcing GitHub Environment manual approvals (`environment: ${{ env }}` for `stg` and `prod`), applies concurrency locks (`git-commit-dev` or `git-commit-${env}-helm`), downloads metadata artifacts, updates GitOps tracking pointers in `infra/k8s/argocd/${env}/helm-${app}/config.json`, and executes serial git commits and pushes with rebase resilience.
   - Formulated mock event payloads in `.github/workflows/helm-cicd/events/` (`push-dev.json`, `dev-all.json`, `tag-stg-api.json`, `tag-prod-worker.json`) and created [.github/workflows/helm-cicd/Taskfile.yaml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/helm-cicd/Taskfile.yaml) for automated local linting and `act` runner execution.
   - Verified local Helm chart integrity via `helm lint` and `helm template` across both `api` and `worker` charts.
-
-
-
-
