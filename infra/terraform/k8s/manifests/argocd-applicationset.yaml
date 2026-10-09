@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: "${project_name}-${environment}-argocd-applicationset"
+  namespace: argocd
+spec:
+  generators:
+    # Generator for API Microservice
+    - matrix:
+        generators:
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_app}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/api/config.json"
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_helm}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/helm-api/config.json"
+
+    # Generator for Worker Microservice
+    - matrix:
+        generators:
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_app}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/worker/config.json"
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_helm}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/helm-worker/config.json"
+
+  template:
+    metadata:
+      name: '${project_name}-${environment}-{{app}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+    spec:
+      project: default
+      sources:
+        # Source 1: Helm Chart from AWS ECR OCI Registry
+        - repoURL: '${ecr_registry_url}/${project_name}/${environment}'
+          chart: '{{chart_name}}'
+          targetRevision: '{{chart_version}}'
+          helm:
+            valueFiles:
+              - values.yaml
+              - $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml
+
+        # Source 2: Application Values & Image Tags from Git
+        - repoURL: '${github_repository_url}'
+          targetRevision: '{{target_commit}}'
+          ref: app_values
+
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: default
+      syncPolicy:
+        automated:
+          enabled: true
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
