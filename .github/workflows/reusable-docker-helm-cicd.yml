@@ -123,7 +123,7 @@ jobs:
         working-directory: infra/terraform/aws/environments/dev
         run: |
           terraform init
-          REPO_URL=$(terraform output -json ecr_repo_urls | jq -r '.[] | select(endswith("-${{ inputs.app_name }}"))')
+          REPO_URL=$(terraform output -json ecr_repo_urls | jq -r '.[] | select(endswith("/${{ inputs.app_name }}") or endswith("-${{ inputs.app_name }}"))')
           echo "ECR_REPO_URL=$REPO_URL" >> $GITHUB_ENV
 
       - name: Login to Amazon ECR

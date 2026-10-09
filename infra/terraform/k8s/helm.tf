@@ -67,6 +67,21 @@ resource "helm_release" "argocd" {
   # Setting wait=false tells Helm to submit resources and return without
   # blocking on readiness — ArgoCD's own health checks are the source of truth.
   wait = false
+
+  set = [
+    {
+      name  = "repoServer.env[0].name"
+      value = "AWS_REGION"
+    },
+    {
+      name  = "repoServer.env[0].value"
+      value = data.aws_region.current.region
+    },
+    {
+      name  = "configs.params.reposerver\\.ecr\\.credential\\.helper"
+      value = "true"
+    }
+  ]
 }
 
 # KEDA 

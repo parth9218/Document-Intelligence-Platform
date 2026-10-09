@@ -239,6 +239,8 @@ jobs:
           TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
           TF_VAR_environment: ${{ needs.detect-env.outputs.env }}
           TF_VAR_github_repository_url: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
+          TF_VAR_targetRevision_app: ${{ vars.TF_TARGET_REVISION_APP || needs.detect-env.outputs.env }}
+          TF_VAR_targetRevision_helm: ${{ vars.TF_TARGET_REVISION_HELM || needs.detect-env.outputs.env }}
           TF_VAR_targetRevision_api: ${{ vars.TF_TARGET_REVISION_API || needs.detect-env.outputs.env }}
           TF_VAR_targetRevision_worker: ${{ vars.TF_TARGET_REVISION_WORKER || needs.detect-env.outputs.env }}
         run: terraform plan -out=tfplan

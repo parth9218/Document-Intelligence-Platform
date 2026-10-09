@@ -37,13 +37,20 @@ resource "kubectl_manifest" "storage_provider_class" {
   })
 }
 
+locals {
+  ecr_registry_url    = var.ecr_registry_url != "" ? var.ecr_registry_url : "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.region}.amazonaws.com"
+  targetRevision_app  = var.targetRevision_app != "" ? var.targetRevision_app : (var.targetRevision_api != null ? var.targetRevision_api : "dev")
+  targetRevision_helm = var.targetRevision_helm != "" ? var.targetRevision_helm : (var.targetRevision_worker != null ? var.targetRevision_worker : "dev")
+}
+
 resource "kubectl_manifest" "argocd_applicationset" {
   yaml_body = templatefile("manifests/argocd-applicationset.yaml", {
     project_name          = var.project_name,
     environment           = var.environment,
     github_repository_url = var.github_repository_url,
-    targetRevision_api    = var.targetRevision_api,
-    targetRevision_worker = var.targetRevision_worker
+    targetRevision_app    = local.targetRevision_app,
+    targetRevision_helm   = local.targetRevision_helm,
+    ecr_registry_url      = local.ecr_registry_url
   })
   depends_on = [
     helm_release.argocd,

@@ -291,4 +291,20 @@ This document lists completed tasks and code files created.
   - Integrated CloudFront cache invalidation (`/*`) and selective tracking branch commits to `{env}/frontend` with `[skip ci]`.
   - Pinned all imported GitHub Actions to exact full-length commit SHAs.
   - Implemented local testing fixtures (`events/dev.json`, `events/push-dev.json`, `events/tag-stg.json`, `events/tag-prod.json`) and Taskfile commands (`Taskfile.yaml`) for local runner verification via `act`.
+- **Helm GitOps Infrastructure & Multi-Source OCI Setup (Task 505)**:
+  - Renamed AWS ECR repositories to slash-delimited namespaces (`${project_name}/${environment}/api` and `${project_name}/${environment}/worker`) so that Helm OCI packages (`helm push oci://.../api`) and Docker images (`.../api:tag`) share the exact same repository without requiring modifications to `name: api` in `Chart.yaml`.
+  - Added repository policy statement `AllowPullFromAccount` to ECR repositories to allow seamless access across the AWS account.
+  - Exported `ecr_registry_url` across ECR module, core module, and root AWS outputs.
+  - Created EKS IAM policy (`argocd_repo_server_ecr_policy`), IAM role (`argocd_repo_server_role`), and EKS Pod Identity Association in `infra/terraform/aws/modules/eks/iam.tf` granting `argocd-repo-server` in namespace `argocd` permissions to call `ecr:GetAuthorizationToken` and pull layers/images from private ECR repositories.
+  - Configured ArgoCD Helm release in `infra/terraform/k8s/helm.tf` with `configs.params.reposerver\.ecr\.credential\.helper = "true"` and `AWS_REGION` environment variable so that `argocd-repo-server` leverages the AWS credential helper and Pod Identity to automatically manage short-lived ECR authorization tokens.
+  - Restructured `infra/k8s/argocd/{dev,stg,prod}/` directory layout, separating concerns into:
+    - `{env}/api/` & `{env}/worker/`: containing `config.json` (`app`, `target_commit`) and environment-specific `values.yaml` (overriding image repositories with new slash paths).
+    - `{env}/helm-api/` & `{env}/helm-worker/`: containing `config.json` (`app`, `chart_name`, `chart_version`).
+  - Refactored `infra/terraform/k8s/manifests/argocd-applicationset.yaml` to utilize a Matrix generator reading Git discovery pointers from both app and helm paths, and configured ArgoCD Multiple Sources with `$ref`:
+    - Source 1: AWS ECR OCI registry (`repoURL: '${ecr_registry_url}/${project_name}/${environment}'`, `chart: '{{chart_name}}'`, `targetRevision: '{{chart_version}}'`).
+    - Source 2: Git repository (`repoURL: '${github_repository_url}'`, `targetRevision: '{{target_commit}}'`, `ref: app_values`), mounting values from `$app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`.
+  - Updated Terraform plumbing in `infra/terraform/k8s/variables.tf` and `infra/terraform/k8s/k8s.tf` to introduce `targetRevision_app`, `targetRevision_helm`, and `ecr_registry_url` with backwards-compatible defaults.
+  - Updated workflow triggers in `.github/workflows/k8s-deploy.yml` and `.github/workflows/infra-destroy.yml` to supply `TF_VAR_targetRevision_app` and `TF_VAR_targetRevision_helm`.
+  - Updated `.github/workflows/reusable-docker-helm-cicd.yml` jq filter to accommodate both `/` and `-` repository delimiters.
+
 

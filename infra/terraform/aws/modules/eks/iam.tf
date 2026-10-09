@@ -256,3 +256,47 @@ resource "aws_eks_pod_identity_association" "keda_metrics_server" {
   service_account = "keda-metrics-server"
   role_arn        = aws_iam_role.keda_operator_role.arn
 }
+
+# ArgoCD Repo Server Role & Pod Identity for ECR OCI Chart Access
+data "aws_iam_policy_document" "argocd_repo_server_ecr_policy" {
+  statement {
+    sid    = "ECRAuthToken"
+    effect = "Allow"
+    actions = [
+      "ecr:GetAuthorizationToken"
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "ECRRepositoryPull"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage"
+    ]
+    resources = var.ecr_repo_arns
+  }
+}
+
+resource "aws_iam_policy" "argocd_repo_server_ecr_policy" {
+  name   = "${var.project_name}-${var.environment}-argocd-repo-server-ecr-policy"
+  policy = data.aws_iam_policy_document.argocd_repo_server_ecr_policy.json
+}
+
+resource "aws_iam_role" "argocd_repo_server_role" {
+  name               = "${var.project_name}-${var.environment}-argocd-repo-server"
+  assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
+}
+
+resource "aws_iam_role_policy_attachment" "argocd_repo_server_ecr" {
+  role       = aws_iam_role.argocd_repo_server_role.name
+  policy_arn = aws_iam_policy.argocd_repo_server_ecr_policy.arn
+}
+
+resource "aws_eks_pod_identity_association" "argocd_repo_server" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "argocd"
+  service_account = "argocd-repo-server"
+  role_arn        = aws_iam_role.argocd_repo_server_role.arn
+}

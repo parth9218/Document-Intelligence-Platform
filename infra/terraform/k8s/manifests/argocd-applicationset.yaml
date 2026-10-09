@@ -5,31 +5,56 @@ metadata:
   namespace: argocd
 spec:
   generators:
-    - git:
-        repoURL: '${github_repository_url}'
-        revision: '${targetRevision_api}'
-        files:
-          - path: "infra/k8s/argocd/${environment}/api/config.json"
-    - git:
-        repoURL: '${github_repository_url}'
-        revision: '${targetRevision_worker}'
-        files:
-          - path: "infra/k8s/argocd/${environment}/worker/config.json"
+    # Generator for API Microservice
+    - matrix:
+        generators:
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_app}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/api/config.json"
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_helm}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/helm-api/config.json"
+
+    # Generator for Worker Microservice
+    - matrix:
+        generators:
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_app}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/worker/config.json"
+          - git:
+              repoURL: '${github_repository_url}'
+              revision: '${targetRevision_helm}'
+              files:
+                - path: "infra/k8s/argocd/${environment}/helm-worker/config.json"
+
   template:
     metadata:
       name: '${project_name}-${environment}-{{app}}'
       annotations:
-        argocd.argoproj.io/sync-wave: "10" # Workloads deployed after core infrastructure
+        argocd.argoproj.io/sync-wave: "10"
     spec:
       project: default
-      source:
-        repoURL: ${github_repository_url}
-        targetRevision: '{{target_commit}}'
-        path: '{{helm_path}}'
-        helm: 
-          valueFiles:
-          - values.yaml
-          - values.${environment}.yaml
+      sources:
+        # Source 1: Helm Chart from AWS ECR OCI Registry
+        - repoURL: '${ecr_registry_url}/${project_name}/${environment}'
+          chart: '{{chart_name}}'
+          targetRevision: '{{chart_version}}'
+          helm:
+            valueFiles:
+              - values.yaml
+              - $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml
+
+        # Source 2: Application Values & Image Tags from Git
+        - repoURL: '${github_repository_url}'
+          targetRevision: '{{target_commit}}'
+          ref: app_values
+
       destination:
         server: 'https://kubernetes.default.svc'
         namespace: default

@@ -1,7 +1,10 @@
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 locals {
   repositories = [
-    "${var.project_name}-${var.environment}-api",
-    "${var.project_name}-${var.environment}-worker"
+    "${var.project_name}/${var.environment}/api",
+    "${var.project_name}/${var.environment}/worker"
   ]
 }
 
@@ -35,6 +38,19 @@ data "aws_iam_policy_document" "ecr_policy" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:BatchCheckLayerAvailability"
+    ]
+  }
+  statement {
+    sid    = "AllowPullFromAccount"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage"
     ]
   }
 }

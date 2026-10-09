@@ -268,6 +268,8 @@ jobs:
           TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'docintel' }}
           TF_VAR_environment: ${{ env.ENV }}
           TF_VAR_github_repository_url: ${{ vars.TF_GITHUB_REPOSITORY_URL }}
+          TF_VAR_targetRevision_app: ${{ vars.TF_TARGET_REVISION_APP || env.ENV }}
+          TF_VAR_targetRevision_helm: ${{ vars.TF_TARGET_REVISION_HELM || env.ENV }}
           TF_VAR_targetRevision_api: ${{ vars.TF_TARGET_REVISION_API || env.ENV }}
           TF_VAR_targetRevision_worker: ${{ vars.TF_TARGET_REVISION_WORKER || env.ENV }}
         run: terraform destroy -auto-approve
