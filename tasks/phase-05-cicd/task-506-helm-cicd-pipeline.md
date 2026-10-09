@@ -2,7 +2,11 @@
 
 ## 1. Goal
 
-Implement an enterprise-grade, multi-environment, tag-driven CI/CD deployment pipeline for Helm charts in `.github/workflows/helm-cicd.yml`. The pipeline automates packaging, linting, and pushing Helm chart templates to **Amazon ECR as OCI registries**, supports concurrent matrix builds for multiple microservice charts (`api` and `worker`), enforces strict immutability without modifying files on disk via dynamic `--version` compilation, and synchronizes releases with ArgoCD through serialized GitOps discovery tracking commits to `{env}/helm` branches.
+Implement an enterprise-grade, multi-environment, tag-driven CI/CD deployment pipeline for Helm charts in `.github/workflows/helm-cicd.yml`. The pipeline enforces a strict **"Package once in dev, promote identical immutable artifacts to stg/prod"** pattern using **Amazon ECR OCI registries**:
+
+1. **Package Once in Dev**: Helm chart templates are packaged strictly once during development (`dev`) with dynamic versioning (`0.0.0-${SHORT_SHA}`) and pushed to the Dev ECR registry.
+2. **Promote Identical OCI Artifacts**: Higher environments (`stg` and `prod`) **never re-package** chart source code. Instead, the workflow verifies and copies the exact immutable OCI artifact from the lower environment (`dev -> stg`, `stg -> prod`). If the chart does not exist in the lower environment registry, the pipeline fails fast.
+3. **ArgoCD GitOps Sync**: Releases update `config.json` discovery pointers on `{env}/helm` branches under serialized concurrency locking, driving ArgoCD Multiple Sources reconciliation.
 
 ---
 
@@ -22,7 +26,7 @@ Implement an enterprise-grade, multi-environment, tag-driven CI/CD deployment pi
 
 ## 3. Workflow Trigger Configuration
 
-The workflow `.github/workflows/helm-cicd.yml` must support three trigger modalities:
+The workflow `.github/workflows/helm-cicd.yml` supports three trigger modalities:
 
 ```yaml
 name: Helm Chart CI/CD Pipeline
@@ -57,18 +61,30 @@ on:
 
 ## 4. Pipeline Architecture & Execution Flow
 
-The workflow is structured into three decoupled phases to maintain clean separation of concerns, enable parallel matrix compilation, and eliminate git push race conditions:
+The workflow is structured into three decoupled phases to maintain clean separation of concerns, execute parallel matrix artifact promotion, and eliminate git push race conditions:
 
 ```mermaid
 flowchart TD
-    Start(["Trigger: Push / Tag / Dispatch"]) --> Detect["Job 1: detect-and-matrix<br/>Resolve Environment, Tag & Changed Charts"]
+    Start(["Trigger: Push / Tag / Dispatch"]) --> Detect["Job 1: detect-and-matrix<br/>Resolve Environment, App & Commit SHA"]
     
-    Detect --> MatrixCheck{"Resolve Chart Matrix"}
-    MatrixCheck -->|"Chart: api"| PackageAPI["Job 2: package-and-push<br/>Matrix: app=api<br/>helm lint & helm push OCI"]
-    MatrixCheck -->|"Chart: worker"| PackageWorker["Job 2: package-and-push<br/>Matrix: app=worker<br/>helm lint & helm push OCI"]
+    Detect --> EnvCheck{"Target Environment?"}
     
-    PackageAPI --> Gate{"Approval Gate<br/>GitHub Environment: stg/prod"}
-    PackageWorker --> Gate
+    %% Dev Branch Packaging (Build Once)
+    EnvCheck -->|"Environment: dev"| DevPackage["Job 2: package-chart-dev<br/>helm lint & package --version 0.0.0-SHA<br/>Push OCI artifact to dev ECR"]
+    
+    %% Staging Promotion (Strict Copy Only)
+    EnvCheck -->|"Environment: stg"| StgVerify{"Verify in dev ECR?<br/>aws ecr describe-images"}
+    StgVerify -->|"Artifact NOT Found"| FailStg["🛑 ABORT PIPELINE (exit 1)<br/>Untested code cannot enter stg!<br/>Building in stg is strictly forbidden."]
+    StgVerify -->|"Artifact Verified"| StgCopy["Job 2: promote-chart-stg<br/>COPY OCI Artifact: dev -> stg ECR<br/>Zero Rebuilding"]
+    
+    %% Production Promotion (Strict Copy Only)
+    EnvCheck -->|"Environment: prod"| ProdVerify{"Verify in stg ECR?<br/>aws ecr describe-images"}
+    ProdVerify -->|"Artifact NOT Found"| FailProd["🛑 ABORT PIPELINE (exit 1)<br/>Untested code cannot enter prod!<br/>Building in prod is strictly forbidden."]
+    ProdVerify -->|"Artifact Verified"| ProdCopy["Job 2: promote-chart-prod<br/>COPY OCI Artifact: stg -> prod ECR<br/>Zero Rebuilding"]
+    
+    DevPackage --> Gate{"Manual Approval Gate<br/>GitHub Environment: stg/prod"}
+    StgCopy --> Gate
+    ProdCopy --> Gate
     
     Gate -->|"Approved / Dev Auto"| GitOps["Job 3: gitops-commit<br/>Serialized Downstream Commit<br/>Updates config.json & pushes"]
     
@@ -88,33 +104,38 @@ flowchart TD
 * **Runs On**: `ubuntu-latest`
 * **Outputs**:
   * `env`: Target deployment environment (`dev`, `stg`, `prod`).
-  * `matrix`: JSON array of charts to package (e.g. `["api"]`, `["worker"]`, or `["api", "worker"]`).
-  * `version`: Chart semantic version (e.g. `0.0.0-${SHORT_SHA}` for `dev`, or extracted semver like `1.2.0` for `stg`/`prod`).
+  * `matrix`: JSON array of charts to process (e.g. `["api"]`, `["worker"]`, or `["api", "worker"]`).
+  * `version`: Chart artifact version tag (`0.0.0-${SHORT_SHA}`).
+  * `release_tag`: Semantic release tag for tracking in `stg`/`prod` (e.g. `1.0.0`).
   * `short_sha`: Git commit short SHA (`git rev-parse --short HEAD`).
   * `commit_sha`: Full 40-character commit SHA (`${{ github.sha }}`).
 
 #### Operational Logic:
-1. **Tag Trigger Detection**:
+1. **Tag Trigger Detection (`stg` and `prod`)**:
    * If `github.ref_type == 'tag'`:
      * Matches format `{env}-helm-{app}-v{major}.{minor}.{patch}`.
      * Extracts `ENV` (`stg` or `prod`).
      * Extracts `APP` (`api` or `worker`).
-     * Extracts `VERSION` (stripping `{env}-helm-{app}-v` prefix).
+     * Extracts `RELEASE_TAG` (stripping `{env}-helm-{app}-v` prefix).
+     * Resolves the commit SHA pointed to by the tag: `SHORT_SHA=$(git rev-parse --short HEAD)`.
+     * Immutable artifact version is always anchored to the commit: `VERSION="0.0.0-${SHORT_SHA}"`.
      * Sets `matrix=["${APP}"]`.
-2. **Push / Dispatch (Dev) Detection**:
+2. **Push / Dispatch Detection (`dev`)**:
    * If `github.event_name == 'push'` or `'workflow_dispatch'`:
      * Sets `ENV="dev"`.
-     * Computes `VERSION="0.0.0-${SHORT_SHA}"`.
+     * Computes `SHORT_SHA=$(git rev-parse --short HEAD)`.
+     * Sets `VERSION="0.0.0-${SHORT_SHA}"`.
+     * Sets `RELEASE_TAG="0.0.0"`.
      * **Dynamic Path Inspection**:
        * If `workflow_dispatch` and `inputs.app != 'all'`: sets `matrix=["${inputs.app}"]`.
-       * Otherwise, inspects changed files using `git diff HEAD~1 HEAD --name-only` or path filters:
+       * Otherwise, inspects changed files:
          * If `infra/k8s/helm/api/**` changed $\rightarrow$ include `"api"`.
          * If `infra/k8s/helm/worker/**` changed $\rightarrow$ include `"worker"`.
          * If neither or both changed (or `inputs.app == 'all'`) $\rightarrow$ sets `matrix=["api", "worker"]`.
 
 ---
 
-### 5.2 Job 2: `package-and-push` (Parallel OCI Compilation Matrix)
+### 5.2 Job 2: `package-or-promote` (Parallel OCI Packaging on Dev / Copy Promotion on Stg & Prod)
 
 * **Needs**: `detect-and-matrix`
 * **Runs On**: `ubuntu-latest`
@@ -126,11 +147,15 @@ flowchart TD
     fail-fast: true
   ```
 
+> **Immutable Promotion Invariant**: 
+> Helm charts are compiled/packaged **strictly once** in `dev`. In `stg` and `prod`, the workflow **never runs `helm package`** and never touches source manifests. It strictly verifies and copies the pre-built OCI artifact from the immediate lower environment (`dev -> stg`, `stg -> prod`). If the artifact is not found in the lower environment ECR repository, the job immediately aborts with `exit 1` to guarantee untested code can never be deployed to higher environments.
+
 #### Step-by-Step Execution:
+
 1. **Checkout Code**:
    * Uses `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` (v7.0.1) with `fetch-depth: 0`.
 2. **Setup Tools**:
-   * Installs Helm v3 (minimum 3.8+ for stable OCI registry commands).
+   * Installs Helm v3 (minimum 3.8+ for stable OCI registry commands) and Skopeo (or uses Helm OCI pull/push).
 3. **AWS OIDC Authentication**:
    * Assumes CI IAM Role via `aws-actions/configure-aws-credentials` using `vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE` and `vars.AWS_REGION`.
 4. **Resolve ECR Registry Domain**:
@@ -141,34 +166,91 @@ flowchart TD
      aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
        helm registry login --username AWS --password-stdin "${{ steps.ecr.outputs.registry_domain }}"
      ```
-6. **Linting & Template Validation**:
-   * Runs strict linting and dry-run template rendering against environment values:
+
+#### Branch A: Development Environment (`env == 'dev'`) — Package Once
+1. **Linting & Template Validation**:
+   ```bash
+   helm lint "infra/k8s/helm/${{ matrix.app }}"
+   helm template "test-release" "infra/k8s/helm/${{ matrix.app }}" \
+     -f "infra/k8s/helm/${{ matrix.app }}/values.yaml" \
+     -f "infra/k8s/helm/${{ matrix.app }}/values.dev.yaml" > /dev/null
+   ```
+2. **Package Chart**:
+   * Uses dynamic `--version` without modifying source files on disk:
      ```bash
-     helm lint "infra/k8s/helm/${{ matrix.app }}"
-     helm template "test-release" "infra/k8s/helm/${{ matrix.app }}" \
-       -f "infra/k8s/helm/${{ matrix.app }}/values.yaml" \
-       -f "infra/k8s/helm/${{ matrix.app }}/values.${{ needs.detect-and-matrix.outputs.env }}.yaml" > /dev/null
+     CHART_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
+     helm package "infra/k8s/helm/${{ matrix.app }}" --version "${CHART_VERSION}" --destination /tmp/charts
      ```
-7. **Dynamic OCI Packaging (`--version`)**:
-   * **Crucial Principle**: Does not touch `Chart.yaml` on disk. Uses `--version` to dynamically set the tarball metadata:
+3. **Push to Dev ECR Registry**:
+   ```bash
+   TARGET_REPO="oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/dev"
+   helm push "/tmp/charts/${{ matrix.app }}-${CHART_VERSION}.tgz" "${TARGET_REPO}"
+   ```
+
+#### Branch B: Staging Environment (`env == 'stg'`) — Promote `dev -> stg`
+1. **Verify Chart Existence in Dev ECR**:
+   ```bash
+   CHART_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
+   DEV_REPO="${{ vars.TF_PROJECT_NAME }}/dev/${{ matrix.app }}"
+   
+   TAG_EXISTS=$(aws ecr describe-images \
+     --repository-name "${DEV_REPO}" \
+     --image-ids imageTag="${CHART_VERSION}" \
+     --query 'imageDetails[0].imageTags[0]' \
+     --output text 2>/dev/null || echo "")
+
+   if [ "$TAG_EXISTS" != "${CHART_VERSION}" ]; then
+     echo "::error::Chart ${{ matrix.app }}:${CHART_VERSION} not found in dev ECR registry (${DEV_REPO}). You must build on dev first!"
+     exit 1
+   fi
+   ```
+2. **Copy Immutable OCI Artifact from Dev to Stg ECR**:
+   * Using Helm OCI pull and push (or `skopeo copy`):
      ```bash
-     TARGET_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
-     helm package "infra/k8s/helm/${{ matrix.app }}" --version "${TARGET_VERSION}" --destination /tmp/charts
+     # Pull exact byte-for-byte archive from dev ECR
+     helm pull "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/dev/${{ matrix.app }}" \
+       --version "${CHART_VERSION}" \
+       --destination /tmp/charts
+
+     # Push the identical archive to stg ECR
+     helm push "/tmp/charts/${{ matrix.app }}-${CHART_VERSION}.tgz" \
+       "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/stg"
      ```
-8. **Push Chart to ECR OCI Repository**:
-   * Pushes the compiled archive to the slash-delimited ECR repository path:
-     ```bash
-     TARGET_REPO="oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/${{ needs.detect-and-matrix.outputs.env }}"
-     helm push "/tmp/charts/${{ matrix.app }}-${TARGET_VERSION}.tgz" "${TARGET_REPO}"
-     ```
-9. **Record Artifact Metadata**:
-   * Emits a step output recording `{ "app": "${{ matrix.app }}", "version": "${TARGET_VERSION}" }` and uploads a minimal metadata artifact for the downstream commit job.
+
+#### Branch C: Production Environment (`env == 'prod'`) — Promote `stg -> prod`
+1. **Verify Chart Existence in Stg ECR**:
+   ```bash
+   CHART_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
+   STG_REPO="${{ vars.TF_PROJECT_NAME }}/stg/${{ matrix.app }}"
+   
+   TAG_EXISTS=$(aws ecr describe-images \
+     --repository-name "${STG_REPO}" \
+     --image-ids imageTag="${CHART_VERSION}" \
+     --query 'imageDetails[0].imageTags[0]' \
+     --output text 2>/dev/null || echo "")
+
+   if [ "$TAG_EXISTS" != "${CHART_VERSION}" ]; then
+     echo "::error::Chart ${{ matrix.app }}:${CHART_VERSION} not found in staging ECR registry (${STG_REPO}). You must promote to staging first!"
+     exit 1
+   fi
+   ```
+2. **Copy Immutable OCI Artifact from Stg to Prod ECR**:
+   ```bash
+   # Pull exact byte-for-byte archive from staging ECR
+   helm pull "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/stg/${{ matrix.app }}" \
+       --version "${CHART_VERSION}" \
+       --destination /tmp/charts
+
+   # Push the identical archive to production ECR
+   helm push "/tmp/charts/${{ matrix.app }}-${CHART_VERSION}.tgz" \
+     "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/prod"
+   ```
 
 ---
 
 ### 5.3 Job 3: `gitops-commit` (Serialized Multi-App Tracking Commit)
 
-* **Needs**: `[detect-and-matrix, package-and-push]`
+* **Needs**: `[detect-and-matrix, package-or-promote]`
 * **Runs On**: `ubuntu-latest`
 * **Environment Gate**: Binds to `environment: ${{ needs.detect-and-matrix.outputs.env }}` to enforce reviewer approval for `stg` and `prod`.
 * **Concurrency Lock**:
@@ -179,19 +261,17 @@ flowchart TD
 1. **Checkout Target Branch**:
    * For `dev`: Checks out `dev` branch.
    * For `stg` / `prod`: Checks out `{env}/helm` release tracking branch (creating orphan branch if not yet existing).
-2. **Download Artifact Metadata**:
-   * Collects all packaged app versions from Job 2.
-3. **Update Discovery Configurations**:
-   * For each packaged app in the matrix (`api`, `worker`, or both):
+2. **Update Discovery Configurations**:
+   * For each packaged/promoted app in the matrix (`api`, `worker`, or both):
      * Updates `infra/k8s/argocd/${{ env }}/helm-${app}/config.json`:
        ```json
        {
          "app": "${app}",
          "chart_name": "${app}",
-         "chart_version": "${version}"
+         "chart_version": "${CHART_VERSION}"
        }
        ```
-4. **Selective Commit & Push with Rebase Loop**:
+3. **Selective Commit & Push with Rebase Loop**:
    * Configures git bot committer:
      ```bash
      git config --global user.name "github-actions[bot]"
@@ -207,6 +287,7 @@ flowchart TD
      ```bash
      git commit -m "release(helm): update charts [${APPS[*]}] to ${{ needs.detect-and-matrix.outputs.version }} [skip ci]" \
                 -m "Environment: ${{ needs.detect-and-matrix.outputs.env }}" \
+                -m "Release Tag: ${{ needs.detect-and-matrix.outputs.release_tag }}" \
                 -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
          || echo "No changes to commit"
 
@@ -235,9 +316,11 @@ To verify the workflow locally without cloud deployment billing, provide local s
 
 ## 7. Acceptance Criteria & Definition of Done
 
+- [ ] **Package Once Enforced**: Helm charts are compiled strictly in `dev`. Staging and production jobs run OCI copy routines without executing `helm package`.
+- [ ] **Promotion Verification & Fail Fast**: Staging pipeline checks `dev` ECR and production pipeline checks `stg` ECR; fails with actionable error if lower environment artifact is absent.
 - [ ] **Workflow File Created**: `.github/workflows/helm-cicd.yml` conforms to GitHub Actions syntax with all pinned action commit SHAs.
-- [ ] **Dynamic Versioning Tested**: `helm package` executes with `--version` flag without dirtying working directory `Chart.yaml` files.
-- [ ] **Parallel Matrix Execution**: Dev runs touching both charts correctly run `package-and-push` for both `api` and `worker` concurrently.
+- [ ] **Dynamic Versioning Tested**: Dev packaging executes with `--version "0.0.0-${SHORT_SHA}"` without modifying working directory `Chart.yaml` files.
+- [ ] **Parallel Matrix Execution**: Dev runs touching both charts correctly run `package-or-promote` for both `api` and `worker` concurrently.
 - [ ] **Atomic GitOps Commits**: A single consolidated `gitops-commit` step updates both `config.json` files when both charts are built, preventing git push non-fast-forward conflicts.
 - [ ] **Approval Gates Active**: Staging and production releases pause at the GitHub Environment gate before committing to `{env}/helm`.
 - [ ] **ArgoCD Discovery Compatibility**: The emitted `config.json` schema strictly matches the keys expected by `infra/terraform/k8s/manifests/argocd-applicationset.yaml` (`chart_name`, `chart_version`, `app`).
