@@ -35,3 +35,6 @@ output "cloudfront_distribution_id" {
   value = module.storage.cloudfront_distribution_id
 }
 output "frontend_bucket_id" { value = module.storage.frontend_bucket_id }
+output "ecr_registry_url" {
+  value = module.ecr.ecr_registry_url
+}

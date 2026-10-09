@@ -32,3 +32,6 @@ output "cloudfront_distribution_id" {
   value = module.core.cloudfront_distribution_id
 }
 output "frontend_bucket_id" { value = module.core.frontend_bucket_id }
+output "ecr_registry_url" {
+  value = module.core.ecr_registry_url
+}
