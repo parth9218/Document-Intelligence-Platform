@@ -166,3 +166,110 @@ Instead of static AWS IAM Access Keys or legacy IRSA mutating webhooks, authenti
 2. **Trust Relationship**: Trust policy authorizes the `pods.eks.amazonaws.com` service principal with `sts:AssumeRole` and `sts:TagSession`.
 3. **EKS Pod Identity Association**: Associates IAM role `argocd_repo_server_role` to ServiceAccount `argocd-repo-server` in namespace `argocd`.
 4. **Credential Helper**: ArgoCD Helm release in `infra/terraform/k8s/helm.tf` enables `configs.params.reposerver\.ecr\.credential\.helper = "true"`. The repo-server natively uses the AWS SDK to retrieve short-lived authorization tokens on demand.
+
+---
+
+## 6. CI/CD Pipeline Implementation (`helm-cicd.yml`)
+
+The automated lifecycle of Helm charts is driven by `.github/workflows/helm-cicd.yml`, establishing a strict **"Package once in dev, promote identical immutable artifacts to stg/prod"** operational model.
+
+### 6.1 End-to-End Promotion Architecture Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer / Release Engineer
+    participant CI as GitHub Actions (helm-cicd.yml)
+    participant TF as Terraform Query (infra/terraform/query)
+    participant ECR_Dev as Dev ECR OCI Registry
+    participant ECR_Stg as Stg ECR OCI Registry
+    participant ECR_Prod as Prod ECR OCI Registry
+    participant Git as Git Repository (Tracking Branches)
+    participant Argo as ArgoCD Repo Server
+
+    rect rgb(240, 248, 255)
+    Note over Dev,ECR_Dev: Phase A: Development (Package Once)
+    Dev->>CI: Push to dev / workflow_dispatch
+    CI->>CI: Detect changed charts (api, worker)
+    CI->>TF: Query Dev ECR repository URLs (backend.config.hcl)
+    TF-->>CI: Return ecr_repo_urls (dev)
+    CI->>CI: helm lint & template test
+    CI->>CI: helm package --version "0.0.0-${SHORT_SHA}"
+    CI->>ECR_Dev: helm push "0.0.0-${SHORT_SHA}" to oci://.../docintel/dev/{app}
+    CI->>Git: Commit updated dev discovery pointer (config.json)
+    end
+
+    rect rgb(255, 250, 240)
+    Note over Dev,ECR_Stg: Phase B: Staging Promotion (Re-tag with SemVer)
+    Dev->>CI: Push tag "stg-helm-{app}-v{semver}"
+    CI->>TF: Query Dev & Stg ECR repository URLs (fail-fast)
+    TF-->>CI: Return ecr_repo_urls (dev & stg)
+    CI->>ECR_Dev: aws ecr describe-images (check 0.0.0-${SHORT_SHA})
+    alt Chart Missing in Dev ECR
+        CI-->>Dev: 🛑 Abort with exit 1 (Untested code forbidden)
+    else Chart Verified
+        CI->>ECR_Dev: helm pull "0.0.0-${SHORT_SHA}"
+        CI->>CI: tar -xzf & helm package --version "{semver}" (zero git changes)
+        CI->>ECR_Stg: helm push "{semver}" to oci://.../docintel/stg/{app}
+        CI->>CI: Pause at GitHub Environment Approval Gate (stg)
+        CI->>Git: Commit updated config.json to stg/helm tracking branch
+    end
+    end
+
+    rect rgb(245, 255, 245)
+    Note over Dev,ECR_Prod: Phase C: Production Promotion (Direct Immutable Copy)
+    Dev->>CI: Push tag "prod-helm-{app}-v{semver}"
+    CI->>TF: Query Stg & Prod ECR repository URLs (fail-fast)
+    TF-->>CI: Return ecr_repo_urls (stg & prod)
+    CI->>ECR_Stg: aws ecr describe-images (check {semver})
+    alt Chart Missing in Stg ECR
+        CI-->>Dev: 🛑 Abort with exit 1 (Unverified code forbidden)
+    else Chart Verified
+        CI->>ECR_Stg: helm pull "{semver}"
+        CI->>ECR_Prod: helm push "{semver}" to oci://.../docintel/prod/{app} (Bit-for-bit identical)
+        CI->>CI: Pause at GitHub Environment Approval Gate (prod)
+        CI->>Git: Commit updated config.json to prod/helm tracking branch
+    end
+    end
+
+    Note over Git,Argo: Reconciliation Loop
+    Argo->>Git: Matrix generator poll / webhook discovery
+    Argo->>ECR_Stg: Pull OCI chart by targetRevision: {chart_version}
+    Argo->>Git: Pull app values by targetRevision: {target_commit}
+    Argo->>Argo: Render templates and reconcile Kubernetes workloads
+```
+
+### 6.2 Key Pipeline Mechanics
+
+1. **Trigger Modalities**:
+   * **Push to `dev`** (`paths: ['infra/k8s/helm/**']`): Runs `git diff` against `HEAD~1` to dynamically detect changed charts and constructs matrix `["api"]`, `["worker"]`, or `["api", "worker"]`.
+   * **Manual `workflow_dispatch`**: Exclusively available for `dev` testing; accepts chart target input (`all`, `api`, or `worker`).
+   * **Release Tags**: Pushing tags matching `{env}-helm-{app}-v{semver}` (e.g. `stg-helm-api-v1.0.0` or `prod-helm-worker-v1.2.0`) isolates the release to a single targeted app matrix.
+
+2. **Zero In-Tree Mutation (`Chart.yaml` Immutability)**:
+   * `Chart.yaml` files committed in git remain untouched at all times.
+   * Dynamic version compilation in `dev` uses `helm package --version "0.0.0-${SHORT_SHA}"`.
+   * Staging promotion unpacks the pre-tested archive (`tar -xzf`) in ephemeral memory and repacks with `--version "{semver}"`.
+   * Production promotion performs a direct `helm pull` and `helm push` of the exact `{semver}` archive with zero rebuilding.
+
+3. **Dynamic Infrastructure Query & Fail-Fast State Validation**:
+   * ECR repository URLs are never hardcoded or manually constructed.
+   * The pipeline invokes `infra/terraform/query` against `infra/terraform/aws/environments/${env}/backend.config.hcl` to retrieve actual outputs from remote Terraform state (`ecr_repo_urls`).
+   * If remote state is inaccessible or a repo URL is not present, the pipeline immediately exits with code 1, enforcing that infrastructure must be deployed prior to deploying application charts.
+
+4. **Serialized Downstream GitOps Commits (`gitops-commit`)**:
+   * Chart packaging and promotion run in parallel across the matrix.
+   * Metadata artifacts (`chart-metadata-${app}`) are passed to a single downstream serialized job.
+   * Employs concurrency groups:
+     - `git-commit-dev` for `dev` (shared with Docker build pipelines).
+     - `git-commit-${env}-helm` for higher environments.
+   * Updates `infra/k8s/argocd/${env}/helm-${app}/config.json` pointers:
+     ```json
+     {
+       "app": "${app}",
+       "chart_name": "${app}",
+       "chart_version": "${chart_version}"
+     }
+     ```
+   * Executes atomic git commit and pushes to tracking branches (`dev` or `{env}/helm`) with automatic pull-rebase loops to prevent push conflicts.
+

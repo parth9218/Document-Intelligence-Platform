@@ -306,5 +306,21 @@ This document lists completed tasks and code files created.
   - Updated Terraform plumbing in `infra/terraform/k8s/variables.tf` and `infra/terraform/k8s/k8s.tf` to introduce `targetRevision_app`, `targetRevision_helm`, and `ecr_registry_url` with backwards-compatible defaults.
   - Updated workflow triggers in `.github/workflows/k8s-deploy.yml` and `.github/workflows/infra-destroy.yml` to supply `TF_VAR_targetRevision_app` and `TF_VAR_targetRevision_helm`.
   - Updated `.github/workflows/reusable-docker-helm-cicd.yml` jq filter to accommodate both `/` and `-` repository delimiters.
+- **Multi-Environment Helm Chart CI/CD Pipeline (Task 506)**:
+  - Pruned obsolete environment-specific Helm values files (`infra/k8s/helm/api/values.dev.yaml`, `values.prod.yaml`, `infra/k8s/helm/worker/values.dev.yaml`, `values.prod.yaml`), as environment configuration is now decoupled under ArgoCD GitOps tracking directories (`infra/k8s/argocd/${env}/${app}/values.yaml`).
+  - Added `.helmignore` to both `infra/k8s/helm/api/` and `infra/k8s/helm/worker/` to ensure `values.*.yaml`, `.git/`, `.DS_Store`, and `*.tgz` archives are never packaged into Helm OCI artifacts.
+  - Updated `.github/workflows/api-cicd.yml` and `.github/workflows/worker-cicd.yml` to update Helm values in `infra/k8s/argocd/dev/${app}/values.yaml` in alignment with the multi-source architecture.
+  - Implemented the unified Helm chart CI/CD pipeline in [.github/workflows/helm-cicd.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/helm-cicd.yml):
+    - `detect-and-matrix`: Parses push triggers on `dev`, manual `workflow_dispatch` inputs, or release tags (`{env}-helm-{app}-v*`). Dynamically generates a JSON matrix (`apps: ["api"]`, `["worker"]`, or `["api", "worker"]`). Resolves semantic versions (`target_version`) directly from tags for `stg` and `prod`, sets `target_version=0.0.0-${SHORT_SHA}` for `dev`, and computes prerequisite `lower_version` (`0.0.0-${SHORT_SHA}` for `stg`, `${semver}` for `prod`).
+    - `package-or-promote`: Queries target and lower environment ECR repository URLs directly from Terraform remote state via `infra/terraform/query`, failing fast if the state or repo URL is missing:
+      - **Branch A (Dev)**: Runs `helm lint`, dry-run `helm template`, packages chart with dynamic `--version "${TARGET_VERSION}"` (preserving clean `Chart.yaml` on disk), and pushes to dev ECR.
+      - **Branch B (Staging)**: Verifies chart existence in Dev ECR (`aws ecr describe-images` for `0.0.0-${SHORT_SHA}`); fails fast (`exit 1`) if missing. Pulls archive from Dev ECR, repacks with `--version "${TARGET_VERSION}"` (`${semver}` from release tag), and pushes to Staging ECR.
+      - **Branch C (Production)**: Verifies chart existence in Staging ECR (`aws ecr describe-images` for `${TARGET_VERSION}`); fails fast (`exit 1`) if missing. Pulls exact immutable archive from Staging ECR and pushes directly to Production ECR with zero rebuilding.
+      - Emits and uploads chart metadata artifacts with `app` and `version`.
+    - `gitops-commit`: Downstream serialized promotion job enforcing GitHub Environment manual approvals (`environment: ${{ env }}` for `stg` and `prod`), applies concurrency locks (`git-commit-dev` or `git-commit-${env}-helm`), downloads metadata artifacts, updates GitOps tracking pointers in `infra/k8s/argocd/${env}/helm-${app}/config.json`, and executes serial git commits and pushes with rebase resilience.
+  - Formulated mock event payloads in `.github/workflows/helm-cicd/events/` (`push-dev.json`, `dev-all.json`, `tag-stg-api.json`, `tag-prod-worker.json`) and created [.github/workflows/helm-cicd/Taskfile.yaml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/helm-cicd/Taskfile.yaml) for automated local linting and `act` runner execution.
+  - Verified local Helm chart integrity via `helm lint` and `helm template` across both `api` and `worker` charts.
+
+
 
 
