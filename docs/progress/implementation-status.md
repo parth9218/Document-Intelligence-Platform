@@ -41,6 +41,7 @@
 - [x] **Task 503**: Frontend Runtime Configuration Decoupling (`config.js`) ── _Complete_
 - [x] **Task 504**: Multi-Environment Frontend CI/CD Pipeline (`frontend-deploy.yml`) ── _Complete_
 - [x] **Task 505**: Helm GitOps Infrastructure & Multi-Source OCI Setup ── _Complete_
+- [ ] **Task 506**: Multi-Environment Helm Chart CI/CD Pipeline (`helm-cicd.yml`) ── _Incomplete_
 
 ---
 
