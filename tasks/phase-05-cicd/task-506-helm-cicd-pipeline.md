@@ -189,62 +189,51 @@ flowchart TD
 
 #### Branch B: Staging Environment (`env == 'stg'`) — Promote `dev -> stg`
 1. **Verify Chart Existence in Dev ECR**:
+   * Staging release tags provide semantic versioning (`stg-helm-{app}-v{semver}`).
+   * The pipeline anchors the prerequisite dev artifact version to the tag's commit SHA (`0.0.0-${SHORT_SHA}`).
+   * Queries the lower environment ECR repository URL from infrastructure:
    ```bash
-   CHART_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
-   DEV_REPO="${{ vars.TF_PROJECT_NAME }}/dev/${{ matrix.app }}"
-   
    TAG_EXISTS=$(aws ecr describe-images \
-     --repository-name "${DEV_REPO}" \
-     --image-ids imageTag="${CHART_VERSION}" \
+     --repository-name "${LOWER_REPO_NAME}" \
+     --image-ids imageTag="${LOWER_VERSION}" \
      --query 'imageDetails[0].imageTags[0]' \
      --output text 2>/dev/null || echo "")
 
-   if [ "$TAG_EXISTS" != "${CHART_VERSION}" ]; then
-     echo "::error::Chart ${{ matrix.app }}:${CHART_VERSION} not found in dev ECR registry (${DEV_REPO}). You must build on dev first!"
+   if [ "$TAG_EXISTS" != "${LOWER_VERSION}" ]; then
+     echo "::error::Chart ${{ matrix.app }}:${LOWER_VERSION} not found in dev ECR registry (${LOWER_REPO_NAME}). You must build on dev first!"
      exit 1
    fi
    ```
-2. **Copy Immutable OCI Artifact from Dev to Stg ECR**:
-   * Using Helm OCI pull and push (or `skopeo copy`):
+2. **Promote and Re-tag with Semantic Version**:
+   * Pulls the pre-tested archive from dev ECR, unpacks it to a temporary directory, and repacks it with `--version "${TARGET_VERSION}"` (semantic version from the tag) without dirtying source files in git:
      ```bash
-     # Pull exact byte-for-byte archive from dev ECR
-     helm pull "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/dev/${{ matrix.app }}" \
-       --version "${CHART_VERSION}" \
-       --destination /tmp/charts
-
-     # Push the identical archive to stg ECR
-     helm push "/tmp/charts/${{ matrix.app }}-${CHART_VERSION}.tgz" \
-       "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/stg"
+     helm pull "oci://${LOWER_REPO_URL}" --version "${LOWER_VERSION}" --destination /tmp/charts
+     tar -xzf "/tmp/charts/${{ matrix.app }}-${LOWER_VERSION}.tgz" -C /tmp/unpacked
+     helm package "/tmp/unpacked/${{ matrix.app }}" --version "${TARGET_VERSION}" --destination /tmp/stg-charts
+     helm push "/tmp/stg-charts/${{ matrix.app }}-${TARGET_VERSION}.tgz" "oci://${TARGET_OCI_BASE}"
      ```
 
 #### Branch C: Production Environment (`env == 'prod'`) — Promote `stg -> prod`
 1. **Verify Chart Existence in Stg ECR**:
+   * Verifies the semantic version `${TARGET_VERSION}` exists in the staging ECR registry queried from infrastructure:
    ```bash
-   CHART_VERSION="${{ needs.detect-and-matrix.outputs.version }}"
-   STG_REPO="${{ vars.TF_PROJECT_NAME }}/stg/${{ matrix.app }}"
-   
    TAG_EXISTS=$(aws ecr describe-images \
-     --repository-name "${STG_REPO}" \
-     --image-ids imageTag="${CHART_VERSION}" \
+     --repository-name "${LOWER_REPO_NAME}" \
+     --image-ids imageTag="${LOWER_VERSION}" \
      --query 'imageDetails[0].imageTags[0]' \
      --output text 2>/dev/null || echo "")
 
-   if [ "$TAG_EXISTS" != "${CHART_VERSION}" ]; then
-     echo "::error::Chart ${{ matrix.app }}:${CHART_VERSION} not found in staging ECR registry (${STG_REPO}). You must promote to staging first!"
+   if [ "$TAG_EXISTS" != "${LOWER_VERSION}" ]; then
+     echo "::error::Chart ${{ matrix.app }}:${LOWER_VERSION} not found in staging ECR registry (${LOWER_REPO_NAME}). You must promote to staging first!"
      exit 1
    fi
    ```
-2. **Copy Immutable OCI Artifact from Stg to Prod ECR**:
-   ```bash
-   # Pull exact byte-for-byte archive from staging ECR
-   helm pull "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/stg/${{ matrix.app }}" \
-       --version "${CHART_VERSION}" \
-       --destination /tmp/charts
-
-   # Push the identical archive to production ECR
-   helm push "/tmp/charts/${{ matrix.app }}-${CHART_VERSION}.tgz" \
-     "oci://${{ steps.ecr.outputs.registry_domain }}/${{ vars.TF_PROJECT_NAME }}/prod"
-   ```
+2. **Direct Bit-for-Bit Copy from Staging to Production ECR**:
+   * Pulls the exact pre-validated semver archive from staging ECR and pushes directly to production ECR with zero rebuilding:
+     ```bash
+     helm pull "oci://${LOWER_REPO_URL}" --version "${LOWER_VERSION}" --destination /tmp/charts
+     helm push "/tmp/charts/${{ matrix.app }}-${TARGET_VERSION}.tgz" "oci://${TARGET_OCI_BASE}"
+     ```
 
 ---
 
