@@ -303,6 +303,33 @@ jobs:
           echo "ssm_secrets_name=$(echo "$TF_JSON"    | jq -r '.ssm_secrets_name.value // empty')"    >> $GITHUB_OUTPUT
 
       # ------------------------------------------------------------------------
+      # Deployment Step Summary & ALB Origin Alignment Guidance
+      # ------------------------------------------------------------------------
+      - name: Emit Deployment Summary
+        if: always()
+        run: |
+          ALB_DNS="${{ needs.plan-aws.outputs.api_alb_dns }}"
+          
+          echo "## ☁️ AWS Infrastructure Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Status: ✅ Success" >> $GITHUB_STEP_SUMMARY
+            if [ "$ALB_DNS" = "placeholder.elb.amazonaws.com" ] || [ -z "$ALB_DNS" ]; then
+              echo "> [!WARNING]" >> $GITHUB_STEP_SUMMARY
+              echo "> **Action Required:** Active Gateway ALB DNS was not found in K8s remote state (placeholder DNS was used)." >> $GITHUB_STEP_SUMMARY
+              echo "> Once Kubernetes infrastructure (\`k8s-deploy.yml\`) is deployed and the Gateway ALB DNS is generated, you **must re-run this AWS Infrastructure workflow** (\`aws-deploy.yml\`) to update the CloudFront distribution origin target." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "> [!CAUTION]" >> $GITHUB_STEP_SUMMARY
+              echo "> **Word of Caution:** CloudFront origin is currently configured with Gateway ALB DNS: \`${ALB_DNS}\`." >> $GITHUB_STEP_SUMMARY
+              echo "> Anytime the Gateway ALB DNS is modified or re-created by the K8s stack, you **must re-run this AWS Infrastructure workflow** (\`aws-deploy.yml\`) to update the CloudFront distribution origin target." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### Status: ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      # ------------------------------------------------------------------------
       # Selective Release Branch Tracking (Executed only on release tags)
       # ------------------------------------------------------------------------
       - name: Update Selective Release Tracking Branch
