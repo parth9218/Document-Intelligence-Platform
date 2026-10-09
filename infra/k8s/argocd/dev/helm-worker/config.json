@@ -1,5 +1,5 @@
 {
   "app": "worker",
   "chart_name": "worker",
-  "chart_version": "0.1.0"
+  "chart_version": "0.0.0-aba90d1"
 }
