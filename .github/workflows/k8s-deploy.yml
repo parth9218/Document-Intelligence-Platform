@@ -378,6 +378,23 @@ jobs:
           echo "CloudFront Distribution Domain: $CF_DOMAIN"
           echo "::notice::Gateway ALB successfully provisioned at ${{ steps.alb-address.outputs.alb_dns }}"
 
+          echo "## 🌐 Gateway ALB Provisioning & CloudFront Alignment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> [!IMPORTANT]" >> $GITHUB_STEP_SUMMARY
+          echo "> The Gateway Application Load Balancer (ALB) has been allocated by the AWS Load Balancer Controller." >> $GITHUB_STEP_SUMMARY
+          echo "> If this ALB DNS differs from the CloudFront origin target or was newly created, re-trigger the **Deploy AWS Infrastructure** workflow (\`aws-deploy.yml\`) to update the CloudFront origin endpoint." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📌 Provisioning Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ env.ENV }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Allocated Gateway ALB DNS** | \`${{ steps.alb-address.outputs.alb_dns }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront Distribution Domain** | \`${CF_DOMAIN:-"Not Configured"}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Next Action" >> $GITHUB_STEP_SUMMARY
+          echo "Run the **Deploy AWS Infrastructure** workflow to update the CloudFront distribution origin target to point to the newly allocated Gateway ALB DNS." >> $GITHUB_STEP_SUMMARY
+
       # ------------------------------------------------------------------------
       # Selective Release Branch Tracking (Executed only on release tags)
       # ------------------------------------------------------------------------
