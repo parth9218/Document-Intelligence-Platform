@@ -1,6 +1,0 @@
-{
-  "ref": "refs/tags/prod-helm-worker-v1.0.0",
-  "repository": {
-    "default_branch": "dev"
-  }
-}

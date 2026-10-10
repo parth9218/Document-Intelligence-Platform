@@ -1,6 +1,0 @@
-{
-  "inputs": {
-    "environment": "dev",
-    "destroy_aws": false
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "inputs": {
-    "environment": "prod",
-    "destroy_aws": true,
-    "aws_release_tag": "prod-infra-aws-v1.0.0",
-    "k8s_release_tag": "prod-infra-k8s-v1.0.0"
-  }
-}
