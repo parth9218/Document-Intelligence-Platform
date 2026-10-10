@@ -210,7 +210,7 @@ sequenceDiagram
 3. **`ECRAuthorizationToken` Generator**:
    - Defined in `infra/terraform/k8s/manifests/argocd-ecr-secret.yaml` (`kind: ECRAuthorizationToken`, namespace `argocd`).
    - Retrieves fresh AWS ECR credentials scoped to the active cluster region.
-4. **Dual ArgoCD Secret Templating (`ExternalSecret`)**:
+4. **Dual ArgoCD Secret Templating (`ExternalSecret` `external-secrets.io/v1`)**:
    - **Repository Secret (`argocd-ecr-helm-repo`)**: Labeled `argocd.argoproj.io/secret-type: repository`, with `url: "${ecr_registry_url}/${project_name}/${environment}"`, `enableOCI: "true"`, and `type: "helm"`. Provides exact-match repository registration in ArgoCD.
    - **Repository Credential Template (`argocd-ecr-repo-creds`)**: Labeled `argocd.argoproj.io/secret-type: repo-creds`, with `url: "${ecr_registry_url}"`. Serves as prefix fallback credentials for all ECR repositories under the registry domain.
    - Refreshes automatically every 1 hour (`refreshInterval: 1h`), far ahead of the 12-hour AWS ECR token expiration window.
