@@ -7,30 +7,34 @@ This document details the multi-environment, multi-concern CI/CD pipeline archit
 ## 1. Core Architectural Strategy
 
 ### 1.1 Separation of Environments and Concerns
+
 To support independent release lifecycles and limit blast radius, the deployment model isolates:
-* **Environments**: `dev` (development / trunk), `stg` (staging), `prod` (production).
-* **Concerns**:
-  * Infrastructure: `infra-aws`, `infra-k8s`
-  * Microservices: `api`, `worker`, `frontend`
-  * Helm Workloads: `helm-api`, `helm-worker`
+
+- **Environments**: `dev` (development / trunk), `stg` (staging), `prod` (production).
+- **Concerns**:
+  - Infrastructure: `infra-aws`, `infra-k8s`
+  - Microservices: `api`, `worker`, `frontend`
+  - Helm Workloads: `helm-api`, `helm-worker`
 
 ### 1.2 Tag-Driven Releases with Immutable Audit Branches
-* **Active Development**: All feature work and continuous integration merge into the trunk branch (`dev`). Commits directly trigger dev-scoped workflows.
-* **Staging and Production Releases**: Triggered exclusively by cutting semantic release tags from validated commits on `dev`:
-  * AWS Infrastructure: `{env}-infra-aws-v{major}.{minor}.{patch}` (e.g. `stg-infra-aws-v1.0.0`, `prod-infra-aws-v1.0.0`)
-  * K8s Infrastructure: `{env}-infra-k8s-v{major}.{minor}.{patch}` (e.g. `stg-infra-k8s-v1.0.0`, `prod-infra-k8s-v1.0.0`)
-  * Applications: `{env}-{api|worker|frontend}-v{major}.{minor}.{patch}`
-  * Helm Charts: `{env}-helm-{api|worker}-v{major}.{minor}.{patch}`
-* **Release Tracking Branches**:
-  * Branches named `{env}/infra-aws`, `{env}/infra-k8s`, `{env}/{api|worker|frontend}` are **never manually modified or merged via pull requests**.
-  * The CI/CD pipeline automatically executes a **selective checkout and commit** upon a verified, successful `apply`, capturing only the deployed files for that concern.
-  * This preserves an immutable, chronological git history of what is running in each environment without pollutive merge noise.
+
+- **Active Development**: All feature work and continuous integration merge into the trunk branch (`dev`). Commits directly trigger dev-scoped workflows.
+- **Staging and Production Releases**: Triggered exclusively by cutting semantic release tags from validated commits on `dev`:
+  - AWS Infrastructure: `{env}-infra-aws-v{major}.{minor}.{patch}` (e.g. `stg-infra-aws-v1.0.0`, `prod-infra-aws-v1.0.0`)
+  - K8s Infrastructure: `{env}-infra-k8s-v{major}.{minor}.{patch}` (e.g. `stg-infra-k8s-v1.0.0`, `prod-infra-k8s-v1.0.0`)
+  - Applications: `{env}-{api|worker|frontend}-v{major}.{minor}.{patch}`
+  - Helm Charts: `{env}-helm-{api|worker}-v{major}.{minor}.{patch}`
+- **Release Tracking Branches**:
+  - Branches named `{env}/infra-aws`, `{env}/infra-k8s`, `{env}/{api|worker|frontend}` are **never manually modified or merged via pull requests**.
+  - The CI/CD pipeline automatically executes a **selective checkout and commit** upon a verified, successful `apply`, capturing only the deployed files for that concern.
+  - This preserves an immutable, chronological git history of what is running in each environment without pollutive merge noise.
 
 ---
 
 ## 2. Refactored Terraform Architecture
 
 ### 2.1 Directory Layout
+
 The infrastructure layout adheres to a DRY root-module topology with isolated environment parameter files:
 
 ```text
@@ -69,22 +73,27 @@ infra/terraform/
 ```
 
 ### 2.2 Dual-Compatible Backend Configuration (`backend.config.hcl`)
+
 Each environment defines its S3 state parameters in HCL syntax:
+
 ```hcl
 bucket = "tf-state-doc-intel-dev-793140949744-us-east-1-an"
 key    = "aws/terraform.tfstate"
 region = "us-east-1"
 ```
+
 Because HCL key-value format is dual-compatible:
+
 1. It is passed as `-backend-config=environments/{env}/backend.config.hcl` during `terraform init`.
 2. It is passed as `-var-file="../aws/environments/{env}/backend.config.hcl"` to `infra/terraform/query/` to read state directly.
 
 ### 2.3 Lightweight State Query Engine (`infra/terraform/query`)
-* Declares only `data "terraform_remote_state" "infra"` backed by `s3`.
-* Requires **zero external third-party providers** (`provider["terraform.io/builtin/terraform"]`).
-* `terraform init` executes in < 1s with 0 MB download overhead.
-* Produces an ephemeral local `.tfstate` on the GitHub Actions runner which is safely discarded at job completion.
-* **Security Guardrail**: `.gitignore` must enforce `*.tfstate*` and `.terraform/` to prevent accidental workstation commits.
+
+- Declares only `data "terraform_remote_state" "infra"` backed by `s3`.
+- Requires **zero external third-party providers** (`provider["terraform.io/builtin/terraform"]`).
+- `terraform init` executes in < 1s with 0 MB download overhead.
+- Produces an ephemeral local `.tfstate` on the GitHub Actions runner which is safely discarded at job completion.
+- **Security Guardrail**: `.gitignore` must enforce `*.tfstate*` and `.terraform/` to prevent accidental workstation commits.
 
 ---
 
@@ -106,19 +115,19 @@ sequenceDiagram
     Query->>S3: Read K8s state
     S3-->>Query: Return ALB DNS (or fallback to placeholder)
     Query-->>GH: ALB DNS resolved
-    
+
     GH->>AWS: terraform init -backend-config=...
     GH->>AWS: terraform plan (governed via TF_VAR_* env vars) -out=tfplan
-    
+
     rect rgb(255, 245, 230)
         Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)
         GH-->>Dev: Prompt for Approval (Reviewers assigned)
         Dev->>GH: Approve Plan
     end
-    
+
     GH->>AWS: terraform apply tfplan
     AWS->>S3: Commit new AWS State
-    
+
     rect rgb(230, 255, 230)
         Note over GH, Git: Immutable Release History
         GH->>Git: Selective checkout & commit aws/ + modules/
@@ -127,6 +136,7 @@ sequenceDiagram
 ```
 
 ### Key Operational Rules:
+
 1. **Target Environment Resolution (`detect-env`)**:
    - Resolves target environment (`stg`, `prod` strictly via git release tags; `dev` via dev push or manual `workflow_dispatch`).
    - Emits `outputs.env` so that downstream jobs (`plan-aws`, `apply-aws`) bind to `environment: ${{ needs.detect-env.outputs.env }}` before executing.
@@ -157,7 +167,7 @@ sequenceDiagram
 
     Dev->>GH: Push Tag `{env}-infra-k8s-v*` or Dev Dispatch
     GH->>GH: Parse tag: ENV, CONCERN, VERSION (or default to dev on push/dispatch)
-    
+
     rect rgb(255, 230, 230)
         Note over GH, Query: Pre-Flight AWS Output Validation
         GH->>Query: Query AWS State (vpc_id, eks_cluster_name, acm_cert_arn, etc.)
@@ -166,19 +176,19 @@ sequenceDiagram
             GH-->>Dev: Fail fast: "Deploy {env}-infra-aws-v* first!"
         end
     end
-    
+
     GH->>K8s: terraform init -backend-config=...
     GH->>K8s: terraform plan (governed via TF_VAR_* env vars) -out=tfplan
-    
+
     rect rgb(255, 245, 230)
         Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)
         GH-->>Dev: Prompt for Approval
         Dev->>GH: Approve Plan
     end
-    
+
     GH->>K8s: terraform apply tfplan
     GH->>Cluster: Poll Gateway resource until ALB DNS is allocated
-    
+
     rect rgb(240, 240, 255)
         Note over GH, Cluster: ALB Drift Check against CloudFront
         GH->>Query: Compare new ALB DNS with CloudFront Origin in AWS state
@@ -186,7 +196,7 @@ sequenceDiagram
             GH-->>Dev: ⚠️ Warning: Trigger {env}-infra-aws-v* to update CloudFront!
         end
     end
-    
+
     rect rgb(230, 255, 230)
         Note over GH, Git: Immutable Release History
         GH->>Git: Selective checkout & commit k8s/
@@ -195,6 +205,7 @@ sequenceDiagram
 ```
 
 ### Key Operational Rules:
+
 1. **Target Environment Resolution (`detect-env`)**:
    - Resolves target environment (`stg`, `prod` strictly via git release tags; `dev` via dev push or manual `workflow_dispatch`) and binds `plan-k8s` and `apply-k8s` jobs to `environment: ${{ needs.detect-env.outputs.env }}` so that scoped repository environment variables (`vars.*`) are accessible.
 2. **Pre-flight AWS Output Validation**:
@@ -208,110 +219,36 @@ sequenceDiagram
 
 ---
 
-## 5. Frontend Static Asset Deployment Workflow (`frontend-deploy.yml`)
-
-The frontend CI/CD pipeline implements an enterprise-grade "Build once in dev, promote identical immutable artifacts to stg/prod" model. Built React/Next.js static bundles (`out/`) are compiled strictly once per commit in `dev`, uploaded to a shared S3 artifact bucket (`vars.ARTIFACT_BUCKET_NAME`), and promoted sequentially into higher environments upon semantic tag releases without re-compilation.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer / Release Engineer
-    participant GH as GitHub Actions (frontend-deploy.yml)
-    participant ArtS3 as Shared S3 Artifact Bucket
-    participant Query as infra/terraform/query
-    participant EnvS3 as Target Env S3 Bucket
-    participant CF as CloudFront CDN
-    participant Git as Release Branch ({env}/app)
-
-    Dev->>GH: Push dev or Push tag `{env}-frontend-v*`
-    GH->>GH: Job 1 (detect-env): Resolve ENV, VERSION, COMMIT_SHA
-
-    rect rgb(240, 245, 255)
-        Note over GH, ArtS3: Job 2 (build-and-promote): Build / Promote Artifacts
-        alt Environment is DEV
-            GH->>GH: Install Node 24 & npm run build
-            GH->>ArtS3: Upload builds/${COMMIT_SHA}.tar.gz
-        else Environment is STG
-            GH->>ArtS3: Copy builds/${COMMIT_SHA}.tar.gz -> releases/stg/${VERSION}.tar.gz
-        else Environment is PROD
-            GH->>ArtS3: Copy releases/stg/${VERSION}.tar.gz -> releases/prod/${VERSION}.tar.gz
-        end
-    end
-
-    rect rgb(255, 245, 230)
-        Note over GH, Dev: Manual Approval Gate (GitHub Environment: stg/prod)
-        GH-->>Dev: Prompt for Approval before Deploying to S3
-        Dev->>GH: Approve Deployment
-    end
-
-    rect rgb(240, 255, 240)
-        Note over GH, EnvS3: Job 3 (deploy-frontend): Deploy to Environment S3
-        GH->>ArtS3: Download current env artifact (builds or releases)
-        GH->>Query: Query AWS State (frontend_bucket_id, cloudfront_dist_id, cloudfront_domain)
-        Query-->>GH: Return Target Infrastructure Outputs
-        GH->>EnvS3: aws s3 sync out/ s3://${FRONTEND_BUCKET_ID} --delete (exclude config.js)
-        GH->>GH: Generate runtime out/config.js (API_URL, API_MODE, APP_VERSION)
-        GH->>EnvS3: aws s3 cp config.js with public, max-age=0, s-maxage=86400, must-revalidate
-        GH->>CF: Invalidate CloudFront Cache (/*)
-    end
-
-    opt Staging or Production Release Tag
-        Note over GH, Git: Immutable Release History
-        GH->>Git: Selective checkout & commit apps/frontend/
-        GH->>Git: git push origin {env}/app [skip ci]
-    end
-```
-
-### Key Operational Rules:
-1. **Decoupled Pre-Deployment Artifact Preparation (`build-and-promote`)**:
-   - Compiles dev builds or promotes release artifacts immediately upon tag/commit trigger without pausing for approval.
-   - For `dev`, compiles Next.js bundle (`npm run build`) and uploads to `s3://${ARTIFACT_BUCKET_NAME}/builds/${COMMIT_SHA}.tar.gz`.
-   - For `stg` and `prod`, re-uses a parameterized promotion step with environment variables (`SOURCE_KEY`, `DEST_KEY`, `SOURCE_DESC`), copying `builds/${COMMIT_SHA}.tar.gz` to `releases/stg/${VERSION}.tar.gz`, and `releases/stg/${VERSION}.tar.gz` to `releases/prod/${VERSION}.tar.gz`.
-2. **Approval Gate Prior to Environment S3 Publishing (`deploy-frontend`)**:
-   - The deployment job binds to `environment: ${{ needs.detect-env.outputs.env }}`, pausing execution on `stg` and `prod` to enforce reviewer approvals *after* the artifact is verified/promoted, but *before* static assets are pushed to the live frontend bucket.
-3. **Runtime Configuration Decoupling (`config.js`)**:
-   - Static bundles contain no environment-specific backend URLs or feature toggles.
-   - The pipeline dynamically generates `config.js` prior to S3 upload, injecting `NEXT_PUBLIC_API_URL` (resolved from CloudFront domain via `infra/terraform/query`), `NEXT_PUBLIC_API_MODE`, and `APP_VERSION`.
-   - Injected synchronously via `<Script src="/config.js" strategy="beforeInteractive" />` into the Next.js HTML head before hydration.
-4. **CloudFront & Edge Caching Semantics**:
-   - Static assets (`_next/static/**`, images) are hashed and cached long-term (`Cache-Control: public, max-age=31536000, immutable`).
-   - `config.js` is uploaded with `Cache-Control: public, max-age=0, s-maxage=86400, must-revalidate`. CloudFront edge locations cache the file for 24 hours (`s-maxage`), but browser clients revalidate on every request (`max-age=0, must-revalidate`). When a new deployment occurs, CloudFront invalidation clears the edge cache instantly.
-5. **Selective Audit Tracking & Shared Release Branch (`{env}/app`)**:
-   - Staging and production releases selectively checkout and commit `apps/frontend/` to the consolidated `{env}/app` branch with `[skip ci]`, maintaining an immutable audit history of application code without wiping sibling microservices (`apps/api`, `apps/worker`).
-   - Governed by global serialized concurrency locking (`git-commit-${env}-app`) to prevent simultaneous push conflicts across frontend and backend pipelines.
-
----
-
-## 6. Branch & Tag Trigger Summary Matrix
-
-| Pipeline | Trigger Pattern | Concurrency Group | Environment Gate | Selective Tracking Branch |
-| :--- | :--- | :--- | :--- | :--- |
-| **AWS Infra (dev)** | Push to `dev` under `infra/terraform/aws/**` or `workflow_dispatch` | `deploy-aws-dev` | None (Automatic) | N/A (Trunk tracked) |
-| **AWS Infra (stg)** | Push tag: `stg-infra-aws-v*` | `deploy-aws-stg` | `stg` (Reviewer required) | `stg/infra-aws` |
-| **AWS Infra (prod)** | Push tag: `prod-infra-aws-v*` | `deploy-aws-prod` | `prod` (Reviewer required) | `prod/infra-aws` |
-| **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
-| **K8s Infra (stg)** | Push tag: `stg-infra-k8s-v*` | `deploy-k8s-stg` | `stg` (Reviewer required) | `stg/infra-k8s` |
-| **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*` | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s` |
-| **Frontend (dev)** | Push to `dev` under `apps/frontend/**` or `workflow_dispatch` | `git-commit-dev` | None (Automatic) | N/A (Trunk tracked) |
-| **Frontend (stg)** | Push tag: `stg-frontend-v*` | `git-commit-stg-app` | `stg` (Reviewer required) | `stg/app` |
-| **Frontend (prod)** | Push tag: `prod-frontend-v*` | `git-commit-prod-app` | `prod` (Reviewer required) | `prod/app` |
-
----
-
-## 7. Infrastructure Teardown Workflow (`infra-destroy.yml`)
+## 5. Infrastructure Teardown Workflow (`infra-destroy.yml`)
 
 The infrastructure teardown pipeline tears down cloud resources in reverse dependency order (`destroy-k8s` followed by optional `destroy-aws`).
 
-### 6.1 Invocation & Parameters:
+### 5.1 Invocation & Parameters:
+
 - **`environment`**: `dev`, `stg`, or `prod`.
 - **`destroy_aws`**: Boolean toggle indicating whether to destroy root AWS infrastructure after Kubernetes teardown finishes.
 - **`aws_release_tag`**: Release tag (format `{env}-infra-aws-v{major}.{minor}.{patch}`) indicating the exact commit to checkout for AWS teardown in `stg` and `prod`.
 - **`k8s_release_tag`**: Release tag (format `{env}-infra-k8s-v{major}.{minor}.{patch}`) indicating the exact commit to checkout for K8s teardown in `stg` and `prod`.
 
-### 6.2 Checkout Semantics:
+### 5.2 Checkout Semantics:
+
 - **`dev` Environment**: Directly checks out the trunk branch (`dev`).
 - **`stg` / `prod` Environments**: Validates release tag formatting and checks out the exact git tag references before executing `terraform destroy`.
 
-### 6.3 State Query & Variables:
+### 5.3 State Query & Variables:
+
 - Reads prerequisite AWS cluster parameters via `infra/terraform/query` against the environment's `backend.config.hcl`.
 - Injects all variables strictly through `TF_VAR_*` environment variables bound to the resolved GitHub Environment scope.
+
+---
+
+## 6. Infrastructure Branch & Tag Trigger Summary Matrix
+
+| Pipeline             | Trigger Pattern                                                     | Concurrency Group | Environment Gate           | Selective Tracking Branch |
+| :------------------- | :------------------------------------------------------------------ | :---------------- | :------------------------- | :------------------------ |
+| **AWS Infra (dev)**  | Push to `dev` under `infra/terraform/aws/**` or `workflow_dispatch` | `deploy-aws-dev`  | None (Automatic)           | N/A (Trunk tracked)       |
+| **AWS Infra (stg)**  | Push tag: `stg-infra-aws-v*`                                        | `deploy-aws-stg`  | `stg` (Reviewer required)  | `stg/infra-aws`           |
+| **AWS Infra (prod)** | Push tag: `prod-infra-aws-v*`                                       | `deploy-aws-prod` | `prod` (Reviewer required) | `prod/infra-aws`          |
+| **K8s Infra (dev)**  | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev`  | None (Automatic)           | N/A (Trunk tracked)       |
+| **K8s Infra (stg)**  | Push tag: `stg-infra-k8s-v*`                                        | `deploy-k8s-stg`  | `stg` (Reviewer required)  | `stg/infra-k8s`           |
+| **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*`                                       | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s`          |
