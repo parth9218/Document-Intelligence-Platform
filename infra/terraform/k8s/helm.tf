@@ -51,6 +51,35 @@ resource "helm_release" "aws_load_balancer_controller" {
   ]
 }
 
+resource "helm_release" "external_secrets" {
+  name             = "external-secrets"
+  repository       = "https://charts.external-secrets.io"
+  chart            = "external-secrets"
+  version          = "2.12.0"
+  namespace        = "external-secrets"
+  create_namespace = true
+
+  # Recommended base settings
+  set = [
+    {
+      name  = "installCRDs"
+      value = "true"
+    },
+    {
+      name  = "replicaCount"
+      value = "2"
+    },
+    {
+      name  = "serviceAccount.name"
+      value = "external-secrets"
+    },
+    {
+      name  = "serviceAccount.create"
+      value = "true"
+    }
+  ]
+}
+
 
 resource "helm_release" "argocd" {
   name                       = "argocd"
@@ -67,21 +96,6 @@ resource "helm_release" "argocd" {
   # Setting wait=false tells Helm to submit resources and return without
   # blocking on readiness — ArgoCD's own health checks are the source of truth.
   wait = false
-
-  set = [
-    {
-      name  = "repoServer.env[0].name"
-      value = "AWS_REGION"
-    },
-    {
-      name  = "repoServer.env[0].value"
-      value = data.aws_region.current.region
-    },
-    {
-      name  = "configs.params.reposerver\\.ecr\\.credential\\.helper"
-      value = "true"
-    }
-  ]
 }
 
 # KEDA 

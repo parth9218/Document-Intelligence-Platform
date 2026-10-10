@@ -257,8 +257,8 @@ resource "aws_eks_pod_identity_association" "keda_metrics_server" {
   role_arn        = aws_iam_role.keda_operator_role.arn
 }
 
-# ArgoCD Repo Server Role & Pod Identity for ECR OCI Chart Access
-data "aws_iam_policy_document" "argocd_repo_server_ecr_policy" {
+# External Secrets Operator Role & Pod Identity for ECR Auth Token Generation
+data "aws_iam_policy_document" "external_secrets_policy" {
   statement {
     sid    = "ECRAuthToken"
     effect = "Allow"
@@ -267,36 +267,27 @@ data "aws_iam_policy_document" "argocd_repo_server_ecr_policy" {
     ]
     resources = ["*"]
   }
-  statement {
-    sid    = "ECRRepositoryPull"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:BatchGetImage"
-    ]
-    resources = var.ecr_repo_arns
-  }
 }
 
-resource "aws_iam_policy" "argocd_repo_server_ecr_policy" {
-  name   = "${var.project_name}-${var.environment}-argocd-repo-server-ecr-policy"
-  policy = data.aws_iam_policy_document.argocd_repo_server_ecr_policy.json
+resource "aws_iam_policy" "external_secrets_policy" {
+  name   = "${var.project_name}-${var.environment}-external-secrets-policy"
+  policy = data.aws_iam_policy_document.external_secrets_policy.json
 }
 
-resource "aws_iam_role" "argocd_repo_server_role" {
-  name               = "${var.project_name}-${var.environment}-argocd-repo-server"
+resource "aws_iam_role" "external_secrets_role" {
+  name               = "${var.project_name}-${var.environment}-external-secrets"
   assume_role_policy = data.aws_iam_policy_document.assume-role-policy-document.json
 }
 
-resource "aws_iam_role_policy_attachment" "argocd_repo_server_ecr" {
-  role       = aws_iam_role.argocd_repo_server_role.name
-  policy_arn = aws_iam_policy.argocd_repo_server_ecr_policy.arn
+resource "aws_iam_role_policy_attachment" "external_secrets" {
+  role       = aws_iam_role.external_secrets_role.name
+  policy_arn = aws_iam_policy.external_secrets_policy.arn
 }
 
-resource "aws_eks_pod_identity_association" "argocd_repo_server" {
+resource "aws_eks_pod_identity_association" "external_secrets" {
   cluster_name    = module.eks.cluster_name
-  namespace       = "argocd"
-  service_account = "argocd-repo-server"
-  role_arn        = aws_iam_role.argocd_repo_server_role.arn
+  namespace       = "external-secrets"
+  service_account = "external-secrets"
+  role_arn        = aws_iam_role.external_secrets_role.arn
 }
+

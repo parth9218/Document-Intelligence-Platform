@@ -335,4 +335,18 @@ This document lists completed tasks and code files created.
     - Taskfile: [.github/workflows/api-worker-cicd/Taskfile.yaml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/api-worker-cicd/Taskfile.yaml) with tasks `test-push-dev`, `test-dispatch-dev`, `test-tag-stg`, and `test-tag-prod`.
   - Successfully verified all local ACT simulation suites (`test-push-dev`, `test-dispatch-dev`, `test-tag-stg`, `test-tag-prod`).
   - Safely retired obsolete legacy workflows: `.github/workflows/api-cicd.yml`, `.github/workflows/worker-cicd.yml`, `.github/workflows/reusable-docker-helm-cicd.yml`, and `.github/workflows/gitops-commit.yml` (and their respective `.github/workflows/api-cicd/` and `worker-cicd/` subdirectories).
+- **External Secrets Operator ECR Token Integration for ArgoCD (OCI Chart Authentication Fix)**:
+  - Fixed ArgoCD repo-server authentication failure (`couldn't generate authentication token to fetch helm charts`) caused by repo-server's internal credential helper failing to authenticate external Helm CLI subprocesses.
+  - Added IAM policy (`external_secrets_policy`), IAM role (`external_secrets_role`), and EKS Pod Identity Association in `infra/terraform/aws/modules/eks/iam.tf` granting `external-secrets` ServiceAccount in namespace `external-secrets` permission to call `ecr:GetAuthorizationToken`.
+  - Configured `helm_release.external_secrets` in `infra/terraform/k8s/helm.tf` to explicitly bind to ServiceAccount `external-secrets`.
+  - Removed failing `configs.params.reposerver.ecr.credential.helper = "true"` setting from `helm_release.argocd` in `infra/terraform/k8s/helm.tf`.
+  - Created `infra/terraform/k8s/manifests/argocd-ecr-secret.yaml` declaring:
+    - An `ECRAuthorizationToken` generator (`ecr-helm-token`) in namespace `argocd` requesting AWS ECR authorization tokens.
+    - An `ExternalSecret` (`argocd-ecr-helm-repo`) generating an exact-match repository secret (`argocd.argoproj.io/secret-type: repository`, `url: "${ecr_registry_url}/${project_name}/${environment}"`, `enableOCI: "true"`, `type: "helm"`).
+    - An `ExternalSecret` (`argocd-ecr-repo-creds`) generating a wildcard repository credential template (`argocd.argoproj.io/secret-type: repo-creds`, `url: "${ecr_registry_url}"`).
+    - Configured automatic hourly rotation (`refreshInterval: 1h`) well before 12-hour AWS ECR token expiration.
+  - Added `kubectl_manifest.argocd_ecr_secret` and updated `argocd_applicationset` dependencies in `infra/terraform/k8s/k8s.tf`.
+  - Pruned redundant `argocd-repo-server` IAM policy (`argocd_repo_server_ecr_policy`), IAM role (`argocd_repo_server_role`), and EKS Pod Identity Association from `infra/terraform/aws/modules/eks/iam.tf`, as well as unused `AWS_REGION` environment variable from `infra/terraform/k8s/helm.tf`, strictly enforcing the Principle of Least Privilege.
+  - Updated architecture specifications in `docs/context/helm-gitops-multi-source-spec.md` with sequence and topology diagrams.
+
 

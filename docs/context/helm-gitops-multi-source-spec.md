@@ -16,7 +16,7 @@ Previously, ArgoCD tracked Helm charts directly from Git paths, coupling Kuberne
 
 - **Decoupled Lifecycle via ArgoCD Multiple Sources (`$ref`)**: Source 1 pulls versioned Helm charts from AWS ECR as an OCI registry (`targetRevision: '{{chart_version}}'`). Source 2 pulls values files from the Git repository pinned to immutable commit SHAs (`ref: app_values`, `targetRevision: '{{target_commit}}'`).
 - **Hierarchical ECR Repository Naming**: ECR repositories are named `${project_name}/${environment}/${app}` (e.g. `docintel/dev/api`). This matches the `name: api` declared in `Chart.yaml`, allowing native `helm push` without mutating chart metadata.
-- **IAM Authentication via EKS Pod Identity**: ArgoCD `argocd-repo-server` authenticates dynamically with AWS ECR using an EKS Pod Identity association and ArgoCD's native ECR credential helper, avoiding 12-hour credential expiry issues.
+- **Automated ECR Token Generation via External Secrets Operator**: Rather than relying on unreliable in-container credential helpers, the **External Secrets Operator (ESO)** leverages EKS Pod Identity to assume an IAM role, invoke `ecr:GetAuthorizationToken`, and dynamically sync 12-hour valid credentials into ArgoCD repository secrets (`argocd.argoproj.io/secret-type: repository` and `repo-creds`) every 1 hour.
 - **Matrix Generator Git Discovery**: An ArgoCD `ApplicationSet` uses dual-generator matrix joins to independently resolve `{app}` releases from `{env}/app` tracking paths and chart versions from `{env}/helm` tracking paths.
 
 ---
@@ -32,13 +32,20 @@ flowchart TD
         AppValues["infra/k8s/argocd/{env}/{app}/values.yaml<br/>(image.tag, env, resources)"]
     end
 
-    subgraph AWS_ECR ["AWS ECR (OCI Registry)"]
+    subgraph AWS_IAM_ECR ["AWS (IAM & ECR OCI)"]
         ECRChart["{account}.dkr.ecr.{region}.amazonaws.com/<br/>{project}/{env}/{app}:{chart_version}"]
+        ECRToken["AWS ECR Auth Token API<br/>(12h Expiration)"]
+    end
+
+    subgraph ESO_Engine ["External Secrets Operator (Namespace: external-secrets)"]
+        ESOPod["ESO Controller Pod<br/>(EKS Pod Identity: external-secrets)"]
+        Generator["ECRAuthorizationToken Generator<br/>(Region: us-east-1)"]
     end
 
     subgraph ArgoCD_Engine ["ArgoCD (Namespace: argocd)"]
         AppSet["ApplicationSet<br/>(Matrix Generator)"]
-        RepoServer["argocd-repo-server Pod<br/>(EKS Pod Identity + ECR Credential Helper)"]
+        RepoSecret["Secret: argocd-ecr-helm-repo<br/>(Type: repository & repo-creds)"]
+        RepoServer["argocd-repo-server Pod<br/>(Helm OCI Subprocess)"]
         WorkloadApp["Application: {project}-{env}-{app}"]
     end
 
@@ -47,13 +54,18 @@ flowchart TD
         Pod["Pods ({app})"]
     end
 
+    ESOPod -->|Assumes IAM Role via Pod Identity| ECRToken
+    ECRToken -->|Refresh every 1h| Generator
+    Generator -->|Syncs Secret| RepoSecret
+    RepoSecret -.->|Supplies Auth| RepoServer
+
     AppConfig -->|Matrix Git Generator 1| AppSet
     HelmConfig -->|Matrix Git Generator 2| AppSet
     AppSet -->|Generates| WorkloadApp
 
     WorkloadApp -->|Source 1: Fetch Chart| RepoServer
     WorkloadApp -->|Source 2: Fetch Values $ref| RepoServer
-    RepoServer -->|Pull OCI Chart via IAM| ECRChart
+    RepoServer -->|Pull OCI Chart via ESO Secret| ECRChart
     RepoServer -->|Read pinned commit SHA| AppValues
 
     WorkloadApp -->|Rendered Manifests Sync| Deployment
@@ -157,18 +169,51 @@ spec:
 
 ---
 
-## 5. Security & Authentication Architecture
+## 5. Security & Authentication Architecture (External Secrets Operator)
 
-### EKS Pod Identity for ArgoCD Repo Server
+### 5.1 Why In-Container Credential Helpers Fail
+When ArgoCD reconciles Helm OCI charts, `argocd-repo-server` executes the external `helm` CLI binary as a separate subprocess (e.g. `helm pull oci://...`). The external Helm CLI cannot natively resolve IAM credentials from EKS Pod Identity without static or injected repository secrets. Additionally, repo-server's built-in `reposerver.ecr.credential.helper=true` parameter relies on legacy internal handlers that fail in decoupled multi-source OCI environments.
 
-Instead of static AWS IAM Access Keys or legacy IRSA mutating webhooks, authentication uses **EKS Pod Identity Association**:
+### 5.2 External Secrets Operator (ESO) Architecture
+To guarantee reliable, zero-touch authentication, **External Secrets Operator** automates the lifecycle of short-lived AWS ECR authorization tokens:
 
-1. **IAM Policy** (`argocd_repo_server_ecr_policy`):
-   - `ecr:GetAuthorizationToken` on `*` (standard AWS requirement for ECR token retrieval).
-   - `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` scoped exclusively to the project's ECR repository ARNs.
-2. **Trust Relationship**: Trust policy authorizes the `pods.eks.amazonaws.com` service principal with `sts:AssumeRole` and `sts:TagSession`.
-3. **EKS Pod Identity Association**: Associates IAM role `argocd_repo_server_role` to ServiceAccount `argocd-repo-server` in namespace `argocd`.
-4. **Credential Helper**: ArgoCD Helm release in `infra/terraform/k8s/helm.tf` enables `configs.params.reposerver\.ecr\.credential\.helper = "true"`. The repo-server natively uses the AWS SDK to retrieve short-lived authorization tokens on demand.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant AWS_IAM as AWS IAM & ECR
+    participant ESO as External Secrets Operator
+    participant K8s_Secret as Kubernetes Secret (argocd)
+    participant ArgoCD as ArgoCD Repo Server (Helm CLI)
+    participant ECR as AWS ECR OCI Registry
+
+    Note over ESO,AWS_IAM: Periodic Token Rotation (refreshInterval: 1h)
+    ESO->>AWS_IAM: Assume Role via EKS Pod Identity (external-secrets SA)
+    ESO->>AWS_IAM: Call ecr:GetAuthorizationToken (Region: us-east-1)
+    AWS_IAM-->>ESO: Return 12h Authorization Token (Username: AWS, Password)
+    ESO->>K8s_Secret: Create/Update Secret labeled argocd.argoproj.io/secret-type: repository
+    ESO->>K8s_Secret: Create/Update Secret labeled argocd.argoproj.io/secret-type: repo-creds
+
+    Note over ArgoCD,ECR: Workload Reconciliation
+    ArgoCD->>K8s_Secret: Match repoURL against configured repository secrets
+    K8s_Secret-->>ArgoCD: Return valid ECR credentials
+    ArgoCD->>ECR: helm pull oci://.../docintel/{env}/{app}:{chart_version} (Authenticated)
+    ECR-->>ArgoCD: Return OCI Helm Chart Tarball
+```
+
+1. **IAM Policy & Role** (`external_secrets_policy` & `external_secrets_role`):
+   - Defined in `infra/terraform/aws/modules/eks/iam.tf`.
+   - Grants `ecr:GetAuthorizationToken` on `*`.
+   - Trust relationship bound to `pods.eks.amazonaws.com` service principal (`sts:AssumeRole`, `sts:TagSession`).
+2. **EKS Pod Identity Association**:
+   - Binds `external_secrets_role` to ServiceAccount `external-secrets` in namespace `external-secrets`.
+   - The ESO controller automatically retrieves AWS credentials via standard AWS SDK environment chains.
+3. **`ECRAuthorizationToken` Generator**:
+   - Defined in `infra/terraform/k8s/manifests/argocd-ecr-secret.yaml` (`kind: ECRAuthorizationToken`, namespace `argocd`).
+   - Retrieves fresh AWS ECR credentials scoped to the active cluster region.
+4. **Dual ArgoCD Secret Templating (`ExternalSecret`)**:
+   - **Repository Secret (`argocd-ecr-helm-repo`)**: Labeled `argocd.argoproj.io/secret-type: repository`, with `url: "${ecr_registry_url}/${project_name}/${environment}"`, `enableOCI: "true"`, and `type: "helm"`. Provides exact-match repository registration in ArgoCD.
+   - **Repository Credential Template (`argocd-ecr-repo-creds`)**: Labeled `argocd.argoproj.io/secret-type: repo-creds`, with `url: "${ecr_registry_url}"`. Serves as prefix fallback credentials for all ECR repositories under the registry domain.
+   - Refreshes automatically every 1 hour (`refreshInterval: 1h`), far ahead of the 12-hour AWS ECR token expiration window.
 
 ---
 
