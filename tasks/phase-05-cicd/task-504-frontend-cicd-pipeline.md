@@ -214,20 +214,26 @@ if [[ "${{ github.ref_type }}" == "tag" ]]; then
   git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
   # Switch to tracking branch
-  git fetch origin "${ENV}/frontend":"${ENV}/frontend" || git branch "${ENV}/frontend"
-  git checkout "${ENV}/frontend"
+  if git ls-remote --exit-code --heads origin "${ENV}/app" >/dev/null 2>&1; then
+    git checkout "${ENV}/app"
+    git pull --rebase origin "${ENV}/app"
+  else
+    git checkout -b "${ENV}/app"
+  fi
 
-  # Clean working tree and checkout only apps/frontend from release tag
-  git rm -rf apps/frontend || true
-  git checkout "tags/${{ github.ref_name }}" -- apps/frontend
+  # Non-destructive selective checkout of apps/frontend from release tag
+  git checkout "tags/${{ github.ref_name }}" -- apps/frontend 2>/dev/null || \
+  git checkout "${{ github.ref_name }}" -- apps/frontend 2>/dev/null || true
 
   git add apps/frontend
-  git commit -m "Deploy ${{ github.ref_name }} to ${ENV} [skip ci]" \
-             -m "Commit SHA: ${COMMIT_SHA}" \
+  git commit -m "release(frontend): deploy frontend ${VERSION} [skip ci]" \
+             -m "Release Tag: ${{ github.ref_name }}" \
+             -m "Source Commit: ${COMMIT_SHA}" \
              -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
     || echo "No changes to commit"
 
-  git push origin "${ENV}/frontend"
+  git pull --rebase origin "${ENV}/app" || true
+  git push origin HEAD:"${ENV}/app"
 fi
 ```
 
@@ -245,4 +251,5 @@ fi
 - [ ] Manual approval gates are enforced for `stg` and `prod` via GitHub Environments.
 - [ ] `config.js` is generated dynamically on the runner and uploaded with `Cache-Control: public, max-age=0, s-maxage=86400, must-revalidate`.
 - [ ] CloudFront cache invalidation runs for all deployments.
-- [ ] Tagged releases selectively update `{env}/frontend` audit tracking branches with `[skip ci]`.
+- [ ] Tagged releases selectively update the consolidated `{env}/app` audit tracking branches without destructive `git rm` wipes.
+
