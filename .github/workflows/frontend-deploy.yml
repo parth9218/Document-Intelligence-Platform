@@ -349,7 +349,7 @@ jobs:
           echo "Generating runtime configuration for ${{ env.ENV }}..."
           TARGET_MODE="api"
           if [ "${{ env.ENV }}" == "dev" ]; then
-            TARGET_MODE="hybrid"
+            TARGET_MODE="api"
           fi
 
           cat <<EOF > apps/frontend/out/config.js
