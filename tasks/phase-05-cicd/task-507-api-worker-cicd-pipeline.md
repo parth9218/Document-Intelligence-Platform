@@ -330,16 +330,18 @@ Provide local simulation fixtures under `.github/workflows/api-worker-cicd/`:
 
 ## 7. Acceptance Criteria & Definition of Done
 
-- [ ] **Workflow File Created**: `.github/workflows/api-worker-cicd.yml` conforms to GitHub Actions syntax with all action dependencies pinned to full-length commit SHAs.
-- [ ] **Build Once Enforced**: Docker containers are compiled strictly in `dev`. Staging and production jobs run ECR pull/retag/push without compiling from Dockerfile.
-- [ ] **Dual API Variants in Dev**: Dev build produces both `${SHORT_SHA}` (full) and `${SHORT_SHA}-slim` (slim) for `api`, while `worker` produces standard `${SHORT_SHA}`.
-- [ ] **Slim API Promotion**: Staging promotion for `api` explicitly pulls `${SHORT_SHA}-slim` from Dev ECR and tags as `${SEMVER}` in Staging ECR.
-- [ ] **Promotion Verification & Fail Fast**: Staging checks `dev` ECR and production checks `stg` ECR; fails with exit code 1 if lower environment image is absent.
-- [ ] **Parallel Matrix Execution**: Matrix builds/promotes run concurrently across `api` and `worker`.
-- [ ] **Approval Gates Active**: Staging and production releases pause at the GitHub Environment gate before committing to `{env}/app`.
-- [ ] **Non-Destructive Selective Checkouts**: Updates to `{env}/app` preserve sibling microservice directories and files.
-- [ ] **Two-Commit Immutable Pinned Pattern**: Staging and production release commits pin `"target_commit": "${C1_SHA}"` and record `"target_version": "${SEMVER}"` in `config.json`.
-- [ ] **Trunk Optimization**: Dev releases update `values.yaml` in a single commit, preserving `"target_commit": "dev"` in `config.json`.
-- [ ] **Serialized Concurrency**: Uses `git-commit-dev` for `dev` and `git-commit-${env}-app` for higher environments.
-- [ ] **Legacy Workflows Deprecated/Replaced**: Obsolete `.github/workflows/api-cicd.yml`, `.github/workflows/worker-cicd.yml`, and `.github/workflows/reusable-docker-helm-cicd.yml` are safely retired or deprecated.
-- [ ] **Documentation Updated**: Update `docs/progress/implementation-status.md` and `docs/context/current-state.md` to reflect Task 507.
+- [x] **Workflow File Created**: `.github/workflows/api-worker-cicd.yml` conforms to GitHub Actions syntax with all action dependencies pinned to full-length commit SHAs.
+- [x] **Build Once Enforced**: Docker containers are compiled strictly in `dev`. Staging and production jobs run ECR pull/retag/push without compiling from Dockerfile.
+- [x] **Dual API Variants in Dev**: Dev build produces both `${SHORT_SHA}` (full) and `${SHORT_SHA}-slim` (slim) for `api`, while `worker` produces standard `${SHORT_SHA}`.
+- [x] **Slim API Promotion**: Staging promotion for `api` explicitly pulls `${SHORT_SHA}-slim` from Dev ECR and tags as `${SEMVER}` in Staging ECR.
+- [x] **Promotion Verification & Fail Fast**: Staging checks `dev` ECR and production checks `stg` ECR; fails with exit code 1 if lower environment image is absent.
+- [x] **Parallel Matrix Execution**: Matrix builds/promotes run concurrently across `api` and `worker`.
+- [x] **Approval Gates Active**: Staging and production releases pause at the GitHub Environment gate before committing to `{env}/app`.
+- [x] **Non-Destructive Selective Checkouts**: Updates to `{env}/app` preserve sibling microservice directories and files.
+- [x] **Two-Commit Immutable Pinned Pattern**: Staging and production release commits pin `"target_commit": "${C1_SHA}"` and record `"target_version": "${SEMVER}"` in `config.json`.
+- [x] **Trunk Optimization**: Dev releases update `values.yaml` in a single commit, preserving `"target_commit": "dev"` in `config.json`.
+- [x] **Serialized Concurrency**: Uses `git-commit-dev` for `dev` and `git-commit-${env}-app` for higher environments.
+- [x] **GitHub Step Summary Generated**: Workflow generates a comprehensive release status summary to `$GITHUB_STEP_SUMMARY` detailing deployed images, ECR repositories, git hashes, and tracking pointers.
+- [x] **Legacy Workflows Deprecated/Replaced**: Obsolete `.github/workflows/api-cicd.yml`, `.github/workflows/worker-cicd.yml`, and `.github/workflows/reusable-docker-helm-cicd.yml` are safely retired or deprecated.
+- [x] **Documentation Updated**: Update `docs/progress/implementation-status.md` and `docs/context/current-state.md` to reflect Task 507.
+

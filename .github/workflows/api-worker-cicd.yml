@@ -1,0 +1,673 @@
+# ==============================================================================
+# API & Worker Microservices Multi-Environment CI/CD Pipeline Workflow
+# ==============================================================================
+# Purpose:
+#   Implements a unified, tag-driven CI/CD deployment pipeline for backend microservices
+#   (`apps/api` and `apps/worker`) across `dev`, `stg`, and `prod` environments.
+#
+# Architectural Principles:
+#   1. Build Once in Dev, Promote Identical Immutable Images to Stg/Prod:
+#      Docker containers are built strictly in `dev`. Staging and production releases
+#      never rebuild containers; instead, they verify and promote identical tested
+#      artifacts from the lower environment ECR repository (`dev -> stg`, `stg -> prod`).
+#   2. Dual Image Variant Strategy for API in Dev:
+#      In `dev`, the workflow builds both `full` (Swagger UI) and `slim` (production-optimized)
+#      container variants, pushing tags `${SHORT_SHA}` and `${SHORT_SHA}-slim`.
+#      Promotion to staging for API explicitly promotes the tested `slim` variant as canonical.
+#   3. Parallel Multi-App Matrix Execution:
+#      Simultaneous changes or dispatches trigger parallel container packaging and promotion
+#      across `api` and `worker` microservices.
+#   4. Fail-Fast ECR Verification:
+#      Higher-environment releases assert that the prerequisite container image exists
+#      in the lower environment ECR repository prior to promotion, aborting immediately if missing.
+#   5. GitHub Environment Approval Gates:
+#      Staging and production releases enforce reviewer approval gates before modifying GitOps manifests.
+#   6. Non-Destructive Selective Checkouts on `{env}/app`:
+#      Releases to `{env}/app` selectively checkout only the target microservice code and manifests,
+#      preventing destructive deletions of sibling microservices on the shared tracking branch.
+#   7. Clean GitOps Commit Optimization:
+#      - Dev: Single atomic commit to `dev` updating `values.yaml` (target_commit remains 'dev').
+#      - Stg / Prod: 2-commit release dance on `{env}/app` pushed together atomically:
+#        Commit 1 updates code and values.yaml (hash C1); Commit 2 pins target_commit to C1
+#        and records human-auditable target_version (SEMVER) in config.json.
+#   8. Serialized Git Concurrency:
+#      Employs `git-commit-dev` for `dev` (shared with `helm-cicd.yml`) and `git-commit-${env}-app`
+#      for higher environments to eliminate git ref contention.
+# ==============================================================================
+
+name: API & Worker CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'apps/api/**'
+      - 'apps/worker/**'
+    tags:
+      - 'stg-api-v*'
+      - 'stg-worker-v*'
+      - 'prod-api-v*'
+      - 'prod-worker-v*'
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Select application to build and deploy (dev only)'
+        required: true
+        type: choice
+        options:
+          - 'all'
+          - 'api'
+          - 'worker'
+        default: 'all'
+      image_to_deploy:
+        description: 'Select API image variant to deploy to dev (applies to api only)'
+        required: false
+        type: choice
+        options:
+          - 'full'
+          - 'slim'
+        default: 'full'
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Phase 1: Environment, Version & Target Matrix Resolution
+  # ----------------------------------------------------------------------------
+  detect-and-matrix:
+    name: Resolve Release Metadata & Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.resolve.outputs.env }}
+      source_env: ${{ steps.resolve.outputs.source_env }}
+      target_version: ${{ steps.resolve.outputs.target_version }}
+      source_tag: ${{ steps.resolve.outputs.source_tag }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+      commit_sha: ${{ steps.resolve.outputs.commit_sha }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+      image_to_deploy: ${{ steps.resolve.outputs.image_to_deploy }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Environment & Matrix Targets
+        id: resolve
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          COMMIT_SHA="${{ github.sha }}"
+
+          if [[ "${{ github.ref_type }}" == "tag" || "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            if [ -z "$TAG_NAME" ] || [[ "$TAG_NAME" == refs/tags/* ]]; then
+              TAG_NAME="${GITHUB_REF#refs/tags/}"
+            fi
+
+            TARGET_ENV=$(echo "$TAG_NAME" | cut -d'-' -f1)
+            APP=$(echo "$TAG_NAME" | cut -d'-' -f2)
+            SEMVER=$(echo "$TAG_NAME" | sed -E 's/^[a-z]+-(api|worker)-v//')
+            MATRIX="[\"$APP\"]"
+            IMAGE_TO_DEPLOY="full"
+
+            TARGET_VERSION="$SEMVER"
+            if [ "$TARGET_ENV" = "stg" ]; then
+              SOURCE_ENV="dev"
+              if [ "$APP" = "api" ]; then
+                SOURCE_TAG="${SHORT_SHA}-slim"
+              else
+                SOURCE_TAG="${SHORT_SHA}"
+              fi
+            elif [ "$TARGET_ENV" = "prod" ]; then
+              SOURCE_ENV="stg"
+              SOURCE_TAG="$SEMVER"
+            else
+              SOURCE_ENV=""
+              SOURCE_TAG=""
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG_NAME=""
+            TARGET_ENV="dev"
+            SOURCE_ENV=""
+            SOURCE_TAG=""
+            IMAGE_TO_DEPLOY="${{ inputs.image_to_deploy || 'full' }}"
+
+            if [[ "${{ inputs.app }}" == "api" ]]; then
+              MATRIX="[\"api\"]"
+              if [[ "$IMAGE_TO_DEPLOY" == "slim" ]]; then
+                TARGET_VERSION="${SHORT_SHA}-slim"
+              else
+                TARGET_VERSION="${SHORT_SHA}"
+              fi
+            elif [[ "${{ inputs.app }}" == "worker" ]]; then
+              MATRIX="[\"worker\"]"
+              TARGET_VERSION="${SHORT_SHA}"
+            else
+              MATRIX="[\"api\", \"worker\"]"
+              TARGET_VERSION="${SHORT_SHA}"
+            fi
+          else
+            # Push to dev
+            TAG_NAME=""
+            TARGET_ENV="dev"
+            SOURCE_ENV=""
+            SOURCE_TAG=""
+            IMAGE_TO_DEPLOY="full"
+            TARGET_VERSION="${SHORT_SHA}"
+
+            # Detect changed microservices between HEAD~1 and HEAD
+            API_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/api/' || true)
+            WORKER_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/worker/' || true)
+
+            if [[ -n "$API_CHANGED" && -z "$WORKER_CHANGED" ]]; then
+              MATRIX="[\"api\"]"
+            elif [[ -z "$API_CHANGED" && -n "$WORKER_CHANGED" ]]; then
+              MATRIX="[\"worker\"]"
+            else
+              MATRIX="[\"api\", \"worker\"]"
+            fi
+          fi
+
+          echo "Target Environment: $TARGET_ENV"
+          echo "Source Environment: $SOURCE_ENV"
+          echo "Target Version: $TARGET_VERSION"
+          echo "Source Tag: $SOURCE_TAG"
+          echo "Commit SHA: $COMMIT_SHA"
+          echo "Short SHA: $SHORT_SHA"
+          echo "App Matrix: $MATRIX"
+          echo "Tag Name: $TAG_NAME"
+          echo "Image to Deploy: $IMAGE_TO_DEPLOY"
+
+          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
+          echo "source_env=$SOURCE_ENV" >> $GITHUB_OUTPUT
+          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+          echo "source_tag=$SOURCE_TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "image_to_deploy=$IMAGE_TO_DEPLOY" >> $GITHUB_OUTPUT
+
+  # ----------------------------------------------------------------------------
+  # Phase 2: Build Once in Dev / Promote Immutable Artifacts to Stg & Prod
+  # ----------------------------------------------------------------------------
+  build-and-promote:
+    name: Build or Promote (${{ matrix.app }})
+    needs: detect-and-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.detect-and-matrix.outputs.matrix) }}
+      fail-fast: true
+    env:
+      ENV: ${{ needs.detect-and-matrix.outputs.env }}
+      SOURCE_ENV: ${{ needs.detect-and-matrix.outputs.source_env }}
+      TARGET_VERSION: ${{ needs.detect-and-matrix.outputs.target_version }}
+      SOURCE_TAG: ${{ needs.detect-and-matrix.outputs.source_tag }}
+      SHORT_SHA: ${{ needs.detect-and-matrix.outputs.short_sha }}
+      APP: ${{ matrix.app }}
+      IMAGE_TO_DEPLOY: ${{ needs.detect-and-matrix.outputs.image_to_deploy }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------------
+      # Local Execution (ACT) Setup: Download & Cache Tools
+      # ------------------------------------------------------------------------
+      - name: Install Tools for ACT
+        if: ${{ env.ACT }}
+        run: |
+          mkdir -p /tmp/.act-tools-cache
+          if ! command -v aws &> /dev/null; then
+            if [ ! -f /tmp/.act-tools-cache/awscliv2.zip ]; then
+              echo "Downloading AWS CLI to local cache..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/.act-tools-cache/awscliv2.zip
+            fi
+            echo "Installing AWS CLI from local cache..."
+            unzip -q /tmp/.act-tools-cache/awscliv2.zip -d /tmp/aws-tmp
+            /tmp/aws-tmp/aws/install --update
+            rm -rf /tmp/aws-tmp
+          fi
+          echo "/usr/local/bin" >> $GITHUB_PATH
+
+      - name: Configure AWS Credentials
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.TF_VAR_GITHUB_ACTIONS_CI_ROLE }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "v1.16.4"
+          terraform_wrapper: false
+
+      - name: Create Terraform Cache Directory
+        run: |
+          mkdir -p ${{ runner.temp }}/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=${{ runner.temp }}/.terraform.d/plugin-cache" >> $GITHUB_ENV
+
+      - name: Use Terraform Plugin Cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      # ------------------------------------------------------------------------
+      # Query Infrastructure for ECR Repo URLs (Target & Lower Environments)
+      # ------------------------------------------------------------------------
+      - name: Query Infrastructure for ECR Repository URLs
+        id: ecr-query
+        working-directory: infra/terraform/query
+        run: |
+          if [ -n "$ACT" ]; then
+            echo "Running in ACT simulation mode, using dummy ECR repo URLs..."
+            TARGET_REPO_URL="793140949744.dkr.ecr.us-east-1.amazonaws.com/docintel/${{ env.ENV }}/${{ env.APP }}"
+            REGISTRY_DOMAIN="793140949744.dkr.ecr.us-east-1.amazonaws.com"
+            echo "target_repo_url=$TARGET_REPO_URL" >> $GITHUB_OUTPUT
+            echo "registry_domain=$REGISTRY_DOMAIN" >> $GITHUB_OUTPUT
+            if [ -n "${{ env.SOURCE_ENV }}" ]; then
+              LOWER_REPO_URL="793140949744.dkr.ecr.us-east-1.amazonaws.com/docintel/${{ env.SOURCE_ENV }}/${{ env.APP }}"
+              echo "lower_repo_url=$LOWER_REPO_URL" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+          fi
+
+          terraform init -lockfile=readonly
+
+          query_ecr_repo() {
+            local q_env="$1"
+            local q_app="$2"
+            local backend_file="../aws/environments/${q_env}/backend.config.hcl"
+
+            if [ ! -f "$backend_file" ]; then
+              echo "::error::Backend config file for environment '${q_env}' not found at: ${backend_file}"
+              exit 1
+            fi
+
+            if ! terraform apply -auto-approve -input=false -var-file="$backend_file" >/dev/null 2>&1; then
+              echo "::error::Failed to query infrastructure state for environment '${q_env}'. Ensure '${q_env}' AWS infrastructure is deployed!"
+              exit 1
+            fi
+
+            local tf_outputs
+            tf_outputs=$(terraform output -json outputs 2>/dev/null || echo "{}")
+            local repo_url
+            repo_url=$(echo "$tf_outputs" | jq -r --arg app "$q_app" '.ecr_repo_urls[]? | select(endswith("/" + $app))')
+
+            if [ -z "$repo_url" ]; then
+              echo "::error::ECR repository URL for app '${q_app}' not found in '${q_env}' infrastructure state outputs!"
+              exit 1
+            fi
+
+            echo "$repo_url"
+          }
+
+          # 1. Query Target Environment ECR Repo URL
+          TARGET_REPO_URL=$(query_ecr_repo "${{ env.ENV }}" "${{ env.APP }}")
+          REGISTRY_DOMAIN=$(echo "$TARGET_REPO_URL" | cut -d'/' -f1)
+
+          echo "target_repo_url=$TARGET_REPO_URL" >> $GITHUB_OUTPUT
+          echo "registry_domain=$REGISTRY_DOMAIN" >> $GITHUB_OUTPUT
+          echo "Resolved Target ECR Repo: $TARGET_REPO_URL (Registry: $REGISTRY_DOMAIN)"
+
+          # 2. Query Lower Environment ECR Repo URL (for stg and prod)
+          if [ -n "${{ env.SOURCE_ENV }}" ]; then
+            LOWER_REPO_URL=$(query_ecr_repo "${{ env.SOURCE_ENV }}" "${{ env.APP }}")
+            echo "lower_repo_url=$LOWER_REPO_URL" >> $GITHUB_OUTPUT
+            echo "Resolved Lower ECR Repo: $LOWER_REPO_URL"
+          fi
+
+      - name: Login to Amazon ECR
+        if: ${{ !env.ACT }}
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - name: Set up Docker Buildx
+        if: ${{ env.ENV == 'dev' }}
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # ------------------------------------------------------------------------
+      # Dev Environment (env == 'dev') — Build & Push
+      # ------------------------------------------------------------------------
+      - name: Build and Push API Full Image
+        if: ${{ env.ENV == 'dev' && matrix.app == 'api' && !env.ACT }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          target: runner
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-query.outputs.target_repo_url }}:${{ env.SHORT_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            ENVIRONMENT=dev
+
+      - name: Build and Push API Slim Image
+        if: ${{ env.ENV == 'dev' && matrix.app == 'api' && !env.ACT }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          target: runner
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-query.outputs.target_repo_url }}:${{ env.SHORT_SHA }}-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            ENVIRONMENT=prod
+
+      - name: Build and Push Worker Image
+        if: ${{ env.ENV == 'dev' && matrix.app == 'worker' && !env.ACT }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/worker
+          file: apps/worker/Dockerfile
+          target: runner
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-query.outputs.target_repo_url }}:${{ env.SHORT_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ------------------------------------------------------------------------
+      # Higher Environments (stg and prod) — Verify & Copy Artifact
+      # ------------------------------------------------------------------------
+      - name: Verify and Promote Image to Target ECR
+        if: ${{ env.ENV != 'dev' && !env.ACT }}
+        run: |
+          TARGET_REPO_URL="${{ steps.ecr-query.outputs.target_repo_url }}"
+          LOWER_REPO_URL="${{ steps.ecr-query.outputs.lower_repo_url }}"
+          LOWER_REPO_NAME=$(echo "$LOWER_REPO_URL" | cut -d'/' -f2-)
+          REGION="${{ vars.AWS_REGION || 'us-east-1' }}"
+
+          echo "==> Verifying image existence in lower ECR repository: ${LOWER_REPO_NAME} (tag: ${{ env.SOURCE_TAG }})..."
+          TAG_EXISTS=$(aws ecr describe-images \
+            --region "${REGION}" \
+            --repository-name "${LOWER_REPO_NAME}" \
+            --image-ids imageTag="${{ env.SOURCE_TAG }}" \
+            --query 'imageDetails[0].imageTags[0]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ "$TAG_EXISTS" != "${{ env.SOURCE_TAG }}" ]; then
+            echo "::error::Prerequisite image '${LOWER_REPO_URL}:${{ env.SOURCE_TAG }}' not found in ${{ env.SOURCE_ENV }} ECR!"
+            echo "::error::Untested/unverified code cannot enter ${{ env.ENV }}! Deploy to ${{ env.SOURCE_ENV }} first."
+            exit 1
+          fi
+
+          echo "==> Artifact verified in lower ECR! Pulling image..."
+          docker pull "${LOWER_REPO_URL}:${{ env.SOURCE_TAG }}"
+
+          echo "==> Tagging promoted image as ${TARGET_REPO_URL}:${{ env.TARGET_VERSION }}..."
+          docker tag "${LOWER_REPO_URL}:${{ env.SOURCE_TAG }}" "${TARGET_REPO_URL}:${{ env.TARGET_VERSION }}"
+
+          echo "==> Pushing promoted image to target ECR: ${TARGET_REPO_URL}:${{ env.TARGET_VERSION }}..."
+          docker push "${TARGET_REPO_URL}:${{ env.TARGET_VERSION }}"
+
+      # ------------------------------------------------------------------------
+      # Metadata Artifact Upload for Downstream Serialized GitOps Commit
+      # ------------------------------------------------------------------------
+      - name: Save Image Metadata Artifact
+        run: |
+          mkdir -p /tmp/metadata
+          TARGET_REPO_URL="${{ steps.ecr-query.outputs.target_repo_url }}"
+
+          if [ "${{ env.ENV }}" = "dev" ]; then
+            if [ "${{ matrix.app }}" = "api" ] && [ "${{ env.IMAGE_TO_DEPLOY }}" = "slim" ]; then
+              DEPLOYED_TAG="${{ env.SHORT_SHA }}-slim"
+            else
+              DEPLOYED_TAG="${{ env.SHORT_SHA }}"
+            fi
+          else
+            DEPLOYED_TAG="${{ env.TARGET_VERSION }}"
+          fi
+
+          jq -n \
+            --arg app "${{ matrix.app }}" \
+            --arg tag "$DEPLOYED_TAG" \
+            --arg repo "$TARGET_REPO_URL" \
+            '{app: $app, image_tag: $tag, ecr_repo: $repo}' > "/tmp/metadata/image-${{ matrix.app }}.json"
+          echo "Saved metadata for ${{ matrix.app }}:"
+          cat "/tmp/metadata/image-${{ matrix.app }}.json"
+
+      - name: Upload Metadata Artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: image-metadata-${{ matrix.app }}
+          path: /tmp/metadata/image-${{ matrix.app }}.json
+          retention-days: 1
+
+  # ----------------------------------------------------------------------------
+  # Phase 3: Serialized GitOps Release Commit
+  # ----------------------------------------------------------------------------
+  gitops-commit:
+    name: Commit GitOps Tracking Release
+    needs: [detect-and-matrix, build-and-promote]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-and-matrix.outputs.env }}
+    concurrency:
+      group: git-commit-${{ needs.detect-and-matrix.outputs.env == 'dev' && 'dev' || format('{0}-app', needs.detect-and-matrix.outputs.env) }}
+      cancel-in-progress: false
+    env:
+      ENV: ${{ needs.detect-and-matrix.outputs.env }}
+      TARGET_VERSION: ${{ needs.detect-and-matrix.outputs.target_version }}
+      SHORT_SHA: ${{ needs.detect-and-matrix.outputs.short_sha }}
+      TAG_NAME: ${{ needs.detect-and-matrix.outputs.tag_name }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download Image Metadata Artifacts
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          pattern: 'image-metadata-*'
+          path: /tmp/metadata-download
+          merge-multiple: true
+
+      - name: Configure Target Branch & Update GitOps Configs
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ "${{ env.ENV }}" = "dev" ]; then
+            TARGET_BRANCH="dev"
+            git checkout dev
+            git pull --rebase origin dev
+
+            APPS=()
+            for meta_file in /tmp/metadata-download/image-*.json; do
+              [ -f "$meta_file" ] || continue
+              APP_NAME=$(jq -r '.app' "$meta_file")
+              IMAGE_TAG=$(jq -r '.image_tag' "$meta_file")
+              ECR_REPO=$(jq -r '.ecr_repo' "$meta_file")
+
+              APPS+=("$APP_NAME")
+              VALUES_FILE="infra/k8s/argocd/dev/${APP_NAME}/values.yaml"
+
+              if [ -f "$VALUES_FILE" ]; then
+                echo "Updating $VALUES_FILE: repo=$ECR_REPO, tag=$IMAGE_TAG"
+                sed -i -E "s|([[:space:]]*repository:).*|\1 \"${ECR_REPO}\"|" "$VALUES_FILE"
+                sed -i -E "s|([[:space:]]*tag:).*|\1 \"${IMAGE_TAG}\"|" "$VALUES_FILE"
+                git add "$VALUES_FILE"
+              else
+                echo "::warning::Values file not found at $VALUES_FILE"
+              fi
+            done
+
+            if [ ${#APPS[@]} -eq 0 ]; then
+              echo "No image metadata found to update."
+              exit 0
+            fi
+
+            echo "Committing updated values.yaml on dev..."
+            git commit -m "release(app): update container image(s) [${APPS[*]}] to ${{ env.SHORT_SHA }} [skip ci]" \
+                       -m "Environment: dev" \
+                       -m "Commit SHA: ${{ needs.detect-and-matrix.outputs.commit_sha }}" \
+                       -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                || echo "No changes to commit"
+
+            git pull --rebase origin dev || true
+            git push origin HEAD:dev
+            echo "Successfully pushed update commit to dev."
+
+          else
+            TARGET_BRANCH="${{ env.ENV }}/app"
+            if git ls-remote --exit-code --heads origin "$TARGET_BRANCH" >/dev/null 2>&1; then
+              git checkout "$TARGET_BRANCH"
+              git pull --rebase origin "$TARGET_BRANCH"
+            else
+              git checkout -b "$TARGET_BRANCH"
+            fi
+
+            for meta_file in /tmp/metadata-download/image-*.json; do
+              [ -f "$meta_file" ] || continue
+              APP_NAME=$(jq -r '.app' "$meta_file")
+              IMAGE_TAG=$(jq -r '.image_tag' "$meta_file")
+              ECR_REPO=$(jq -r '.ecr_repo' "$meta_file")
+
+              # Selective checkout of app source code from release tag
+              if [ -n "${{ env.TAG_NAME }}" ]; then
+                echo "Selectively checking out apps/${APP_NAME} from tag ${{ env.TAG_NAME }}..."
+                git checkout "${{ env.TAG_NAME }}" -- "apps/${APP_NAME}" 2>/dev/null || \
+                git checkout "tags/${{ env.TAG_NAME }}" -- "apps/${APP_NAME}" 2>/dev/null || true
+              fi
+
+              VALUES_FILE="infra/k8s/argocd/${{ env.ENV }}/${APP_NAME}/values.yaml"
+              CONFIG_FILE="infra/k8s/argocd/${{ env.ENV }}/${APP_NAME}/config.json"
+
+              mkdir -p "$(dirname "$VALUES_FILE")"
+              if [ ! -f "$VALUES_FILE" ] && [ -n "${{ env.TAG_NAME }}" ]; then
+                git checkout "${{ env.TAG_NAME }}" -- "$VALUES_FILE" 2>/dev/null || \
+                git checkout "tags/${{ env.TAG_NAME }}" -- "$VALUES_FILE" 2>/dev/null || true
+              fi
+
+              if [ -f "$VALUES_FILE" ]; then
+                echo "Updating $VALUES_FILE: repo=$ECR_REPO, tag=$IMAGE_TAG"
+                sed -i -E "s|([[:space:]]*repository:).*|\1 \"${ECR_REPO}\"|" "$VALUES_FILE"
+                sed -i -E "s|([[:space:]]*tag:).*|\1 \"${IMAGE_TAG}\"|" "$VALUES_FILE"
+                git add "$VALUES_FILE"
+              fi
+
+              if [ -d "apps/${APP_NAME}" ]; then
+                git add "apps/${APP_NAME}"
+              fi
+
+              # Commit 1: Code and values.yaml
+              echo "Executing Commit 1 (code & values.yaml) for ${APP_NAME}..."
+              git commit -m "release(${APP_NAME}): deploy ${APP_NAME} ${IMAGE_TAG} [skip ci]" \
+                         -m "Release Tag: ${{ env.TAG_NAME }}" \
+                         -m "Source Commit: ${{ needs.detect-and-matrix.outputs.commit_sha }}" \
+                         -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                  || echo "No changes to commit for C1"
+
+              C1_SHA=$(git rev-parse HEAD)
+              echo "Recorded Commit 1 SHA: ${C1_SHA}"
+
+              # Update config.json with target_commit and target_version
+              mkdir -p "$(dirname "$CONFIG_FILE")"
+              if [ ! -f "$CONFIG_FILE" ]; then
+                jq -n \
+                  --arg app "$APP_NAME" \
+                  --arg tc "$C1_SHA" \
+                  --arg tv "$IMAGE_TAG" \
+                  '{app: $app, target_commit: $tc, target_version: $tv}' > "$CONFIG_FILE"
+              else
+                jq --arg app "$APP_NAME" --arg tc "$C1_SHA" --arg tv "$IMAGE_TAG" \
+                  '.app = $app | .target_commit = $tc | .target_version = $tv' \
+                  "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+                mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+              fi
+
+              git add "$CONFIG_FILE"
+
+              # Commit 2: Pinned target_commit in config.json
+              echo "Executing Commit 2 (config.json pin) for ${APP_NAME}..."
+              git commit -m "chore(${APP_NAME}): pin target_commit to ${C1_SHA} for ${IMAGE_TAG} [skip ci]" \
+                         -m "Environment: ${{ env.ENV }}" \
+                         -m "Target Version: ${IMAGE_TAG}" \
+                         -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                  || echo "No changes to commit for C2"
+            done
+
+            git pull --rebase origin "$TARGET_BRANCH" || true
+            git push origin HEAD:"$TARGET_BRANCH"
+            echo "Successfully pushed release commits to $TARGET_BRANCH."
+          fi
+
+      - name: Generate GitHub Deployment Summary
+        if: always()
+        run: |
+          echo "## 🚀 API & Worker Microservices Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Status: ✅ Successful Release" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Status: ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📌 Release Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ env.ENV }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ env.TAG_NAME }}" ]; then
+            echo "| **Release Tag** | \`${{ env.TAG_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| **Target Version / Semver** | \`${{ env.TARGET_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit SHA** | \`${{ needs.detect-and-matrix.outputs.commit_sha }}\` (\`${{ env.SHORT_SHA }}\`) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target GitOps Branch** | \`${{ env.ENV == 'dev' && 'dev' || format('{0}/app', env.ENV) }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | \`${{ github.actor }}\` (\`${{ github.event_name }}\`) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📦 Deployed Microservices & Container Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Microservice | Deployed Tag | ECR Repository | Target Commit Pin |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+
+          for meta_file in /tmp/metadata-download/image-*.json; do
+            [ -f "$meta_file" ] || continue
+            APP=$(jq -r '.app' "$meta_file")
+            TAG=$(jq -r '.image_tag' "$meta_file")
+            REPO=$(jq -r '.ecr_repo' "$meta_file")
+
+            if [ "${{ env.ENV }}" = "dev" ]; then
+              PIN="dev (live trunk)"
+            else
+              CFG="infra/k8s/argocd/${{ env.ENV }}/${APP}/config.json"
+              if [ -f "$CFG" ]; then
+                PIN=$(jq -r '.target_commit // "unknown"' "$CFG")
+              else
+                PIN="pinned"
+              fi
+            fi
+
+            echo "| **${APP}** | \`${TAG}\` | \`${REPO}\` | \`${PIN}\` |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> [!NOTE]" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.ENV }}" = "dev" ]; then
+            echo "> **Trunk Optimization Active:** In \`dev\`, \`values.yaml\` was committed directly to \`dev\` trunk. ArgoCD ApplicationSet tracks live branch with \`target_commit: dev\`." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> **Immutable Pinned Release Active:** Code and manifests were committed to \`${{ env.ENV }}/app\`. ArgoCD ApplicationSet reconciles exact pinned commit SHA with zero drift." >> $GITHUB_STEP_SUMMARY
+          fi
+
