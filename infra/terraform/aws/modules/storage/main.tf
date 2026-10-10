@@ -255,6 +255,7 @@ resource "aws_db_instance" "db" {
   vpc_security_group_ids              = [aws_security_group.db.id]
   iam_database_authentication_enabled = true
   skip_final_snapshot                 = var.environment != "prod"
+  final_snapshot_identifier           = var.environment == "prod" ? "${local.rds_name}-final-${formatdate("MMM-DD-YYYY", timestamp())}" : null
   deletion_protection                 = var.environment == "prod"
 
   tags = {
