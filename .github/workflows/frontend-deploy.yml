@@ -14,7 +14,7 @@
 #   - Decoupled Runtime Configuration: Injects environment-specific `config.js` at deploy time.
 #   - Edge Caching & Browser Revalidation: Static hashed chunks cached permanently, `config.js`
 #     edge-cached with `public, max-age=0, s-maxage=86400, must-revalidate`.
-#   - Selective Audit Tracking: Tagged releases selectively update `{env}/frontend` tracking branches.
+#   - Selective Audit Tracking: Tagged releases selectively update `{env}/app` tracking branches.
 # ==============================================================================
 
 name: Deploy Frontend Static Assets
@@ -214,7 +214,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ needs.detect-env.outputs.env }}
     concurrency:
-      group: deploy-frontend-${{ needs.detect-env.outputs.env }}
+      group: git-commit-${{ needs.detect-env.outputs.env == 'dev' && 'dev' || format('{0}-app', needs.detect-env.outputs.env) }}
       cancel-in-progress: false
     env:
       ENV: ${{ needs.detect-env.outputs.env }}
@@ -401,21 +401,67 @@ jobs:
       - name: Update Selective Release Tracking Branch
         if: ${{ github.ref_type == 'tag' }}
         run: |
-          TARGET_BRANCH="${{ env.ENV }}/frontend"
+          TARGET_BRANCH="${{ env.ENV }}/app"
           echo "Updating release tracking branch: $TARGET_BRANCH"
-          git restore .
-          git clean -fdx
-          git fetch origin "${TARGET_BRANCH}:${TARGET_BRANCH}" 2>/dev/null || git branch "$TARGET_BRANCH"
-          git checkout "$TARGET_BRANCH"
-          git rm -rf . 2>/dev/null || true
-          git checkout "tags/${{ github.ref_name }}" -- \
-            apps/frontend
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Release ${{ github.ref_name }} [skip ci]" \
-            -m "Original Commit: ${{ github.sha }}" \
-            -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            || echo "No changes to commit"
-          git push origin "$TARGET_BRANCH"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$TARGET_BRANCH" >/dev/null 2>&1; then
+            git checkout "$TARGET_BRANCH"
+            git pull --rebase origin "$TARGET_BRANCH"
+          else
+            git checkout -b "$TARGET_BRANCH"
+          fi
+
+          echo "Selectively checking out apps/frontend from tag ${{ github.ref_name }}..."
+          git checkout "${{ github.ref_name }}" -- "apps/frontend" 2>/dev/null || \
+          git checkout "tags/${{ github.ref_name }}" -- "apps/frontend" 2>/dev/null || true
+
+          if [ -d "apps/frontend" ]; then
+            git add "apps/frontend"
+          fi
+
+          git commit -m "release(frontend): deploy frontend ${{ env.VERSION }} [skip ci]" \
+                     -m "Release Tag: ${{ github.ref_name }}" \
+                     -m "Source Commit: ${{ env.COMMIT_SHA }}" \
+                     -m "Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              || echo "No changes to commit"
+
+          git pull --rebase origin "$TARGET_BRANCH" || true
+          git push origin HEAD:"$TARGET_BRANCH"
+          echo "Successfully pushed release commit to $TARGET_BRANCH."
+
+      # ------------------------------------------------------------------------
+      # Generate GitHub Deployment Step Summary
+      # ------------------------------------------------------------------------
+      - name: Generate GitHub Deployment Summary
+        if: always()
+        run: |
+          echo "## 🌐 Frontend Static Asset Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Status: ✅ Successful Deployment" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Status: ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📌 Deployment Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ env.ENV }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            echo "| **Release Tag** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Release Tracking Branch** | \`${{ env.ENV }}/app\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| **Version** | \`${{ env.VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit SHA** | \`${{ env.COMMIT_SHA }}\` (\`${{ env.SHORT_SHA }}\`) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Frontend S3 Bucket** | \`${{ steps.query-outputs.outputs.frontend_bucket_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront Domain** | \`https://${{ steps.query-outputs.outputs.cloudfront_domain }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront Invalidation** | \`${{ steps.query-outputs.outputs.cloudfront_distribution_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> [!NOTE]" >> $GITHUB_STEP_SUMMARY
+          echo "> **Consolidated Tracking Branch:** Frontend releases to staging and production are selectively committed to \`${{ env.ENV }}/app\` without wiping sibling microservices." >> $GITHUB_STEP_SUMMARY

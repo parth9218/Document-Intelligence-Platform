@@ -288,7 +288,7 @@ This document lists completed tasks and code files created.
   - Implemented [.github/workflows/frontend-deploy.yml](file:///Users/parth/RAG/Document%20Intelligence%20Platform/.github/workflows/frontend-deploy.yml) executing the "Build once in dev, promote identical immutable artifacts to stg/prod" pattern using a shared S3 artifact bucket (`vars.ARTIFACT_BUCKET_NAME`).
   - Integrated dynamic infrastructure output resolution via `infra/terraform/query`.
   - Configured pipeline to generate and inject `out/config.js` into the target frontend bucket with edge-cached and browser-revalidating headers (`public, max-age=0, s-maxage=86400, must-revalidate`).
-  - Integrated CloudFront cache invalidation (`/*`) and selective tracking branch commits to `{env}/frontend` with `[skip ci]`.
+  - Integrated CloudFront cache invalidation (`/*`) and non-destructive selective tracking branch commits to the consolidated `{env}/app` branch with global concurrency alignment (`git-commit-${env}-app`) and `[skip ci]`.
   - Pinned all imported GitHub Actions to exact full-length commit SHAs.
   - Implemented local testing fixtures (`events/dev.json`, `events/push-dev.json`, `events/tag-stg.json`, `events/tag-prod.json`) and Taskfile commands (`Taskfile.yaml`) for local runner verification via `act`.
 - **Helm GitOps Infrastructure & Multi-Source OCI Setup (Task 505)**:

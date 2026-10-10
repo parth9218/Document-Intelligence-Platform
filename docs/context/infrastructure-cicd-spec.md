@@ -221,7 +221,7 @@ sequenceDiagram
     participant Query as infra/terraform/query
     participant EnvS3 as Target Env S3 Bucket
     participant CF as CloudFront CDN
-    participant Git as Release Branch ({env}/frontend)
+    participant Git as Release Branch ({env}/app)
 
     Dev->>GH: Push dev or Push tag `{env}-frontend-v*`
     GH->>GH: Job 1 (detect-env): Resolve ENV, VERSION, COMMIT_SHA
@@ -258,7 +258,7 @@ sequenceDiagram
     opt Staging or Production Release Tag
         Note over GH, Git: Immutable Release History
         GH->>Git: Selective checkout & commit apps/frontend/
-        GH->>Git: git push origin {env}/frontend [skip ci]
+        GH->>Git: git push origin {env}/app [skip ci]
     end
 ```
 
@@ -276,8 +276,9 @@ sequenceDiagram
 4. **CloudFront & Edge Caching Semantics**:
    - Static assets (`_next/static/**`, images) are hashed and cached long-term (`Cache-Control: public, max-age=31536000, immutable`).
    - `config.js` is uploaded with `Cache-Control: public, max-age=0, s-maxage=86400, must-revalidate`. CloudFront edge locations cache the file for 24 hours (`s-maxage`), but browser clients revalidate on every request (`max-age=0, must-revalidate`). When a new deployment occurs, CloudFront invalidation clears the edge cache instantly.
-5. **Selective Audit Tracking**:
-   - Staging and production releases selectively checkout and commit `apps/frontend/` to the `{env}/frontend` branch with `[skip ci]`, maintaining an immutable audit history of frontend code deployed to each environment.
+5. **Selective Audit Tracking & Shared Release Branch (`{env}/app`)**:
+   - Staging and production releases selectively checkout and commit `apps/frontend/` to the consolidated `{env}/app` branch with `[skip ci]`, maintaining an immutable audit history of application code without wiping sibling microservices (`apps/api`, `apps/worker`).
+   - Governed by global serialized concurrency locking (`git-commit-${env}-app`) to prevent simultaneous push conflicts across frontend and backend pipelines.
 
 ---
 
@@ -291,9 +292,9 @@ sequenceDiagram
 | **K8s Infra (dev)** | Push to `dev` under `infra/terraform/k8s/**` or `workflow_dispatch` | `deploy-k8s-dev` | None (Automatic) | N/A (Trunk tracked) |
 | **K8s Infra (stg)** | Push tag: `stg-infra-k8s-v*` | `deploy-k8s-stg` | `stg` (Reviewer required) | `stg/infra-k8s` |
 | **K8s Infra (prod)** | Push tag: `prod-infra-k8s-v*` | `deploy-k8s-prod` | `prod` (Reviewer required) | `prod/infra-k8s` |
-| **Frontend (dev)** | Push to `dev` under `apps/frontend/**` or `workflow_dispatch` | `deploy-frontend-dev` | None (Automatic) | N/A (Trunk tracked) |
-| **Frontend (stg)** | Push tag: `stg-frontend-v*` | `deploy-frontend-stg` | `stg` (Reviewer required) | `stg/frontend` |
-| **Frontend (prod)** | Push tag: `prod-frontend-v*` | `deploy-frontend-prod` | `prod` (Reviewer required) | `prod/frontend` |
+| **Frontend (dev)** | Push to `dev` under `apps/frontend/**` or `workflow_dispatch` | `git-commit-dev` | None (Automatic) | N/A (Trunk tracked) |
+| **Frontend (stg)** | Push tag: `stg-frontend-v*` | `git-commit-stg-app` | `stg` (Reviewer required) | `stg/app` |
+| **Frontend (prod)** | Push tag: `prod-frontend-v*` | `git-commit-prod-app` | `prod` (Reviewer required) | `prod/app` |
 
 ---
 
