@@ -13,11 +13,13 @@ spec:
               revision: '${targetRevision_app}'
               files:
                 - path: "infra/k8s/argocd/${environment}/api/config.json"
+              pathParamPrefix: app
           - git:
               repoURL: '${github_repository_url}'
               revision: '${targetRevision_helm}'
               files:
                 - path: "infra/k8s/argocd/${environment}/helm-api/config.json"
+              pathParamPrefix: helm
 
     # Generator for Worker Microservice
     - matrix:
@@ -27,12 +29,13 @@ spec:
               revision: '${targetRevision_app}'
               files:
                 - path: "infra/k8s/argocd/${environment}/worker/config.json"
+              pathParamPrefix: app
           - git:
               repoURL: '${github_repository_url}'
               revision: '${targetRevision_helm}'
               files:
                 - path: "infra/k8s/argocd/${environment}/helm-worker/config.json"
-
+              pathParamPrefix: helm
   template:
     metadata:
       name: '${project_name}-${environment}-{{app}}'
