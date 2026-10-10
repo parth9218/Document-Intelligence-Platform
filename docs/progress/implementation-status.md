@@ -42,6 +42,7 @@
 - [x] **Task 504**: Multi-Environment Frontend CI/CD Pipeline (`frontend-deploy.yml`) ── _Complete_
 - [x] **Task 505**: Helm GitOps Infrastructure & Multi-Source OCI Setup ── _Complete_
 - [x] **Task 506**: Multi-Environment Helm Chart CI/CD Pipeline (`helm-cicd.yml`) ── _Complete_
+- [ ] **Task 507**: Multi-Environment API & Worker Container CI/CD Pipeline (`api-worker-cicd.yml`) ── _Incomplete_
 
 ---
 
