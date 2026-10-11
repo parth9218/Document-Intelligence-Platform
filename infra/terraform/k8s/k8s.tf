@@ -43,6 +43,40 @@ locals {
   targetRevision_helm = var.targetRevision_helm != "" ? var.targetRevision_helm : (var.targetRevision_worker != null ? var.targetRevision_worker : "dev")
 }
 
+data "kubectl_file_documents" "argocd_ecr_secret" {
+  # Fix 1: Wrap the list literal in toset() so it is a valid set(string)
+  for_each = toset(["api", "worker"])
+
+  content = templatefile("manifests/argocd-ecr-secret.yaml", {
+    project_name     = var.project_name
+    environment      = var.environment
+    ecr_registry_url = local.ecr_registry_url
+    aws_region       = data.aws_region.current.region
+    app              = each.value
+  })
+}
+
+resource "kubectl_manifest" "argocd_ecr_secret" {
+  for_each = {
+    for pair in flatten([
+      for app_key, doc in data.kubectl_file_documents.argocd_ecr_secret : [
+        for manifest_key, yaml in doc.manifests : {
+          unique_id = "${app_key}-${manifest_key}"
+          yaml_body = yaml
+        }
+      ]
+    ]) : pair.unique_id => pair.yaml_body
+  }
+
+  yaml_body = each.value
+
+  depends_on = [
+    helm_release.external_secrets,
+    helm_release.argocd
+  ]
+}
+
+
 resource "kubectl_manifest" "argocd_applicationset" {
   yaml_body = templatefile("manifests/argocd-applicationset.yaml", {
     project_name          = var.project_name,
@@ -55,7 +89,8 @@ resource "kubectl_manifest" "argocd_applicationset" {
   depends_on = [
     helm_release.argocd,
     helm_release.keda,
-    helm_release.keda-add-ons-http
+    helm_release.keda-add-ons-http,
+    kubectl_manifest.argocd_ecr_secret
   ]
 }
 
