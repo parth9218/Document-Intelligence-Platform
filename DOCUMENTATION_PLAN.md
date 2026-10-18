@@ -386,9 +386,11 @@ mkdocs-mermaid2-plugin>=1.1.1
 - Navigation: Explicitly defined left sidebar matching the structure below
 
 **GitHub Pages CI/CD Pipeline (`.github/workflows/docs-deploy.yml`)**:
+- Target: GitHub Pages with "GitHub Actions" source selected.
 - Trigger: Push to `dev` branch affecting `docs-site/**` or `.github/workflows/docs-deploy.yml`.
-- Permissions: `contents: write` (for `gh-pages` branch deployment via `mkdocs gh-deploy`).
-- Steps: Checkout repository, setup Python 3.11+, install `docs-site/requirements.txt`, run `mkdocs gh-deploy --config-file docs-site/mkdocs.yml --force`.
+- Permissions: `contents: read`, `pages: write`, `id-token: write`.
+- Build Job: Checkout repository, setup Python 3.11+, install `docs-site/requirements.txt`, run `mkdocs build --config-file docs-site/mkdocs.yml --site-dir docs-site/site`, setup pages (`actions/configure-pages@v5`), and upload artifact (`actions/upload-pages-artifact@v3` with path `docs-site/site`).
+- Deploy Job: Deploy to `github-pages` environment via `actions/deploy-pages@v4`.
 
 ### 6.2 Complete Page Structure & Content Guide
 
