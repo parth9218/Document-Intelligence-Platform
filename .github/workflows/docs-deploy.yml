@@ -1,0 +1,60 @@
+# ==============================================================================
+# Technical Documentation Deployment Workflow (MkDocs Material -> GitHub Pages)
+# ==============================================================================
+# Purpose:
+#   Automatically builds the technical documentation website from `docs-site/`
+#   and publishes static assets to the `gh-pages` branch for GitHub Pages hosting.
+#
+# Trigger Conditions:
+#   - Push to `dev` branch with changes under `docs-site/**` or `.github/workflows/docs-deploy.yml`.
+#   - Manual `workflow_dispatch`.
+# ==============================================================================
+
+name: Deploy Technical Documentation
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'docs-site/**'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-docs:
+    name: Build & Deploy Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install MkDocs Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs-site/requirements.txt
+
+      - name: Configure Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build & Publish to GitHub Pages
+        run: |
+          mkdocs gh-deploy --config-file docs-site/mkdocs.yml --force
+

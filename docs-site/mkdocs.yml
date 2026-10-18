@@ -1,0 +1,190 @@
+site_name: "AI Document Intelligence Platform"
+site_description: "Production-Grade Multi-Tenant Cloud-Native Retrieval-Augmented Generation (RAG) Platform on AWS EKS"
+site_author: "Platform Engineering Team"
+docs_dir: "docs"
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: "Switch to dark mode"
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: "Switch to light mode"
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  favicon: "assets/logo.png"
+  logo: "assets/logo.png"
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - attr_list
+  - def_list
+  - tables
+
+plugins:
+  - search
+  - mermaid2:
+      arguments:
+        startOnLoad: true
+        theme: 'default'
+  - panzoom:
+      full_screen: true
+      key: "none"
+
+extra_javascript:
+  - javascripts/mermaid.min.js
+
+nav:
+  - Home: "index.md"
+
+  - Architecture:
+      - "System Overview": "architecture/overview.md"
+      - "End-to-End Data Flows": "architecture/data-flow.md"
+      - "Technology Stack & Rationale": "architecture/technology-stack.md"
+      - "Cost Optimization": "architecture/cost-optimization.md"
+
+  - Design Decisions (ADRs):
+      - "ADR Index": "design-decisions/index.md"
+      - "CloudFront Unified API Routing": "design-decisions/cloudfront-api-routing.md"
+
+  - Challenges & Solutions:
+      - "Overview": "challenges/index.md"
+      - "ALB DNS Circular Dependency": "challenges/alb-dns-circular-dependency.md"
+      - "CloudFront Mixed-Content": "challenges/cloudfront-mixed-content.md"
+      - "ArgoCD Commit Pinning": "challenges/argocd-commit-pinning.md"
+      - "Terraform Query Module": "challenges/terraform-query-module.md"
+      - "RDS IAM Authentication": "challenges/rds-iam-auth.md"
+      - "External Secrets ECR Tokens": "challenges/external-secrets-ecr-tokens.md"
+      - "Presigned PUT to POST": "challenges/presigned-put-to-post.md"
+      - "Session-Scoped SSE": "challenges/session-scoped-sse.md"
+      - "Confirm-Upload Race Condition": "challenges/confirm-upload-race-condition.md"
+      - "Hierarchical ECR Naming": "challenges/ecr-repository-naming.md"
+      - "Non-Destructive Selective Checkouts": "challenges/non-destructive-selective-checkouts.md"
+      - "Serialized Git Commits": "challenges/serialized-git-commits.md"
+      - "PG NOTIFY 8KB Payload Limit": "challenges/pg-notify-payload-size.md"
+      - "First-Time Deployment Bootstrap": "challenges/first-time-deployment-bootstrap.md"
+
+  - Database Architecture:
+      - "Schema & Entity Relationships": "database/schema.md"
+      - "Indexes & Constraints": "database/indexes-constraints.md"
+      - "Access Patterns": "database/access-patterns.md"
+      - "PG NOTIFY & Real-Time Triggers": "database/pg-notify-triggers.md"
+      - "Polyglot Dual-ORM Strategy": "database/dual-orm-strategy.md"
+
+  - Services:
+      - API Service (Node.js/Express):
+          - "Overview": "services/api/overview.md"
+          - "Session Management": "services/api/session-management.md"
+          - "Document Upload & Validation": "services/api/document-upload.md"
+          - "Real-Time Progress Streaming": "services/api/realtime-progress.md"
+          - "Query & Citation Engine": "services/api/query-engine.md"
+          - "OpenAPI & Swagger UI": "services/api/swagger-api-docs.md"
+          - "RDS IAM Database Authentication": "services/api/rds-iam-auth.md"
+          - "Multi-Stage Container Packaging": "services/api/docker-build.md"
+      - Worker Service (Python):
+          - "Overview": "services/worker/overview.md"
+          - "SQS Consumer & DLQ Bridge": "services/worker/sqs-consumer.md"
+          - "Document Extraction Pipeline": "services/worker/extraction-pipeline.md"
+          - "Chunking & Vector Embeddings": "services/worker/chunking-embedding.md"
+          - "Vector Storage & Progress Checkpoints": "services/worker/vector-storage.md"
+          - "Idempotency & Checkpoint Resume": "services/worker/idempotency-resume.md"
+      - Frontend Client (Next.js):
+          - "Overview": "services/frontend/overview.md"
+          - "Session Authentication Flow": "services/frontend/session-auth-flow.md"
+          - "Batch Upload & S3 Direct Engine": "services/frontend/batch-upload-s3.md"
+          - "Real-Time Progress Monitoring": "services/frontend/realtime-progress.md"
+          - "Streaming Q&A Chat": "services/frontend/chat-streaming.md"
+          - "Citation & Source Popovers": "services/frontend/citation-system.md"
+          - "Hybrid MSW Mock Architecture": "services/frontend/msw-mock-system.md"
+          - "Decoupled Runtime Configuration": "services/frontend/runtime-config.md"
+
+  - Cloud Infrastructure:
+      - AWS Cloud Infrastructure:
+          - "Overview & Architecture": "infrastructure/aws/overview.md"
+          - "Terraform Modules": "infrastructure/aws/terraform-modules.md"
+          - "Initial Provisioning Guide": "infrastructure/aws/initial-setup.md"
+      - Kubernetes Platform (EKS):
+          - "Cluster Topology & Architecture": "infrastructure/kubernetes/overview.md"
+          - "Secrets Store CSI Driver": "infrastructure/kubernetes/secrets-csi-driver.md"
+          - "Gateway API & AWS LB Controller": "infrastructure/kubernetes/gateway-api-alb.md"
+          - "ArgoCD Multi-Source GitOps": "infrastructure/kubernetes/argocd-gitops.md"
+          - "External Secrets Operator (ESO)": "infrastructure/kubernetes/external-secrets.md"
+          - "Event-Driven Autoscaling (KEDA)": "infrastructure/kubernetes/keda-autoscaling.md"
+          - "Helm Chart Packaging": "infrastructure/kubernetes/helm-charts.md"
+
+  - Security Architecture:
+      - "Defense-in-Depth Model": "security/overview.md"
+      - "Session Authentication": "security/session-authentication.md"
+      - "IAM Auth & Dynamic Secrets": "security/iam-auth-secrets.md"
+      - "S3 Presigned Upload Security": "security/upload-security.md"
+      - "Multi-Tenant Data Isolation": "security/tenant-isolation.md"
+      - "Cross-Origin Resource Sharing (CORS)": "security/cors-policy.md"
+
+  - Deployment & CI/CD:
+      - "Trunk-Based Architecture": "deployment/overview.md"
+      - "🚧 Pull Request Validation Pipeline": "deployment/ci-pipeline.md"
+      - "Development Continuous Deployment": "deployment/cd-dev.md"
+      - "Staging & Production Promotion": "deployment/cd-staging-production.md"
+      - "Infrastructure Deployment Order": "deployment/infrastructure-deployment.md"
+      - "Branch Protection & Governance": "deployment/branch-tag-protection.md"
+
+  - Development & Operations:
+      - "Local Development Setup": "development/local-setup.md"
+      - "API Standalone Guide": "development/api-standalone.md"
+      - "Worker Standalone Guide": "development/worker-standalone.md"
+      - "Frontend Standalone Guide": "development/frontend-standalone.md"
+      - "Global Environment Variables": "development/environment-variables.md"
+
+  - Testing Strategy:
+      - "Testing Strategy & Pyramid": "testing/strategy.md"
+      - "API Test Suites": "testing/api-tests.md"
+      - "Worker Test Suites": "testing/worker-tests.md"
+      - "Local Infrastructure Parity": "testing/infrastructure-parity.md"
+
+  - Observability & Reliability:
+      - "Observability Strategy": "observability/overview.md"
+      - "Structured Application Logging": "observability/logging.md"
+      - "Health Checks & Probes": "observability/health-checks.md"
+      - "Queue Metrics & Reliability Daemons": "observability/monitoring.md"
+
+  - Visual Showcase:
+      - "UI Walkthrough & Screenshots": "screenshots/index.md"
