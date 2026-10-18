@@ -1,6 +1,9 @@
 site_name: "AI Document Intelligence Platform"
 site_description: "Production-Grade Multi-Tenant Cloud-Native Retrieval-Augmented Generation (RAG) Platform on AWS EKS"
 site_author: "Platform Engineering Team"
+site_url: "https://parth9218.github.io/Document-Intelligence-Platform/"
+repo_url: "https://github.com/parth9218/Document-Intelligence-Platform"
+repo_name: "parth9218/Document-Intelligence-Platform"
 docs_dir: "docs"
 
 theme:
@@ -69,6 +72,11 @@ plugins:
   - panzoom:
       full_screen: true
       key: "none"
+      include_selectors:
+        - ".architecture-diagram"
+
+extra_css:
+  - stylesheets/custom.css
 
 extra_javascript:
   - javascripts/mermaid.min.js

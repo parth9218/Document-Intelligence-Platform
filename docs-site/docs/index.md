@@ -58,83 +58,9 @@ The platform serves as an authoritative demonstration of senior cloud engineerin
 
 ## System Architecture Overview
 
-```mermaid
-%%{init: {
-  'theme': 'default',
-  'themeVariables': {
-    'primaryColor': '#ffffff',
-    'primaryTextColor': '#0f172a',
-    'primaryBorderColor': '#1e293b',
-    'lineColor': '#1e293b',
-    'edgeLabelBackground': '#e2e8f0',
-    'tertiaryColor': '#fdf4ff'
-  }
-}}%%
-flowchart TD
-    subgraph Client ["Client Interface"]
-        Browser["React Client<br/>(Browser)"]
-    end
-
-    subgraph Edge ["Global Edge & CDN Layer"]
-        CF["AWS CloudFront<br/>Distribution"]
-        S3Static["S3 Bucket: Static<br/>Frontend<br/>(Next.js)"]
-    end
-
-    subgraph Storage ["AWS Storage, Messaging & Database"]
-        S3Doc["S3 Bucket:<br/>Documents (KMS<br/>Encrypted)"]
-        SQS["Amazon SQS<br/>Queue"]
-        DLQ["Dead Letter<br/>Queue (DLQ)"]
-        RDS["Amazon RDS<br/>PostgreSQL 16<br/>(pgvector)"]
-    end
-
-    subgraph EKS ["Amazon EKS Cluster (Kubernetes 1.31)"]
-        KEDA["KEDA Autoscaler"]
-        ArgoCD["ArgoCD GitOps<br/>Controller"]
-        ALB["AWS ALB &<br/>Gateway API"]
-        CSI["Secrets Store<br/>CSI Driver"]
-        WorkerPods["Python<br/>Ingestion<br/>Worker Pods"]
-        ApiPods["Node.js /<br/>Express API Pods"]
-    end
-
-    subgraph Bedrock ["Amazon Bedrock Foundation Models"]
-        Titan["Titan<br/>Embeddings V2<br/>(1024-dim)"]
-        Claude["Claude 3 Haiku<br/>(Streaming)"]
-    end
-
-    Browser -->|Direct Multipart POST| S3Doc
-    Browser -->|Request App| CF
-    Browser -->|API Queries & SSE Stream| CF
-
-    CF -->|Fetch Assets| S3Static
-    CF -->|Forward API Traffic| ALB
-
-    S3Doc -->|S3 Event Notification| SQS
-    SQS -.->|Max Retries Exceeded| DLQ
-    SQS -->|Long Poll 20s| WorkerPods
-    WorkerPods -->|Fetch File| S3Doc
-    WorkerPods -->|Idempotent Upsert| RDS
-    WorkerPods -->|Generate Vectors| Titan
-
-    KEDA -.->|Scales 0 to 10| WorkerPods
-    ArgoCD -->|Syncs| WorkerPods
-    ArgoCD -->|Syncs| ApiPods
-    ALB -->|Route Traffic| ApiPods
-    CSI -.->|Mounts Secrets| WorkerPods
-    CSI -.->|Mounts Secrets| ApiPods
-
-    ApiPods -->|Session Cosine Search| RDS
-    ApiPods -->|Grounded Prompt| Claude
-    RDS -.->|PG NOTIFY Events| ApiPods
-
-    style Client fill:#fdf4ff,stroke:#d946ef,stroke-width:2px;
-    style Edge fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px;
-    style Storage fill:#ecfeff,stroke:#06b6d4,stroke-width:2px;
-    style EKS fill:#fff7ed,stroke:#f97316,stroke-width:2px;
-    style Bedrock fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
-
-    classDef whiteCard fill:#ffffff,stroke:#1e293b,stroke-width:1.5px,color:#0f172a,rx:4,ry:4;
-    class Browser,CF,S3Static,S3Doc,SQS,DLQ,RDS,KEDA,ArgoCD,ALB,CSI,WorkerPods,ApiPods,Titan,Claude whiteCard;
-```
+<div class="architecture-diagram">
+  <img src="assets/architecture.png" alt="AI Document Intelligence Platform — Production Architecture" />
+</div>
 
 ---
 
