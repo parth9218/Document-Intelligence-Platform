@@ -44,6 +44,10 @@ on:
     paths:
       - 'apps/api/**'
       - 'apps/worker/**'
+      - '!apps/api/README.md'
+      - '!apps/api/**/README.md'
+      - '!apps/worker/README.md'
+      - '!apps/worker/**/README.md'
     tags:
       - 'stg-api-v*'
       - 'stg-worker-v*'
@@ -160,9 +164,9 @@ jobs:
             IMAGE_TO_DEPLOY="full"
             TARGET_VERSION="${SHORT_SHA}"
 
-            # Detect changed microservices between HEAD~1 and HEAD
-            API_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/api/' || true)
-            WORKER_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/worker/' || true)
+            # Detect changed microservices between HEAD~1 and HEAD (excluding README updates)
+            API_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/api/' | grep -v -E '(^|/)README\.md$' || true)
+            WORKER_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^apps/worker/' | grep -v -E '(^|/)README\.md$' || true)
 
             if [[ -n "$API_CHANGED" && -z "$WORKER_CHANGED" ]]; then
               MATRIX="[\"api\"]"
