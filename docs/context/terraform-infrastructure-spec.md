@@ -10,7 +10,7 @@ The `infra/terraform` directory is structured to separate reusable modules from 
 - **Modules (`infra/terraform/aws/modules`)**:
   - `acm`: ACM Certificates and TLS configurations.
   - `ecr`: Elastic Container Registries.
-  - `eks`: EKS cluster configuration with dedicated node groups (`api-nodes`, `worker-nodes`), EKS Pod Identity Associations.
+  - `eks`: EKS cluster configuration operating in **EKS Auto Mode** (with built-in `general-purpose` and `system` node pools, eliminating traditional Managed Node Groups) and EKS Pod Identity Associations.
   - `messaging`: SQS Queues and Dead Letter Queues (DLQs).
   - `oidc`: OIDC Identity Providers for EKS.
   - `secrets`: AWS Secrets Manager and SSM Parameter Store setup for dynamic configuration.
