@@ -263,7 +263,7 @@ Structure:
 
 5. Services Overview (brief descriptions with links to app READMEs)
 
-6. Quick Start (link to docs website local setup page + one-liner docker-compose up)
+6. Quick Start (concise summary linking directly to the technical documentation's Local Setup guide, noting the multi-step local environment requirements — `.env` configurations, LocalStack bootstrap via `scripts/localstack/init-aws.sh`, and full stack orchestration via `scripts/start-local.sh` — without lengthy instructions in the root README)
 
 7. Deployment Summary
    - Dev: PR → CI → tests → merge → push triggers deploy
@@ -595,8 +595,7 @@ Source for all deployment pages: `docs/context/infrastructure-cicd-spec.md`, `do
 
 #### Section: Development
 
-**`docs-site/development/local-setup.md`** — Docker Compose full stack. Source: `docker-compose.yml`, `scripts/localstack-init.sh`
-- Note: Local setup is under active maintenance
+**`docs-site/development/local-setup.md`** — Comprehensive multi-step local setup guide: environment variable configuration (`.env` across root and apps), containerized cloud emulation (PostgreSQL with `pgvector`, LocalStack S3/SQS initialized via `scripts/localstack/init-aws.sh`, and Ollama), workspace launch orchestration via `scripts/start-local.sh`, timestamped logging under `logs/run_<timestamp>/`, and service verification.
 
 **`docs-site/development/api-standalone.md`**, **`worker-standalone.md`**, **`frontend-standalone.md`** — Per-service standalone instructions
 

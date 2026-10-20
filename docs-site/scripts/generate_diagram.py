@@ -89,7 +89,7 @@ with Diagram(
 
     # Worker processing
     sqs_queue >> Edge(label="Long Poll (20s)", color="#ea580c") >> worker_pods
-    worker_pods >> Edge(label="Fetch & Sniff", color="#0891b2") >> s3_docs
+    s3_docs >> Edge(label="Fetch & Sniff", color="#0891b2") >> worker_pods
     worker_pods >> Edge(label="Embed Paragraphs", color="#059669") >> titan
     worker_pods >> Edge(label="Idempotent Upsert", color="#0891b2") >> rds
 
