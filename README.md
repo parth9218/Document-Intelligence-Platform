@@ -161,10 +161,7 @@ cd Document-Intelligence-Platform
 # 2. Configure environment variables (root, API, Worker, and Frontend)
 cp .env.example .env
 
-# 3. Initialize AWS resources (LocalStack)
-./scripts/localstack/init-aws.sh
-
-# 4. Launch local platform workspace (boots containers, runs Prisma migrations & starts services)
+# 3. Launch local platform workspace (boots containers, runs Prisma migrations & starts services)
 ./scripts/start-local.sh
 ```
 
