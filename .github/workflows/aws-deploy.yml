@@ -31,6 +31,8 @@ on:
       - dev
     paths:
       - 'infra/terraform/aws/**'
+      - '!infra/terraform/aws/README.md'
+      - '!infra/terraform/aws/**/README.md'
     tags:
       - 'stg-infra-aws-v*'
       - 'prod-infra-aws-v*'

@@ -34,6 +34,8 @@ on:
       - dev
     paths:
       - 'infra/terraform/k8s/**'
+      - '!infra/terraform/k8s/README.md'
+      - '!infra/terraform/k8s/**/README.md'
     tags:
       - 'stg-infra-k8s-v*'
       - 'prod-infra-k8s-v*'
