@@ -54,7 +54,7 @@ sequenceDiagram
     participant W1 as Worker Pod 1
     participant W2 as Worker Pod 2
     participant Bedrock as Amazon Bedrock Titan V2
-    participant DB as PostgreSQL (pgvector)
+    participant DB as PostgreSQL
 
     SQS->>W1: Pull SQS Message (VisibilityTimeout 600s)
     W1->>W1: Parse PDF and Generate 150 Chunks (3 Batches)
@@ -64,16 +64,16 @@ sequenceDiagram
     Bedrock-->>W1: 50 Vector Embeddings
     W1->>DB: Upsert Chunks and Commit Checkpoint 0
 
-    Note over W1,DB: Batch 1 (Chunks 50 to 99): Worker Pod Fails
+    Note over W1,DB: Batch 1 (Chunks 50 to 99) - Worker Pod Fails
     W1->>Bedrock: Embed Batch 1
     Note over W1: Pod terminates abruptly (Eviction or Restart)
-    Note over SQS: Visibility timeout (600s) elapses; SQS redelivers message
+    Note over SQS: Visibility timeout 600s elapses and SQS redelivers message
 
     SQS->>W2: Redeliver Message to Replacement Pod
     W2->>DB: Read Job State (Checkpoint 0 of 3 Batches)
     Note over W2: Skips Batch 0 and resumes at Batch 1
 
-    Note over W2,DB: Batch 1 (Chunks 50 to 99): Resumed
+    Note over W2,DB: Batch 1 (Chunks 50 to 99) - Resumed
     W2->>Bedrock: Embed Batch 1
     W2->>DB: Upsert Chunks and Commit Checkpoint 1
     
@@ -81,7 +81,7 @@ sequenceDiagram
     W2->>Bedrock: Embed Batch 2
     W2->>DB: Upsert Chunks and Commit Checkpoint 2
 
-    W2->>DB: Atomically set status = completed (100%)
+    W2->>DB: Atomically set status completed (100 percent)
     W2->>SQS: Delete Message (Job Acknowledged)
 ```
 

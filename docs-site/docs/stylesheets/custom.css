@@ -5,7 +5,7 @@
 /* Outer Panzoom Box Frame */
 .panzoom-box {
   width: 100% !important;
-  background-color: #ffffff !important;
+  background-color: var(--md-default-bg-color, #ffffff) !important;
   border: 1px solid var(--md-default-fg-color--lightest, #e2e8f0);
   border-radius: 8px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
@@ -48,16 +48,16 @@
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
-  background-color: #ffffff !important;
+  background-color: var(--md-default-bg-color, #ffffff) !important;
   padding: 1rem !important;
   box-sizing: border-box !important;
 }
 
 .panzoom-box .mermaid svg,
 .mermaid svg {
-  width: 100% !important;
   max-width: 100% !important;
   height: auto !important;
+  min-height: 160px;
   max-height: 75vh !important;
   display: block !important;
   margin: 0 auto !important;

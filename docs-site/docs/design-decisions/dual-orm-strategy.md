@@ -72,14 +72,14 @@ flowchart TD
 
     subgraph PythonDomain ["Consumer Mirror (SQLAlchemy ORM)"]
         direction TB
-        Models["SQLAlchemy Declarative Models<br/>Mirrors Schema & Vector Types"]
+        Models["SQLAlchemy Declarative Models<br/>Mirrors Schema and Vector Types"]
         WorkerSession["SQLAlchemy Worker Session<br/>Transactional Context Managers"]
         
         Models --> WorkerSession
-        WorkerSession -->|Reads & Writes (Zero DDL)| RDS
+        WorkerSession -->|Reads and Writes - Zero DDL| RDS
     end
 
-    ClientTS -->|Reads & Writes| RDS
+    ClientTS -->|Reads and Writes| RDS
 ```
 
 ---

@@ -46,9 +46,11 @@
   function ensureFullFrameSvgs() {
     document.querySelectorAll('.mermaid svg').forEach((svg) => {
       svg.style.setProperty('max-width', '100%', 'important');
-      svg.style.setProperty('width', '100%', 'important');
       svg.style.setProperty('height', 'auto', 'important');
       svg.style.setProperty('display', 'block', 'important');
+      if (!svg.style.minHeight) {
+        svg.style.setProperty('min-height', '160px');
+      }
     });
   }
 
