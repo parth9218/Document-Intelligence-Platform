@@ -25,6 +25,8 @@ on:
       - dev
     paths:
       - 'apps/frontend/**'
+      - '!apps/frontend/README.md'
+      - '!apps/frontend/**/README.md'
     tags:
       - 'stg-frontend-v*'
       - 'prod-frontend-v*'

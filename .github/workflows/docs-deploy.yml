@@ -1,0 +1,81 @@
+# ==============================================================================
+# Technical Documentation Deployment Workflow (MkDocs Material -> GitHub Pages)
+# ==============================================================================
+# Purpose:
+#   Builds the technical documentation website from `docs-site/` using MkDocs
+#   and deploys the static site directly to GitHub Pages via GitHub Actions
+#   (using upload-pages-artifact and deploy-pages).
+#
+# Trigger Conditions:
+#   - Push to `dev` branch with changes under `docs-site/**` or `.github/workflows/docs-deploy.yml`.
+#   - Manual `workflow_dispatch`.
+# ==============================================================================
+
+name: Deploy Technical Documentation
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'docs-site/**'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# Do NOT cancel in-progress runs as we want to allow deployments to complete cleanly.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install MkDocs Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs-site/requirements.txt
+
+      - name: Build Documentation Site
+        run: |
+          cd docs-site
+          mkdocs build --config-file mkdocs.yml --site-dir site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v5.0.0
+        with:
+          path: docs-site/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
