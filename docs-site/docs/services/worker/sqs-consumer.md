@@ -1,25 +1,97 @@
 ---
 title: "SQS Consumer & DLQ Bridge"
-description: "Long polling with boto3, message parsing, visibility timeout extension, and Dead Letter Queue monitoring."
+description: "Boto3 long polling, message envelope extraction, visibility timeouts, and DLQ failure synchronization."
 ---
 
 # SQS Consumer & DLQ Bridge
 
-> Long polling with boto3, message parsing, visibility timeout extension, and Dead Letter Queue monitoring.
+> Asynchronous SQS long-polling consumer, visibility timeout management, transient vs permanent error routing, and DLQ state synchronization.
 
 ---
 
-## Overview
+## Consumer Polling Architecture
 
-*This document is part of the comprehensive technical documentation for the **AI Document Intelligence Platform**. Detailed technical architecture, sequence diagrams, and operational specifications are being compiled for this section according to the master documentation plan.*
+The SQS consumer decouples file upload arrival from compute-intensive text extraction. It consumes S3 event notifications from Amazon SQS using the AWS Boto3 SDK, balancing throughput and infrastructure cost.
 
-## Key Topics Covered
+```mermaid
+sequenceDiagram
+    autonumber
+    actor S3 as Amazon S3
+    participant SQS as Amazon SQS Queue
+    participant Consumer as SqsConsumer Loop
+    participant Handler as JobHandler
+    participant DLQ as SQS DLQ
+    participant DLQPoller as DLQ Thread
+    participant DB as PostgreSQL
 
-- Architectural context and operational rationale
-- Implementation details and source code references
-- Production invariants, trade-offs, and security guardrails
-- Verification and operational runbooks
+    S3->>SQS: S3 Event Notification (ObjectCreated)
+    Consumer->>SQS: ReceiveMessage (WaitTime: 20s, Visibility: 600s)
+    SQS-->>Consumer: Ingestion Job Message
+
+    Consumer->>Consumer: Parse Envelope and S3 Key
+    Consumer->>Handler: handle_job()
+
+    alt Success
+        Handler-->>Consumer: Job Success
+        Consumer->>SQS: DeleteMessage
+    else Permanent Failure
+        Handler->>DB: UPDATE status = failed
+        Handler-->>Consumer: PermanentFailure
+        Consumer->>SQS: DeleteMessage
+    else Transient Failure
+        Handler-->>Consumer: TransientFailure
+        Note over Consumer: Leave unacknowledged
+    end
+
+    Note over SQS: If receiveCount exceeds 3, route to DLQ
+    loop Every 30 Seconds
+        DLQPoller->>DLQ: ReceiveMessage()
+        DLQ-->>DLQPoller: Dead-Lettered Message
+        DLQPoller->>DB: UPDATE status = failed (max_retries_exceeded)
+        DLQPoller->>DLQ: DeleteMessage
+    end
+```
 
 ---
 
-*For detailed source specifications, see the corresponding architecture documents in `docs/context/` and implementation tasks in `tasks/`.*
+## Polling Configuration & SQS Parameters
+
+| Parameter | Value | Operational Rationale |
+|:---|:---|:---|
+| **`WaitTimeSeconds`** | `20` | Long-polling interval minimizing empty response requests, reducing AWS API costs. |
+| **`MaxNumberOfMessages`** | `1` | One message per poll ensuring predictable pod memory footprints during heavy PDF parsing. |
+| **`VisibilityTimeout`** | `600` (10 mins) | Prevents duplicate pickup while worker extracts, chunks, and embeds large documents. |
+| **`maxReceiveCount`** | `3` | Retries transient errors up to 3 times before routing poison-pill messages to DLQ. |
+
+---
+
+## S3 Key Parsing & Schema Contract
+
+Incoming messages are filtered to match the canonical S3 key convention:
+
+`sessions/{sessionId}/documents/{documentId}/original`
+
+- **Malformed Messages**: If an object key does not match this structure, the message is logged and deleted immediately to prevent infinite poison-pill polling loops.
+- **Envelope Extraction**: Extracts `bucket.name`, `object.key`, `sessionId` (segment 1), and `documentId` (segment 3).
+
+---
+
+## Dual Failure Strategy: Transient vs Permanent
+
+To maintain predictable queue throughput, the consumer differentiates errors:
+
+1. **Permanent Failures**: Includes unparseable PDFs, unsupported magic numbers, and missing database parent records. The worker marks the database status as `failed` and calls `delete_message` immediately.
+2. **Transient Failures**: Includes temporary Bedrock API rate throttling or database connection drops. The message is **not** deleted. When the 600-second visibility timeout expires, SQS re-exposes the message for another worker attempt.
+
+---
+
+## DLQ Bridge Daemon Thread
+
+If a message exhausts its 3 delivery attempts, SQS routes it to the Dead Letter Queue (`documents-dlq`).
+
+A secondary background daemon thread (`run_dlq_poller`) polls the DLQ every 30 seconds:
+
+- Reads the dead-lettered message.
+- Identifies the corresponding `document_id`.
+- Atomically updates `processing_jobs.status = 'failed'` with `error_code = 'max_retries_exceeded'`.
+- Deletes the message from the DLQ, ensuring the user interface reflects the terminal failure.

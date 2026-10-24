@@ -5,21 +5,93 @@ description: "Layered TypeScript Express architecture, middleware chain, configu
 
 # API Service Overview
 
-> Layered TypeScript Express architecture, middleware chain, configuration loading, and error handling.
+> High-concurrency TypeScript Express backend serving session authentication, S3 presigned upload dispatching, SSE progress streaming, and grounded RAG query orchestration.
 
 ---
 
-## Overview
+## Architectural Role & Responsibilities
 
-*This document is part of the comprehensive technical documentation for the **AI Document Intelligence Platform**. Detailed technical architecture, sequence diagrams, and operational specifications are being compiled for this section according to the master documentation plan.*
+The API service (`apps/api`) functions as the edge-facing application gateway running on **Node.js 24 Alpine** within the Amazon EKS cluster. It is optimized for asynchronous, non-blocking I/O operations and long-lived HTTP streaming connections.
 
-## Key Topics Covered
+```mermaid
+flowchart TD
+    subgraph Client ["Client Layer"]
+        Browser["Next.js Single Page App"]
+    end
 
-- Architectural context and operational rationale
-- Implementation details and source code references
-- Production invariants, trade-offs, and security guardrails
-- Verification and operational runbooks
+    subgraph MiddlewareChain ["Global Express Middleware Chain"]
+        direction TB
+        CORS["CORS Middleware<br/>(Dynamic dev / Strict whitelist prod)"]
+        Parser["JSON Body Parser<br/>(express.json with 10MB limit)"]
+        Logger["Structured Request Logger<br/>(JSON in prod / Colorized in dev)"]
+        SessionAuth["Session Middleware<br/>(HMAC-SHA256 signature & auto-init)"]
+        CORS --> Parser --> Logger --> SessionAuth
+    end
+
+    subgraph RoutingControllers ["Routing & Validation Layer"]
+        direction TB
+        Val["Zod Request Validators"]
+        Ctrl["Domain Controllers<br/>(Session, Document, Query)"]
+        Val --> Ctrl
+    end
+
+    subgraph ServiceLayer ["Core Service Orchestration"]
+        direction TB
+        DocSvc["Document Service<br/>(S3 Presigned POST & state machine)"]
+        ProgSvc["Progress SSE Manager<br/>(Dedicated pgPool listener)"]
+        SearchSvc["Search & Vector Service<br/>(Embedding + pgvector query)"]
+        LLMSvc["LLM Streaming Service<br/>(Claude 3.5 Sonnet via Bedrock)"]
+    end
+
+    subgraph Persistence ["Data & External Services"]
+        Prisma["Prisma ORM<br/>(Transaction authority)"]
+        RDS[("RDS PostgreSQL 16<br/>+ pgvector")]
+        Bedrock["Amazon Bedrock<br/>(Titan V2 / Claude 3.5)"]
+        S3["Amazon S3 Bucket"]
+    end
+
+    Browser -->|HTTP Requests| CORS
+    SessionAuth --> Val
+    Ctrl --> ServiceLayer
+    DocSvc --> Prisma --> RDS
+    DocSvc --> S3
+    ProgSvc -->|pgPool LISTEN| RDS
+    SearchSvc --> Bedrock
+    SearchSvc --> Prisma
+    LLMSvc --> Bedrock
+```
 
 ---
 
-*For detailed source specifications, see the corresponding architecture documents in `docs/context/` and implementation tasks in `tasks/`.*
+## Layered System Topology
+
+The service strictly enforces separation of concerns across five decoupled tiers:
+
+| Layer | Directory | Primary Responsibility |
+|:---|:---|:---|
+| **Routes** | `src/routes/` | Mounts HTTP path endpoints, attaches route-specific validators, and maps handler methods. |
+| **Validators** | `src/validators/` | Validates incoming payloads before controller entry. |
+| **Controllers** | `src/controllers/` | Unpacks request context, coordinates service invocations, and crafts HTTP status codes. |
+| **Services** | `src/services/` | Contains all business logic, external SDK calls (S3, Bedrock), and database transactions. |
+| **Data Layer** | `src/db.ts` | Houses Prisma ORM Client and standalone `pgPool` connection pools. |
+
+---
+
+## Middleware Execution Chain
+
+Incoming requests traverse an ordered pipeline before reaching route handlers:
+
+1. **CORS Middleware**: Evaluates origin against environment policies. Returns `Access-Control-Allow-Credentials: true` and caches preflight `OPTIONS` requests for 24 hours.
+2. **Body Parsers**: Decodes JSON payloads with strict size caps to protect memory headroom.
+3. **Structured Request Logger**: Intercepts request metadata, assigns correlation IDs, and logs execution latency.
+4. **Session HMAC Middleware**: Validates the cryptographic cookie signature, auto-creates guest sessions if missing, and extends the 24-hour expiration window.
+5. **Route Validators**: Blocks malformed requests before service dispatch.
+6. **Centralized Error Handler**: Translates thrown business exceptions into RFC-compliant JSON responses with standard error codes.
+
+---
+
+## Production Invariants & Guardrails
+
+- **Zero Raw SQL in Routes**: All database reads, writes, and transactional state changes execute through Prisma ORM models or parameter-isolated queries.
+- **Fail-Fast Request Validation**: Payloads failing schema or limit checks are rejected with descriptive HTTP 400/422 responses before invoking database or AWS SDK resources.
+- **Graceful Lifecycle Management**: The process captures `SIGTERM` and `SIGINT` signals, closing open HTTP sockets, releasing `pgPool` connections, and disconnecting Prisma cleanly.
