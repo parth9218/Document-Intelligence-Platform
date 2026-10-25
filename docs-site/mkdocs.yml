@@ -80,6 +80,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/mermaid.min.js
+  - javascripts/mermaid-instant.js
 
 nav:
   - Home: "index.md"
@@ -91,8 +92,15 @@ nav:
       - "Cost Optimization": "architecture/cost-optimization.md"
 
   - Design Decisions (ADRs):
-      - "ADR Index": "design-decisions/index.md"
+      - "ADR Index & Master Registry": "design-decisions/index.md"
       - "CloudFront Unified API Routing": "design-decisions/cloudfront-api-routing.md"
+      - "EKS Pod Identity over IRSA": "design-decisions/pod-identity-over-irsa.md"
+      - "Gateway API over Ingress": "design-decisions/gateway-api-over-ingress.md"
+      - "Polyglot Microservices Split": "design-decisions/polyglot-microservices-split.md"
+      - "Dual ORM Strategy": "design-decisions/dual-orm-strategy.md"
+      - "Idempotent Checkpoint Resumption": "design-decisions/idempotency-checkpoint-resumption.md"
+      - "Session-Scoped SSE Architecture": "design-decisions/session-scoped-sse.md"
+      - "Immutable Artifact Promotion": "design-decisions/immutable-artifact-promotion.md"
 
   - Challenges & Solutions:
       - "Overview": "challenges/index.md"
@@ -108,7 +116,6 @@ nav:
       - "Hierarchical ECR Naming": "challenges/ecr-repository-naming.md"
       - "Non-Destructive Selective Checkouts": "challenges/non-destructive-selective-checkouts.md"
       - "Serialized Git Commits": "challenges/serialized-git-commits.md"
-      - "PG NOTIFY 8KB Payload Limit": "challenges/pg-notify-payload-size.md"
       - "First-Time Deployment Bootstrap": "challenges/first-time-deployment-bootstrap.md"
 
   - Database Architecture:
