@@ -31,41 +31,55 @@ Git branches and semantic tags are **mutable pointers** that advance dynamically
 
 ## Architectural Solution
 
-We implemented **Immutable Commit Pinning** orchestrated by ArgoCD `ApplicationSet` matrix generators and a structured 2-commit release protocol:
+We implemented **Multi-Source Matrix GitOps with Dual-Generator Commit Pinning** orchestrated by ArgoCD `ApplicationSet`:
 
-1. **Discovery Manifest Configuration (`config.json`)**:
-   - Each application directory under `infra/k8s/argocd/${env}/${app}/` contains a small configuration file recording two explicit fields:
-     - `target_commit`: The exact, immutable Git commit hash to reconcile.
-     - `target_version`: The semantic release version (e.g. `v1.2.0`) for human auditing.
-2. **Multi-Source ApplicationSet Integration**:
-   - The ArgoCD ApplicationSet uses a Git generator to discover configuration files and binds:
-     - `targetRevision`: Set to `target_commit` for application manifests and values.
-     - `targetRevision`: Set to `chart_version` for private AWS ECR OCI Helm charts.
-3. **The Atomic 2-Commit Release Protocol**:
-   - **Commit 1 ($C_1$)**: Updates application code and environment-specific `values.yaml` (new container image tag).
-   - **Commit 2 ($C_2$)**: Pins `config.json` with `target_commit` set to $C_1$'s SHA and `target_version` set to the release version.
-   - Both commits are pushed together atomically. ArgoCD detects the update to `config.json` and pulls the exact tree of commit $C_1$.
+1. **Dual Git Generators Tracking Distinct Revision Pointers**:
+   - The `ApplicationSet` defines a cross-generator **matrix** combining two independent Git discovery generators:
+     - **Generator 1 (Application Values Pointer)**: Tracks `${targetRevision_app}` (release branch `{env}/${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/${app}/config.json` to resolve the immutable `target_commit` Git hash.
+     - **Generator 2 (Helm Chart Release Pointer)**: Tracks `${targetRevision_helm}` (release branch `{env}/helm-${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/helm-${app}/config.json` to resolve `chart_name` and `chart_version`.
+2. **ArgoCD Multiple Sources Cross-Reconciliation (`$app_values`)**:
+   - The matrix join dynamically instantiates an ArgoCD `Application` configuring two synchronized sources:
+     - **Source 1 (Immutable Helm OCI Package)**: Pulls the packaged Helm chart directly from the private AWS ECR OCI registry (`targetRevision: "{{chart_version}}"`), injecting base chart defaults.
+     - **Source 2 (Pinned Application Values)**: Clones the Git repository strictly at `targetRevision: "{{target_commit}}"`, assigned the named reference `ref: app_values`.
+     - **Values Overlay**: In Source 1, Helm receives `- $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`, merging the pinned values and image tags directly onto the ECR Helm chart.
+3. **Decoupled Helm Commits vs Application Commits**:
+   - **Helm Release Pipeline (`{env}-helm-{app}-v*`)**: Updates Helm templates independently, publishes versioned OCI tarballs to AWS ECR, and commits the new `chart_version` to `{env}/helm-${app}`.
+   - **Workload Release Pipeline (`{env}-{app}-v*`)**: Employs an atomic 2-commit protocol:
+     - **Commit 1 ($C_1$)**: Updates application code and environment `values.yaml` (new container image tag).
+     - **Commit 2 ($C_2$)**: Updates `config.json` with `target_commit` set to $C_1$'s SHA and `target_version` set to the release version.
+   - Pushing both commits together allows ArgoCD to discover $C_2$ on the tracking branch and checkout the exact immutable tree of $C_1$.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant CI as GitHub Actions Runner
-    participant Git as Git Repository (dev/app)
-    participant Argo as ArgoCD ApplicationSet
-    participant K8s as Kubernetes Cluster
+flowchart TD
+    subgraph Matrix_Generators ["ArgoCD ApplicationSet Matrix Generators"]
+        direction TB
+        GenApp["Git Generator 1 (App Pointer)<br/>Tracks targetRevision_app ({env}/{app})<br/>Reads {app}/config.json (target_commit)"]
+        GenHelm["Git Generator 2 (Helm Pointer)<br/>Tracks targetRevision_helm ({env}/helm-{app})<br/>Reads helm-{app}/config.json (chart_version)"]
+    end
 
-    Note over CI: Release Workflow Initiated (v1.2.0)
-    CI->>Git: 1. Commit 1 (C1): Update code & values.yaml
-    Note over CI: Capture C1 Git Commit SHA
-    CI->>Git: 2. Commit 2 (C2): Update config.json (target_commit = C1_SHA)
-    CI->>Git: 3. Atomic git push (Pushes C1 and C2 together)
-    
-    Git-->>Argo: Webhook / Poll Notification
-    Argo->>Git: Read config.json from target branch
-    Note over Argo: Resolves targetRevision = C1_SHA
-    Argo->>Git: Fetch exact tree at C1_SHA
-    Argo->>K8s: Apply reconciled state to cluster
-    K8s-->>Argo: Deployment Healthy
+    subgraph Matrix_Join ["Matrix Generator Join"]
+        AppInstance["Generated ArgoCD Application<br/>docintel-{env}-{app}"]
+    end
+
+    subgraph Multi_Sources ["ArgoCD Multiple Sources Engine"]
+        direction TB
+        Source1["Source 1: AWS ECR OCI Registry<br/>chart: {{chart_name}}<br/>targetRevision: {{chart_version}}"]
+        Source2["Source 2: Git Repository ($app_values)<br/>targetRevision: {{target_commit}} (Pinned SHA)<br/>Values: {app}/values.yaml"]
+    end
+
+    subgraph Target_Cluster ["Amazon EKS Workload"]
+        K8sDeploy["Rendered Manifests<br/>(ECR Chart Templates + Pinned Values)"]
+        Pods["Running Pods (Exact Immutable SHA)"]
+    end
+
+    GenApp --> Matrix_Join
+    GenHelm --> Matrix_Join
+    Matrix_Join --> AppInstance
+
+    AppInstance --> Source1
+    AppInstance --> Source2
+    Source2 -.->|"Overlay values via $app_values"| Source1
+    Source1 --> K8sDeploy --> Pods
 ```
 
 ---
@@ -73,5 +87,6 @@ sequenceDiagram
 ## Measurable Outcome & Production Invariants
 
 - **100% Deterministic Deployments**: ArgoCD reconciles exact, cryptographically immutable Git tree hashes rather than moving branch pointers.
+- **Decoupled Template & App Lifecycles**: Infrastructure engineers release chart changes without triggering microservice rebuilds; developers release container updates without touching Helm chart versions.
 - **Instant Rollback**: Restoring the previous version requires only reverting `config.json` to the prior commit SHA, triggering an immediate rollback to that exact known-good configuration.
-- **Audit Compliance**: Every running pod replica maps 1:1 to an audited Git commit hash recorded directly in the Kubernetes application status.
+- **Zero Race Conditions**: Because `values.yaml` is fetched from the pinned commit $C_1$ rather than branch HEAD, concurrent developer pushes never corrupt active deployments.

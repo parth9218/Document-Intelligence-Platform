@@ -33,17 +33,20 @@ Enabling IAM authentication in RDS requires coordinating three separate layers t
 
 ## Architectural Solution
 
-We implemented a **dynamic token generator and caching layer** integrated directly into each application's connection lifecycle:
+We implemented a **multi-tiered credential and dynamic token caching architecture** that clearly separates pod-level AWS IAM session credentials from database-level authentication tokens:
 
-1. **Node.js Express API (`apps/api`)**:
-   - Implemented an in-memory token cache with a **10-minute Time-To-Live (TTL)** using `@aws-sdk/rds-signer`.
-   - The token is refreshed 5 minutes prior to the 15-minute AWS expiration boundary.
-   - Configured the database connection pool with dynamic password resolution, injecting the refreshed token into both the raw pool and the Prisma Client via the driver adapter.
-2. **Python Worker Daemon (`apps/worker`)**:
-   - Generates tokens dynamically using the AWS SDK (`boto3.client('rds').generate_db_auth_token()`).
-   - Hooks into SQLAlchemy engine connection events to supply a fresh token on every new connection establishment.
-3. **EKS Pod Identity Permissions**:
-   - The IAM role bound to the service account includes least-privilege `rds-db:connect` permissions scoped strictly to the authorized database resource identifier and username.
+1. **Two Distinct Credential Lifecycles**:
+   - **Layer 1: Pod-Level AWS IAM Session Credentials (1-Hour TTL)**: The EKS Pod Identity Agent injects temporary AWS IAM credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) into the pod. These credentials have a standard 1-hour validity and are refreshed automatically by the AWS SDK in the background.
+   - **Layer 2: Database-Level RDS IAM Auth Token (15-Minute Engine Limit)**: Using its AWS credentials, the application calls the RDS signer SDK to produce a signed SigV4 token used as the database password. **Amazon RDS strictly enforces a 15-minute maximum lifetime** on this token; any connection handshake attempted with a token older than 15 minutes is rejected by RDS PAM authentication.
+2. **Application In-Memory Token Cache (10-Minute TTL)**:
+   - Generating a new SigV4 token on every single pool connection adds unnecessary latency.
+   - Both the Node.js Express API (`apps/api`) and Python Worker (`apps/worker`) cache the generated database token in memory with a **10-minute Time-To-Live (TTL)**.
+   - This guarantees that tokens are refreshed 5 minutes prior to the 15-minute RDS cutoff, ensuring every pool reconnection receives a valid, unexpired token without restarting pods.
+3. **Dual ORM Lifecycle Integration**:
+   - **Express API (Prisma ORM)**: Configured the database connection pool with dynamic password resolution, injecting refreshed tokens into the raw pool and the Prisma Client via the driver adapter.
+   - **Python Worker (SQLAlchemy ORM)**: Hooks into SQLAlchemy engine `do_connect` events via `boto3.client('rds').generate_db_auth_token()` to supply fresh cached tokens.
+4. **Least-Privilege EKS Pod Identity**:
+   - The IAM role bound to the service account includes `rds-db:connect` permissions scoped strictly to the authorized database resource identifier and username.
 
 ```mermaid
 sequenceDiagram
@@ -53,21 +56,25 @@ sequenceDiagram
     participant IAM as AWS IAM Service
     participant RDS as Amazon RDS PostgreSQL
 
-    Note over Pod: Need DB Connection (Pool Check)
+    Note over Pod,Agent: Tier 1: Pod-Level IAM Session Credentials (1-Hour TTL)
     Pod->>Agent: Request Temporary Pod Credentials
     Agent->>IAM: AssumeRole via Pod Identity
-    IAM-->>Agent: Temporary AWS Credentials (1h)
-    Agent-->>Pod: Injected via AWS SDK
+    IAM-->>Agent: Temporary AWS Credentials (1-Hour TTL)
+    Agent-->>Pod: Injected into Pod Environment (AWS SDK)
     
-    Pod->>Pod: Generate Signed IAM Token (15-min TTL)
-    Note over Pod: Cache Token in Memory (10-min TTL)
+    Note over Pod: Tier 2: RDS DB Auth Token Generation (15-Min Engine Boundary)
+    Pod->>Pod: Generate Signed RDS Auth Token via SigV4 (15-min RDS Limit)
     
+    Note over Pod: Tier 3: In-Memory Token Cache (10-Min Preemptive TTL)
+    Pod->>Pod: Cache DB Token in Memory (10-Min TTL)
+    
+    Note over Pod,RDS: Database Connection Handshake
     Pod->>RDS: Connect with User: app_user & Password: [IAM_TOKEN]
-    RDS->>IAM: Verify Token Signature
+    RDS->>IAM: Verify SigV4 Token Signature & Expiration (under 15 min)
     IAM-->>RDS: Signature Valid & Authorized
     RDS-->>Pod: Connection Established (TLS Encrypted)
     
-    Note over Pod: At 10 Minutes: Token Cache Refreshed Automatically
+    Note over Pod: Re-auth Preemption: At 10 Minutes, DB Token Cache Refreshed
 ```
 
 ---
