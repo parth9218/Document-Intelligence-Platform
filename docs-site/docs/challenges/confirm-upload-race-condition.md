@@ -43,8 +43,8 @@ We refactored `confirmUpload()` in `apps/api/src/services/document.service.ts` t
    - **`pending_upload`**: Atomically transition status to `uploaded` and return `200 OK`.
    - **`uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`**: Recognize that asynchronous processing has already begun or finished. Log the benign race condition and **return `200 OK` immediately** without mutating the advanced status.
    - **`expired`, `cancelled`**: Throw `409 Conflict`, as uploads cannot be confirmed for aborted jobs.
-2. **Database Atomic Guard**:
-   - Uses Prisma transactions with optimistic concurrency checks to guarantee that no subsequent call can regress status backwards from processing states to `uploaded`.
+2. **Multi-Table Atomic Transaction**:
+   - Executes `prisma.$transaction([ ... ])` to update both `documents` and `processing_jobs` tables atomically, ensuring that status transitions never leave the database in an inconsistent partial state.
 
 ```mermaid
 sequenceDiagram
@@ -57,7 +57,7 @@ sequenceDiagram
     participant DB as RDS PostgreSQL
 
     Browser->>S3: 1. Complete Direct S3 Upload (204 No Content)
-    
+
     par Asynchronous Ingestion (Fast Track)
         S3->>SQS: 2a. Event: ObjectCreated
         SQS->>Worker: 2b. Long Poll: Receive Message (under 100ms)

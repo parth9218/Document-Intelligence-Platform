@@ -1,13 +1,13 @@
 ---
 title: "Technical Challenges & Solutions"
-description: "Master catalog of 14 complex architectural and operational engineering hurdles overcome across edge networking, GitOps, security, and messaging."
+description: "Master catalog of 13 complex architectural and operational engineering hurdles overcome across edge networking, GitOps, security, and messaging."
 ---
 
 # Technical Challenges & Solutions
 
-> Comprehensive index of 14 real-world engineering hurdles overcome during the design, deployment, and operation of the AI Document Intelligence Platform.
+> Comprehensive index of 13 real-world engineering hurdles overcome during the design, deployment, and operation of the AI Document Intelligence Platform.
 
-Building a production-grade, multi-tenant Retrieval-Augmented Generation (RAG) platform on AWS EKS presents intricate challenges across distributed state, security boundaries, and GitOps synchronization. This section documents 14 real-world engineering challenges, detailing the exact root cause, architectural solution, and measurable production outcome.
+Building a production-grade, multi-tenant Retrieval-Augmented Generation (RAG) platform on AWS EKS presents intricate challenges across distributed state, security boundaries, and GitOps synchronization. This section documents 13 real-world engineering challenges, detailing the exact root cause, architectural solution, and measurable production outcome.
 
 ---
 
@@ -27,7 +27,7 @@ flowchart TD
         C6["06. External Secrets ECR Tokens"]
         C11["11. Non-Destructive Selective Checkouts"]
         C12["12. Serialized Git Commits"]
-        C14["14. First-Time Deployment Bootstrap"]
+        C13["13. First-Time Deployment Bootstrap"]
     end
 
     subgraph Security_Identity ["Security & Workload Identity"]
@@ -38,7 +38,6 @@ flowchart TD
     subgraph Messaging_State ["Real-Time Messaging & Resiliency"]
         C8["08. Session-Scoped SSE Architecture"]
         C9["09. Confirm-Upload Race Condition"]
-        C13["13. PG NOTIFY 8KB Payload Limit"]
     end
 
     Edge_Infra --> GitOps_Delivery
@@ -64,8 +63,7 @@ flowchart TD
 | **10** | [Hierarchical ECR Naming](ecr-repository-naming.md) | Infra & CI | Helm OCI chart push requires matching repo name, colliding with Docker images. | Slash-delimited repository namespaces (`${project}/${env}/${app}`). | Clean Docker and Helm OCI coexistence without file mutations. |
 | **11** | [Non-Destructive Selective Checkouts](non-destructive-selective-checkouts.md) | GitOps | Deploying one service to `{env}/app` wiped sibling microservice files. | Selective sparse checkout updating only target app files and values. | Multi-service coexistence on unified tracking branches. |
 | **12** | [Serialized Git Commits](serialized-git-commits.md) | GitOps | Parallel CI pipelines push to tracking branches simultaneously, causing push rejects. | Concurrency groups (`git-commit-dev`, `git-commit-${env}-app`) + rebase loops. | Zero failed Git pushes due to lock contention. |
-| **13** | [PG NOTIFY 8KB Payload Limit](pg-notify-payload-size.md) | Messaging | PostgreSQL `pg_notify()` drops payloads exceeding 8,000 bytes during errors. | Trigger payload minimization + deterministic 500-char error truncation. | Payloads stay under 500 bytes; zero lost notifications. |
-| **14** | [First-Time Deployment Bootstrap](first-time-deployment-bootstrap.md) | CI/CD | `[skip ci]` tags on automated commits prevent release tags from triggering workflows. | Explicit empty sync commits clearing `[skip ci]` state during bootstrap. | Deterministic workflow execution during cluster bring-up. |
+| **13** | [First-Time Deployment Bootstrap](first-time-deployment-bootstrap.md) | CI/CD | `[skip ci]` tags on automated commits prevent release tags from triggering workflows. | Explicit empty sync commits clearing `[skip ci]` state during bootstrap. | Deterministic workflow execution during cluster bring-up. |
 
 ---
 

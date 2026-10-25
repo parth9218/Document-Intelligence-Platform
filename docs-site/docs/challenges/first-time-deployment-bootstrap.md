@@ -1,9 +1,9 @@
 ---
-title: "Challenge 14: First-Time Deployment Bootstrap"
+title: "Challenge 13: First-Time Deployment Bootstrap"
 description: "Resolving GitHub Actions [skip ci] execution deadlocks during initial environment and release bootstrapping."
 ---
 
-# Challenge 14: First-Time Deployment Bootstrap
+# Challenge 13: First-Time Deployment Bootstrap
 
 > How automated GitOps commits carrying [skip ci] halted downstream release workflows, and the bootstrap protocol that resolved execution deadlocks.
 
@@ -29,15 +29,17 @@ Investigating GitHub Actions workflow trigger mechanics revealed a subtle platfo
 
 ## Architectural Solution
 
-We established a **Two-Pronged Commit Formatting and Bootstrap Protocol**:
+We established a **Deterministic Release Tagging and Bootstrap Protocol**:
 
-1. **Targeted Branch Separation**:
-   - `[skip ci]` is **strictly forbidden** on the `dev` trunk branch during release preparation.
-   - Workflows only append `[skip ci]` when pushing to isolated, non-triggering tracking branches (`{env}/app`, `{env}/infra-aws`).
-2. **The Empty Release Synchronization Commit**:
-   - When preparing a release from a branch whose HEAD commit carries `[skip ci]`, developers or automated release scripts push an explicit empty commit (`git commit --allow-empty`) to clear the bypass flag before creating the release tag.
+1. **Why `[skip ci]` is Necessary on `dev`**:
+   - When CI completes tests and builds container images, the workflow updates `values.yaml` with the new short SHA on the `dev` trunk branch.
+   - This automated commit **must carry `[skip ci]`** to prevent GitHub Actions from re-triggering itself in an infinite recursive build loop on `dev` (`on: push: branches: [dev]`).
+2. **The Empty Release Anchor Commit**:
+   - Because `dev`'s latest commit carries `[skip ci]`, cutting a semantic release tag directly from that commit causes the tag to inherit the `[skip ci]` message, silently aborting the tag-push webhook.
+   - To bypass this deadlock, release engineers or automation scripts push an explicit clean empty commit (`git commit --allow-empty -m "chore(release): prepare release v1.0.0"`) to `dev`.
+   - Creating the release tag on this clean commit ensures the tagged commit contains no bypass flags, allowing GitHub Actions to detect the tag and trigger the staging or production pipeline.
 3. **Workflow Dispatch Fallback**:
-   - All deployment workflows declare manual `workflow_dispatch` triggers, allowing platform engineers to trigger promotions directly from the GitHub UI even if a commit message contains bypass tags.
+   - All deployment workflows declare manual `workflow_dispatch` triggers, allowing platform engineers to trigger promotions directly from the GitHub UI with explicit version inputs, bypassing tag-push webhook evaluation entirely if needed.
 
 ```mermaid
 sequenceDiagram
@@ -65,4 +67,4 @@ sequenceDiagram
 
 - **Deterministic Release Triggers**: 100% of semantic release tags trigger intended staging and production delivery pipelines.
 - **Zero Silent Failures**: Platform engineers are never left guessing why a tag failed to start a workflow run.
-- **Loop Prevention Preserved**: Tracking branches continue to leverage `[skip ci]`, preventing infinite recursive pipeline executions.
+- **Loop Prevention Preserved**: Automated commits on `dev` and tracking branches continue to leverage `[skip ci]`, preventing infinite recursive pipeline executions without impeding release promotions.
