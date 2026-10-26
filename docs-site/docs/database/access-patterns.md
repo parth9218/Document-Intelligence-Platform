@@ -23,12 +23,11 @@ flowchart LR
     end
 
     subgraph PostgreSQL ["Amazon RDS PostgreSQL + pgvector"]
-        RDS[("Relational & Vector Store<br/>PostgreSQL 16")]
+        RDS[("Relational & Vector Store<br/>PostgreSQL 18")]
     end
 
     subgraph PythonWorker ["Python Worker (apps/worker/)"]
-        Extract["Extractor Service<br/>(Status Updates)"]
-        Upsert["Storage Service<br/>(Batch Chunk Upserts)"]
+        BatchUpsert["Storage Service<br/>(Batch Upsert & Checkpoint)"]
         Complete["Job Handler<br/>(Atomic Completion)"]
     end
 
@@ -37,9 +36,8 @@ flowchart LR
     Stream -->|3. Snapshot Query| RDS
     RAG -->|4. Cosine Search <=>| RDS
 
-    Extract -->|5. Progress Checkpoints| RDS
-    Upsert -->|6. ON CONFLICT Upsert| RDS
-    Complete -->|7. Mark Completed| RDS
+    BatchUpsert -->|5. Atomic Batch Upsert & Checkpoint| RDS
+    Complete -->|6. Atomic Terminal Completion| RDS
 ```
 
 ---
@@ -52,9 +50,9 @@ flowchart LR
 - **Frequency**: Every authenticated incoming HTTP request.
 - **Preconditions**: Cryptographic session cookie present in HTTP request headers.
 - **Execution Lifecycle**:
-  1. **Token Lookup**: Looks up the session row in `sessions` using a unique B-tree index on `session_token`.
-  2. **Signature Verification**: Verifies the HMAC-SHA256 signature using constant-time comparison to prevent timing attacks.
-  3. **Sliding Window Extension**: Atomically updates `last_active_at` to the current timestamp and advances `expires_at` by 24 hours.
+    1. **Token Lookup**: Looks up the session row in `sessions` using a unique B-tree index on `session_token`.
+    2. **Signature Verification**: Verifies the HMAC-SHA256 signature using constant-time comparison to prevent timing attacks.
+    3. **Sliding Window Extension**: Atomically updates `last_active_at` to the current timestamp and advances `expires_at` by 24 hours.
 
 ---
 
@@ -63,9 +61,9 @@ flowchart LR
 - **Executing Service**: Express API (`apps/api/src/services/document.service.ts`)
 - **Frequency**: Triggered when a user confirms document selection (`POST /api/documents`).
 - **Execution Lifecycle**:
-  1. **Tier-2A Concurrency Evaluation**: Performs a count query on `processing_jobs` filtering by `session_id` and active in-flight states (`pending_upload`, `downloading`, `extracting`, `embedding`). Fails fast with `HTTP 429` if active count exceeds 5.
-  2. **Tier-2B Storage Quota Evaluation**: Aggregates the sum of `file_size_bytes` in `documents` for non-terminal records. Rejects with `HTTP 400` if the cumulative session storage exceeds 50 MB.
-  3. **Atomic Transactional Commit**: Executes a single multi-row transaction that inserts each validated file into `documents` and generates corresponding records in `processing_jobs` with status `pending_upload`.
+    1. **Tier-2A Concurrency Evaluation**: Performs a count query on `processing_jobs` filtering by `session_id` and active in-flight states (`pending_upload`, `downloading`, `extracting`, `embedding`). Fails fast with `HTTP 429` if active count exceeds 5.
+    2. **Tier-2B Storage Quota Evaluation**: Aggregates the sum of `file_size_bytes` in `documents` for non-terminal records. Rejects with `HTTP 400` if the cumulative session storage exceeds 50 MB.
+    3. **Atomic Transactional Commit**: Executes a single multi-row transaction that inserts each validated file into `documents` and generates corresponding records in `processing_jobs` with status `pending_upload`.
 
 ---
 
@@ -74,31 +72,36 @@ flowchart LR
 - **Executing Service**: Express API (`apps/api/src/services/search.service.ts`)
 - **Frequency**: Executed on each conversational user question (`POST /api/query/search`).
 - **Execution Lifecycle**:
-  1. **Query Embedding**: The API converts the natural language question into a 1024-dimensional dense vector via Amazon Bedrock Titan Embeddings V2 (or local E5-large-v2).
-  2. **Session Pre-Filtering**: The query enforces a strict parameterized clause on `document_chunks.session_id` matching the authenticated user's session UUID.
-  3. **HNSW Vector Search**: Calculates cosine distance using the `<=>` operator against indexed chunk embeddings, applying a distance threshold cutoff (`<= 0.5`) to eliminate irrelevant noise.
-  4. **Top-K Ordering**: Traverses the HNSW graph to return the top 5 nearest chunks in ascending distance order, joining `documents` to retrieve source filenames and page numbers.
+    1. **Query Embedding**: The API converts the natural language question into a 1024-dimensional dense vector via Amazon Bedrock Titan Embeddings V2 (or local E5-large-v2).
+    2. **Session Pre-Filtering**: The query enforces a strict parameterized clause on `document_chunks.session_id` matching the authenticated user's session UUID.
+    3. **HNSW Vector Search**: Calculates cosine distance using the `<=>` operator against indexed chunk embeddings, applying a distance threshold cutoff (`<= 0.5`) to eliminate irrelevant noise.
+    4. **Top-K Ordering**: Traverses the HNSW graph to return the top 5 nearest chunks in ascending distance order, joining `documents` to retrieve source filenames and page numbers.
 
 ---
 
-### 4. Idempotent Batch Chunk Upsert
+### 4. Idempotent Batch Chunk Upsert & Checkpoint Tracking
 
-- **Executing Service**: Python Worker (`apps/worker/app/repositories/job_repository.py`)
+- **Executing Service**: Python Worker (`apps/worker/app/services/document_service.py` & `job_repository.py`)
 - **Frequency**: Executed every 50 chunks during document ingestion.
+- **Transactional Boundary**: **Single Atomic Transaction** (`JobRepository.upsert_chunks()` + `JobRepository.update_job_status()` + `db.commit()`).
 - **Execution Lifecycle**:
-  1. **Bulk Ingestion**: Chunks and their 1024-dimensional embeddings are batched into a single multi-row insert statement.
-  2. **Conflict Resolution**: Leverages PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` to overwrite content, token count, model version, and embedding vector in place.
-  3. **Idempotency Guarantee**: If an Amazon SQS visibility timeout triggers a duplicate delivery or a worker restarts mid-batch, existing chunks are safely refreshed without generating duplicate records.
+    1. **Bulk Ingestion**: Chunks and their 1024-dimensional embeddings are batched into a single multi-row insert statement on the active database session.
+    2. **Conflict Resolution**: Leverages PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` to overwrite content, token count, model version, and embedding vector in place.
+    3. **Atomic Progress & Checkpoint Staging**: Staged on the same transaction, updates `processed_chunks`, linear `progress_pct` (capped at 99%), and `checkpoint_index = batch_idx` via `db.flush()`.
+    4. **Unified Commit & Event Trigger**: A single `db.commit()` finalizes both chunk insertions and the job status checkpoint atomically. This immediately triggers the PostgreSQL `processing_jobs_notify` trigger.
+    5. **Failure & Drift Invariant**: If a worker pod crashes, KEDA scales down, or the database connection drops prior to `db.commit()`, both the chunk embeddings and the checkpoint update roll back together. A replacement worker cleanly resumes from `checkpoint_index + 1` with zero data corruption or partial state drift.
 
 ---
 
-### 5. Checkpoint Progress Tracking & Final Completion
+### 5. Terminal Job Completion & Status Finalization
 
 - **Executing Service**: Python Worker (`apps/worker/app/repositories/job_repository.py`)
-- **Frequency**: Checkpoints every 50 chunks; completes once after the final batch.
+- **Frequency**: Executed once per document after all batches commit.
+- **Transactional Boundary**: **Single Atomic Transaction** (`JobRepository.mark_job_completed()`).
 - **Execution Lifecycle**:
-  1. **Progress Checkpoint**: Updates `processed_chunks`, `checkpoint_index`, and computes linear `progress_pct` (capped at 99%). Triggers an immediate PostgreSQL `NOTIFY` event.
-  2. **Atomic Terminal Commit**: Upon embedding the final batch, commits an atomic transaction setting `status = 'completed'`, `progress_pct = 100`, and `completed_at = now()` across both `processing_jobs` and `documents`.
+    1. **Terminal Progress Update**: Updates `processing_jobs` setting `status = 'completed'`, `progress_pct = 100`, `processed_chunks = total_chunks`, `checkpoint_index = total_batches - 1`, and records `completed_at = now()`.
+    2. **Document State Transition**: Simultaneously transitions `documents.status = 'completed'` and `documents.updated_at = now()`.
+    3. **Atomic Commit & Notification**: The atomic commit fires the terminal PostgreSQL `NOTIFY` event, signaling the Express SSE stream to push the final completion payload to the browser.
 
 ---
 
@@ -107,8 +110,8 @@ flowchart LR
 - **Executing Service**: Express API Scheduled Daemon (`apps/api/src/jobs/cleanup.ts`)
 - **Frequency**: Runs periodically every 5 minutes in background.
 - **Execution Lifecycle**:
-  1. **Expired Presigned URL Sweep**: Identifies `processing_jobs` in `pending_upload` created more than 30 minutes ago without user confirmation; transitions status to `expired` with error code `upload_expired`.
-  2. **Stuck Ingestion Sweep**: Identifies jobs in `uploaded` status that have not been claimed by a worker after 10 minutes; transitions status to `failed` with error code `sqs_delivery_failure`.
+    1. **Expired Presigned URL Sweep**: Identifies `processing_jobs` in `pending_upload` created more than 30 minutes ago without user confirmation; transitions status to `expired` with error code `upload_expired`.
+    2. **Stuck Ingestion Sweep**: Identifies jobs in `uploaded` status that have not been claimed by a worker after 10 minutes; transitions status to `failed` with error code `sqs_delivery_failure`.
 
 ---
 
@@ -120,6 +123,6 @@ flowchart LR
 | **Quota & Concurrency** | `documents`, `processing_jobs` | `session_id = $1 AND status IN (...)` | Compound B-tree index evaluation |
 | **Batch Init Transaction** | `documents`, `processing_jobs` | Multi-row INSERT | Atomic Prisma transaction boundary |
 | **Vector Similarity** | `document_chunks` JOIN `documents` | `session_id = $1 AND distance <= 0.5` | HNSW cosine graph traversal |
-| **Batch Upsert** | `document_chunks` | `(document_id, chunk_index)` | PostgreSQL `ON CONFLICT DO UPDATE` |
-| **Progress Checkpoint** | `processing_jobs` | `document_id = $1` | Triggers PostgreSQL `pg_notify` event |
+| **Batch Upsert & Checkpoint** | `document_chunks`, `processing_jobs` | `(document_id, chunk_index)` ON CONFLICT + `document_id = $1` | **Single Atomic Transaction** (`db.commit()`) + Trigger NOTIFY |
+| **Terminal Completion** | `processing_jobs`, `documents` | `document_id = $1` | Atomic multi-table transition (`status = 'completed'`) |
 | **Orphan Sweeps** | `processing_jobs` | `status = $1 AND created_at < $2` | Batch update via scheduled timer |

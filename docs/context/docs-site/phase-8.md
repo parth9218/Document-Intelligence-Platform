@@ -61,19 +61,19 @@
 
 ### 3.3 Database Access Patterns (`access-patterns.md`)
 - **Data Access Topology Flowchart**: Maps query interactions across Express API and Python Worker against Amazon RDS PostgreSQL.
-- **7 Core Patterns Documented in Distilled Prose**:
-  1. Session verification & sliding-window extension (token lookup, constant-time HMAC check, sliding window).
+- **Core Query Patterns Documented in Distilled Prose**:
+  1. Session authentication & sliding-window extension (token lookup, constant-time HMAC check, sliding window).
   2. Multi-file batch upload initialization (Tier-2A concurrency check, Tier-2B storage quota evaluation, atomic multi-row commit).
   3. Parameterized vector cosine similarity search (query embedding, tenant pre-filtering on `session_id`, HNSW `<=>` search with distance `<= 0.5`, top-5 ordering).
-  4. Idempotent batch chunk upsert (bulk ingestion, conflict resolution on `(document_id, chunk_index)`, safe SQS retry guarantee).
-  5. Checkpoint progress tracking & final completion (checkpoint updates every 50 chunks, atomic terminal commit).
+  4. Idempotent batch chunk upsert & checkpoint tracking (single atomic transaction committing 50 chunks + `checkpoint_index` + `processed_chunks` + `progress_pct`).
+  5. Terminal job completion & status finalization (atomic multi-table commit transitioning `processing_jobs` and `documents` to completed with 100% progress).
   6. Automated orphan & timeout sweeps (expired presigned URL sweeps >30m, stuck ingestion sweeps >10m).
 - **Matrix Summary**: A structured comparison matrix summarizing target tables, primary filters, and concurrency/isolation guards.
 
 ### 3.4 PostgreSQL NOTIFY & Real-Time Triggers (`pg-notify-triggers.md`)
 - **Push Pipeline Architecture**: Sequence diagram tracing Worker batch update -> PostgreSQL `processing_jobs_notify` trigger -> `pg_notify` on `progress_{sessionId}` -> Express `pgPool` client listener -> Browser SSE `event: update`.
 - **Session-Scoped Routing**: Explains how channel naming (`progress_{sessionId}`) delivers kernel-level tenant isolation, eliminating Express-side filtering.
-- **Payload Safety**: Enforces 500-character truncation in SQL trigger logic to prevent silent drops from PostgreSQL's 8,000-byte `pg_notify` payload ceiling.
+- **Payload Safety**: Explains PostgreSQL's 8,000-byte `pg_notify` payload limit and how compact JSON schemas (<250 bytes) prevent buffer overflow.
 - **Scalability Caveat**: Acknowledges 1-connection-per-client pool overhead and RDS Proxy incompatibility, outlining the enterprise evolution to Redis Pub/Sub for 10,000+ concurrent connections.
 
 ### 3.5 Polyglot Dual-ORM Strategy (`dual-orm-strategy.md`)

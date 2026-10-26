@@ -13,8 +13,8 @@ description: "Prisma ORM for TypeScript API and SQLAlchemy for Python Worker sha
 
 The platform uses a polyglot microservice architecture consisting of a **Node.js Express API** and a **Python Worker daemon** accessing a shared **Amazon RDS PostgreSQL** instance with `pgvector`. 
 
-To maintain clean codebases and prevent SQL injection attacks, the project constitution (`GEMINI.md`) enforces a strict **Zero Raw SQL Mandate**:
-> *"Do not write raw SQL queries. All database transactions, inserts, updates, and vector similarity queries must be executed strictly via ORM models and parameters."*
+To maintain clean codebases and prevent SQL injection attacks, the project constitution mandates a strict **ORM-First Policy**:
+> *"All relational database transactions, inserts, updates, and CRUD operations must be executed strictly via ORM models and parameters (Prisma Client in Express and SQLAlchemy in Python). The sole exception is vector cosine similarity search (`<=>`), which is executed via type-safe parameterized queries (`prisma.$queryRaw`) because Prisma 5 treats pgvector columns as unsupported types."*
 
 To satisfy this rule across two languages without risking database migration deadlocks, we established a **unidirectional schema authority lifecycle**:
 
@@ -30,7 +30,7 @@ flowchart TD
         PrismaMigrate -->|"Generates Client"| PrismaClient
     end
 
-    subgraph DatabaseLayer ["Database Layer (PostgreSQL 16 + pgvector)"]
+    subgraph DatabaseLayer ["Database Layer (PostgreSQL 18 + pgvector)"]
         direction TB
         Postgres[("Amazon RDS PostgreSQL<br/>Tables, Indexes, Triggers")]
         PrismaMigrate -->|"Applies Versioned Migrations"| Postgres

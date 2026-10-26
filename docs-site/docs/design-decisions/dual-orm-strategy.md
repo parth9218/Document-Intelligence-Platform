@@ -21,9 +21,9 @@ The platform's decoupled architecture consists of a Node.js Express API and a Py
 
 ### The Dual-ORM Challenge
 
-1. **Strict Zero Raw SQL Mandate**:
-   The authoritative project constitution (`GEMINI.md`) explicitly prohibits raw SQL statements:
-   > *"Do not write raw SQL queries. All database transactions, inserts, updates, and vector similarity queries must be executed strictly via ORM models and parameters."*
+1. **Strict ORM-First Policy**:
+   The project constitution mandates ORM-driven database access across all services:
+   > *"All relational database transactions, inserts, updates, and CRUD operations must be executed strictly via ORM models and parameters. Vector cosine similarity search (`<=>`) is executed via parameterized queries (`prisma.$queryRaw`) due to Prisma 5's unsupported vector type mapping."*
 2. **Dual Migration Hazard**:
    If both runtimes run independent migration frameworks (e.g., Prisma Migrate in TypeScript and Alembic in Python), migration histories inevitably diverge, resulting in deadlocks, race conditions, and corrupted table constraints.
 3. **Ecosystem Specialization**:

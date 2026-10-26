@@ -11,7 +11,7 @@ description: "Relational schema definitions for sessions, documents, processing 
 
 ## Architecture Overview
 
-The database architecture is designed for **strict session multi-tenancy**, **vector similarity retrieval**, and **granular job state tracking**. Deployed on **Amazon RDS PostgreSQL 16** with the **`pgvector`** extension, the schema provides relational integrity, cascading lifecycle management, and dimensional vector storage.
+The database architecture is designed for **strict session multi-tenancy**, **vector similarity retrieval**, and **granular job state tracking**. Deployed on **Amazon RDS PostgreSQL 18** with the **`pgvector`** extension, the schema provides relational integrity, cascading lifecycle management, and dimensional vector storage.
 
 All table structures and migrations are governed authoritatively by the **Prisma schema** (`apps/api/prisma/schema.prisma`) in TypeScript and mapped into **SQLAlchemy Declarative models** (`apps/worker/app/models/generated_models.py`) in Python.
 
@@ -156,7 +156,7 @@ Tracks asynchronous worker ingestion progress, batch checkpoints, and error diag
 | `checkpoint_index` | `INTEGER` | `NOT NULL`, Default: `-1` | Index of the last successfully committed 50-chunk batch |
 | `worker_id` | `TEXT` | `NULLABLE` | Hostname of the processing Kubernetes worker pod |
 | `error_code` | `TEXT` | `NULLABLE` | Machine-readable failure reason (`invalid_magic_bytes`, `sqs_timeout`) |
-| `error_message` | `TEXT` | `NULLABLE` | Diagnostic error string (truncated to 500 chars in triggers) |
+| `error_message` | `TEXT` | `NULLABLE` | High-level diagnostic failure summary |
 | `started_at` | `TIMESTAMPTZ` | `NULLABLE` | Timestamp when worker began downloading |
 | `completed_at` | `TIMESTAMPTZ` | `NULLABLE` | Timestamp when final batch committed |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL`, Default: `now()` | Job initialization timestamp |

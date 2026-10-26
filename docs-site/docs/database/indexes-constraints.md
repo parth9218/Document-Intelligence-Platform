@@ -15,7 +15,7 @@ The database implements a multi-tier indexing strategy designed to balance **sub
 
 ```mermaid
 flowchart TD
-    subgraph StorageLayer ["Amazon RDS PostgreSQL 16 + pgvector"]
+    subgraph StorageLayer ["Amazon RDS PostgreSQL 18 + pgvector"]
         direction TB
         
         subgraph VectorIndexing ["Vector Similarity Engine (pgvector)"]
