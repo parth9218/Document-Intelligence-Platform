@@ -71,7 +71,7 @@ with Diagram(
                 eks = EKS("Amazon EKS in Auto Mode\n(general-purpose & system)")
 
             with Cluster("Relational Persistence", graph_attr={"bgcolor": "#ffffff", "pencolor": "#ea580c", "style": "rounded"}):
-                rds = RDSPostgresqlInstance("Amazon RDS PostgreSQL 16\n(pgvector + IAM DB Auth)")
+                rds = RDSPostgresqlInstance("Amazon RDS PostgreSQL 18\n(pgvector + IAM DB Auth)")
 
     with Cluster("Asynchronous Messaging & Document Storage", graph_attr={"bgcolor": "#ecfeff", "pencolor": "#06b6d4", "style": "rounded,bold"}):
         s3_docs = S3("S3 Documents Bucket\n(KMS SSE Encrypted)")

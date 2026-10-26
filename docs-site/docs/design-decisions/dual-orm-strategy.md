@@ -21,9 +21,9 @@ The platform's decoupled architecture consists of a Node.js Express API and a Py
 
 ### The Dual-ORM Challenge
 
-1. **Strict Zero Raw SQL Mandate**:
-   The authoritative project constitution (`GEMINI.md`) explicitly prohibits raw SQL statements:
-   > *"Do not write raw SQL queries. All database transactions, inserts, updates, and vector similarity queries must be executed strictly via ORM models and parameters."*
+1. **Strict ORM-First Policy**:
+   The project constitution mandates ORM-driven database access across all services:
+   > _"All relational database transactions, inserts, updates, and CRUD operations must be executed strictly via ORM models and parameters. Vector cosine similarity search (`<=>`) is executed via parameterized queries (`prisma.$queryRaw`) due to Prisma 5's unsupported vector type mapping."_
 2. **Dual Migration Hazard**:
    If both runtimes run independent migration frameworks (e.g., Prisma Migrate in TypeScript and Alembic in Python), migration histories inevitably diverge, resulting in deadlocks, race conditions, and corrupted table constraints.
 3. **Ecosystem Specialization**:
@@ -59,7 +59,7 @@ flowchart TD
         Schema["apps/api/prisma/schema.prisma<br/>Authoritative Schema Definition"]
         Migrate["Prisma CLI (prisma migrate dev)<br/>Generates Versioned Migrations"]
         ClientTS["Prisma Client<br/>Auto-Generated Typed Client"]
-        
+
         Schema --> Migrate
         Migrate --> ClientTS
     end
@@ -74,7 +74,7 @@ flowchart TD
         direction TB
         Models["SQLAlchemy Declarative Models<br/>Mirrors Schema and Vector Types"]
         WorkerSession["SQLAlchemy Worker Session<br/>Transactional Context Managers"]
-        
+
         Models --> WorkerSession
         WorkerSession -->|Reads and Writes - Zero DDL| RDS
     end
@@ -86,14 +86,14 @@ flowchart TD
 
 ## Data Access Model Comparison
 
-| Operational Dimension | Node.js Express API (`apps/api/`) | Python Worker Daemon (`apps/worker/`) |
-| :--- | :--- | :--- |
-| **ORM Framework** | **Prisma ORM (v5.x)** with `@prisma/adapter-pg` | **SQLAlchemy (v2.x)** Declarative |
-| **Primary Responsibility** | Schema authority, session management, vector search | Bulk extraction, vector embeddings, progress checkpoints |
-| **Vector Storage Binding** | Unsupported(`"vector(1024)"`) with Prisma `$queryRaw` | `pgvector.sqlalchemy.Vector(1024)` |
-| **Index Strategy** | Declares HNSW cosine similarity index (`m=16`, `ef_construction=64`) | Queries against pre-existing HNSW index |
-| **Connection Pooling** | Prisma Client + dedicated `pgPool` for SSE `LISTEN` | SQLAlchemy `QueuePool` with context managers |
-| **Migration Authority** | **Sole Authority** (`prisma migrate dev`) | **Zero Authority** (Read/Write Only) |
+| Operational Dimension      | Node.js Express API (`apps/api/`)                                    | Python Worker Daemon (`apps/worker/`)                    |
+| :------------------------- | :------------------------------------------------------------------- | :------------------------------------------------------- |
+| **ORM Framework**          | **Prisma ORM (v5.x)** with `@prisma/adapter-pg`                      | **SQLAlchemy (v2.x)** Declarative                        |
+| **Primary Responsibility** | Schema authority, session management, vector search                  | Bulk extraction, vector embeddings, progress checkpoints |
+| **Vector Storage Binding** | Unsupported(`"vector(1024)"`) with Prisma `$queryRaw`                | `pgvector.sqlalchemy.Vector(1024)`                       |
+| **Index Strategy**         | Declares HNSW cosine similarity index (`m=16`, `ef_construction=64`) | Queries against pre-existing HNSW index                  |
+| **Connection Pooling**     | Prisma Client + dedicated `pgPool` for SSE `LISTEN`                  | SQLAlchemy `QueuePool` with context managers             |
+| **Migration Authority**    | **Sole Authority** (`prisma migrate dev`)                            | **Zero Authority** (Read/Write Only)                     |
 
 ---
 
@@ -109,4 +109,4 @@ flowchart TD
 ### Negative Consequences & Mitigations
 
 - **Model Drift Risk**: If a developer adds a column in `schema.prisma` but forgets to update `apps/worker/app/models/`, the worker will fail to map the new attribute.
-  - *Mitigation*: Both services share unified end-to-end integration test suites (`apps/worker/tests/test_integration.py` and `apps/api/src/tests/documents.test.ts`) executed against real PostgreSQL containers during local CI runs.
+  - _Mitigation_: Both services share unified end-to-end integration test suites (`apps/worker/tests/test_integration.py` and `apps/api/src/tests/documents.test.ts`) executed against real PostgreSQL containers during local CI runs.
