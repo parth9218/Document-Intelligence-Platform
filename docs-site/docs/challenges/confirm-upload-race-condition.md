@@ -7,6 +7,8 @@ description: "Resolving inverted race conditions between fast asynchronous SQS w
 
 > Eliminating false-positive 409 Conflict errors caused by asynchronous SQS ingestion outrunning synchronous client HTTP confirmations.
 
+---
+
 ## Problem Statement
 
 The platform decouples S3 multipart uploads from backend job dispatching:

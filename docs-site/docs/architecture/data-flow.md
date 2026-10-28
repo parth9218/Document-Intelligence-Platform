@@ -43,6 +43,7 @@ sequenceDiagram
     SQS-->>Worker: 10. S3 Event Message Payload
     Worker->>DB: 11. Update status = downloading
     Worker->>S3: 12. GET Object (Stream Bytes)
+
     Note over Worker: Extraction Pipeline:<br/>• Validate Magic Bytes (%PDF)<br/>• PyMuPDF text extraction<br/>• Paragraph chunking (~500 tokens)
     Worker->>DB: 13. Update status = extracting to chunking
 
@@ -91,6 +92,7 @@ sequenceDiagram
     Worker->>DB: 8. UPDATE processing_jobs status = completed, progress_pct = 100
     DB-->>Express: 9. PG NOTIFY completion frame
     Express-->>Browser: 10. SSE event: update (status = completed)
+
     opt Fallback Polling (Network Disconnect)
         Browser->>Express: GET /api/documents/status (Every 3 seconds)
         Express-->>Browser: HTTP 200 JSON (Identical schema to snapshot)
@@ -121,6 +123,7 @@ sequenceDiagram
     Client->>API: 1. POST /api/query/search (query, stream: true)
     API->>BedrockEmbed: 2. Embed user question
     BedrockEmbed-->>API: 3. Return 1024-dimension float array
+
     API->>DB: 4. Cosine similarity vector query scoped by session_id
     Note over DB: Enforces strict session isolation:<br/>WHERE session_id = current_session<br/>AND cosine_distance at most 0.5<br/>LIMIT 5
     DB-->>API: 5. Top-K relevant context chunks with page numbers
