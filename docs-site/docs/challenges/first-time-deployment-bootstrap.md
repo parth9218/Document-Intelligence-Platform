@@ -53,7 +53,7 @@ sequenceDiagram
     Dev->>Git: 1. Push empty sync commit (Clears [skip ci])
     Note over Git: Creates clean commit without bypass flag
     Dev->>Git: 2. Push release tag pointing to clean commit
-    
+
     Git->>Engine: Webhook: Tag Created (stg-api-v1.0.0)
     Engine->>Engine: Inspect commit message (No bypass flag found)
     Note over Engine: Trigger Authorized!

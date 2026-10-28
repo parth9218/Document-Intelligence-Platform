@@ -19,16 +19,16 @@ flowchart TD
         SrcCode["Route Controllers & JSDoc Annotations"]
         GenScript["generate-openapi.ts Script"]
         SpecJSON["api-specification.json Artifact"]
-        
+
         SrcCode --> GenScript --> SpecJSON
     end
 
     subgraph EnvironmentGating ["Packaging & Runtime Environment Gating"]
         Docker["API Dockerfile (ARG ENVIRONMENT)"]
-        
+
         DevImage["Development / Test Image<br/>(ENVIRONMENT=dev)"]
         ProdImage["Production Slim Image<br/>(ENVIRONMENT=prod)"]
-        
+
         Docker -->|Installs swagger-ui-express| DevImage
         Docker -->|Uninstalls swagger-ui-express & stubs spec| ProdImage
     end
@@ -36,7 +36,7 @@ flowchart TD
     subgraph RuntimeRouting ["Runtime HTTP Ingress"]
         DevRoute["GET /api-docs<br/>(Interactive Swagger UI)"]
         ProdRoute["GET /api-docs<br/>(Returns HTTP 404 Not Found)"]
-        
+
         DevImage --> DevRoute
         ProdImage --> ProdRoute
     end
@@ -58,10 +58,10 @@ All endpoint contracts are declared as JSDoc annotations directly adjacent to ro
 
 To prevent internal architectural intelligence leakage in production environments, the system applies defense-in-depth isolation:
 
-| Environment | Swagger UI Status | Package Status | Spec File | HTTP Response |
-|:---|:---|:---|:---|:---|
-| **Local / Development** | Enabled | `swagger-ui-express` bundled | Full OpenAPI JSON | `HTTP 200 OK` (Interactive UI) |
-| **Staging / Production** | Disabled | `swagger-ui-express` uninstalled | Stubbed empty object (`{}`) | `HTTP 404 Not Found` |
+| Environment              | Swagger UI Status | Package Status                   | Spec File                   | HTTP Response                  |
+| :----------------------- | :---------------- | :------------------------------- | :-------------------------- | :----------------------------- |
+| **Local / Development**  | Enabled           | `swagger-ui-express` bundled     | Full OpenAPI JSON           | `HTTP 200 OK` (Interactive UI) |
+| **Staging / Production** | Disabled          | `swagger-ui-express` uninstalled | Stubbed empty object (`{}`) | `HTTP 404 Not Found`           |
 
 ---
 

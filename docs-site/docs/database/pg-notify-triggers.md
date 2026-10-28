@@ -66,7 +66,7 @@ In early architecture drafts, notifications were broadcast to a single global ch
 The trigger function dynamically targets a session-isolated channel following a deterministic naming convention:
 
 > **Channel Naming Convention**: `progress_<session_id_with_underscores>`  
-> *Example*: `progress_550e8400_e29b_41d4_a716_446655440000`
+> _Example_: `progress_550e8400_e29b_41d4_a716_446655440000`
 
 - **Identifier Sanitization**: Hyphens in the UUID are replaced with underscores (`replace(NEW.session_id::text, '-', '_')`) producing a valid unquoted PostgreSQL identifier.
 - **Kernel-Level Tenant Isolation**: PostgreSQL delivers notifications **only to the backend connection listening on that specific channel**. Express API instances perform zero cross-tenant event filtering.
@@ -79,15 +79,15 @@ PostgreSQL enforces a strict **8,000-byte payload limit** on `pg_notify` message
 
 ### Notification Payload Schema
 
-| Field | Data Type | Description | Optimization Guardrail |
-| :--- | :--- | :--- | :--- |
-| `document_id` | `UUID` | Target document identifier | Relates the update to client-side document registry. |
-| `status` | `String` | Current pipeline stage | Status enum (`extracting`, `embedding`, `completed`). |
-| `progress_pct` | `Integer` | Computed progress percentage | Normalized value between 0% and 100%. |
-| `processed_chunks` | `Integer` | Total chunks processed so far | Granular counter incremented in batches of 50. |
-| `total_chunks` | `Integer` | Total chunks identified | Set during initial extraction phase. |
-| `error_code` | `String` | Machine-readable error code | Populated only on failure states. |
-| `error_message` | `String` | High-level diagnostic summary | Populated on failure; kept concise by worker error handlers to protect the 8KB buffer. |
+| Field              | Data Type | Description                   | Optimization Guardrail                                                                 |
+| :----------------- | :-------- | :---------------------------- | :------------------------------------------------------------------------------------- |
+| `document_id`      | `UUID`    | Target document identifier    | Relates the update to client-side document registry.                                   |
+| `status`           | `String`  | Current pipeline stage        | Status enum (`extracting`, `embedding`, `completed`).                                  |
+| `progress_pct`     | `Integer` | Computed progress percentage  | Normalized value between 0% and 100%.                                                  |
+| `processed_chunks` | `Integer` | Total chunks processed so far | Granular counter incremented in batches of 50.                                         |
+| `total_chunks`     | `Integer` | Total chunks identified       | Set during initial extraction phase.                                                   |
+| `error_code`       | `String`  | Machine-readable error code   | Populated only on failure states.                                                      |
+| `error_message`    | `String`  | High-level diagnostic summary | Populated on failure; kept concise by worker error handlers to protect the 8KB buffer. |
 
 ### Payload Size Optimization Invariants
 
@@ -108,6 +108,7 @@ PostgreSQL enforces a strict **8,000-byte payload limit** on `pg_notify` message
 ### 3-Second Fallback Polling Loop
 
 If corporate firewalls or transient network issues terminate the persistent HTTP/1.1 SSE stream:
+
 - The React client detects socket closure within 3 seconds.
 - Automatically initiates polling against `GET /api/documents/status` on a 3-second interval.
 - Seamlessly terminates the polling loop when the SSE connection is re-established.
@@ -118,8 +119,8 @@ If corporate firewalls or transient network issues terminate the persistent HTTP
 
 While PostgreSQL `LISTEN/NOTIFY` provides a lightweight real-time event system without requiring external message brokers for current workloads, senior cloud architecture demands acknowledging its scaling boundaries:
 
-| Architectural Factor | Current PostgreSQL `LISTEN/NOTIFY` | Target Enterprise Evolution (Redis Pub/Sub) |
-| :--- | :--- | :--- |
-| **Connection Overhead** | Requires 1 dedicated PostgreSQL connection per active SSE client. | Redis multiplexes tens of thousands of subscribers over a single connection pool. |
-| **RDS Proxy Incompatibility** | Long-held persistent `LISTEN` sockets pin connections and disrupt RDS Proxy connection multiplexing. | API pods bypass database proxies entirely for real-time pub/sub. |
-| **Target Scale** | Optimal for designed platform volume (100–500 concurrent active browser sessions). | Required when scaling to 10,000+ simultaneous connected streaming clients. |
+| Architectural Factor          | Current PostgreSQL `LISTEN/NOTIFY`                                                                   | Target Enterprise Evolution (Redis Pub/Sub)                                       |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| **Connection Overhead**       | Requires 1 dedicated PostgreSQL connection per active SSE client.                                    | Redis multiplexes tens of thousands of subscribers over a single connection pool. |
+| **RDS Proxy Incompatibility** | Long-held persistent `LISTEN` sockets pin connections and disrupt RDS Proxy connection multiplexing. | API pods bypass database proxies entirely for real-time pub/sub.                  |
+| **Target Scale**              | Optimal for designed platform volume (100–500 concurrent active browser sessions).                   | Required when scaling to 10,000+ simultaneous connected streaming clients.        |

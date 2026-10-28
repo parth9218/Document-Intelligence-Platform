@@ -25,7 +25,7 @@ sequenceDiagram
 
     Hook->>SSE: connectProgressStream()
     SSE->>API: GET /api/documents/progress (withCredentials: true)
-    
+
     API-->>SSE: event: snapshot (Array of all documents)
     SSE->>Store: setDocumentRegistry(snapshotData)
     Store-->>UI: Render initial document cards

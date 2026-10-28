@@ -67,13 +67,13 @@ flowchart TD
 
 The service strictly enforces separation of concerns across five decoupled tiers:
 
-| Layer | Directory | Primary Responsibility |
-|:---|:---|:---|
-| **Routes** | `src/routes/` | Mounts HTTP path endpoints, attaches route-specific validators, and maps handler methods. |
-| **Validators** | `src/validators/` | Validates incoming payloads before controller entry. |
-| **Controllers** | `src/controllers/` | Unpacks request context, coordinates service invocations, and crafts HTTP status codes. |
-| **Services** | `src/services/` | Contains all business logic, external SDK calls (S3, Bedrock), and database transactions. |
-| **Data Layer** | `src/db.ts` | Houses Prisma ORM Client and standalone `pgPool` connection pools. |
+| Layer           | Directory          | Primary Responsibility                                                                    |
+| :-------------- | :----------------- | :---------------------------------------------------------------------------------------- |
+| **Routes**      | `src/routes/`      | Mounts HTTP path endpoints, attaches route-specific validators, and maps handler methods. |
+| **Validators**  | `src/validators/`  | Validates incoming payloads before controller entry.                                      |
+| **Controllers** | `src/controllers/` | Unpacks request context, coordinates service invocations, and crafts HTTP status codes.   |
+| **Services**    | `src/services/`    | Contains all business logic, external SDK calls (S3, Bedrock), and database transactions. |
+| **Data Layer**  | `src/db.ts`        | Houses Prisma ORM Client and standalone `pgPool` connection pools.                        |
 
 ---
 

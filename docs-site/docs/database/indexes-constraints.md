@@ -17,18 +17,18 @@ The database implements a multi-tier indexing strategy designed to balance **sub
 flowchart TD
     subgraph StorageLayer ["Amazon RDS PostgreSQL 18 + pgvector"]
         direction TB
-        
+
         subgraph VectorIndexing ["Vector Similarity Engine (pgvector)"]
             HNSW["HNSW Index: document_chunks_embedding_hnsw_idx<br/>USING hnsw (embedding vector_cosine_ops)<br/>WITH (m=16, ef_construction=64)"]
         end
-        
+
         subgraph TenancyIndexing ["Multi-Tenant Relational Indexes"]
             IdxSession["sessions: session_token (UNIQUE B-tree)"]
             IdxDocSession["documents: session_id (B-tree)"]
             IdxJobCompound["processing_jobs: (session_id, status) (Compound B-tree)"]
             IdxChunkSession["document_chunks: session_id (B-tree)"]
         end
-        
+
         subgraph IntegrityConstraints ["Idempotency & Relational Constraints"]
             UniqChunk["document_chunks: (document_id, chunk_index) (COMPOSITE UNIQUE)"]
             UniqJob["processing_jobs: document_id (UNIQUE 1:1)"]
@@ -36,10 +36,10 @@ flowchart TD
             Cascades["Foreign Key Cascades: ON DELETE CASCADE"]
         end
     end
-    
+
     Query["RAG Search Query"] -->|Filters Tenant| IdxChunkSession
     IdxChunkSession -->|Traverses Graph| HNSW
-    
+
     Worker["Worker Ingestion"] -->|Enforces Idempotency| UniqChunk
     API["API Gateway"] -->|Evaluates Concurrency| IdxJobCompound
 ```
@@ -60,11 +60,11 @@ The platform implements **Hierarchical Navigable Small World (HNSW)** indexing o
 
 ### Architectural Rationale: HNSW vs. IVFFlat
 
-| Evaluation Dimension | HNSW Index (Implemented) | Inverted File Index (IVFFlat) |
-| :--- | :--- | :--- |
-| **Warm-Up Requirement** | **Incremental Build**: Vectors can be indexed immediately as chunks arrive without pre-training. | **Centroid Pre-Training**: Requires a pre-existing vector dataset to train k-means cluster centroids before building. |
-| **Query Latency** | **Sub-50ms at High Recall**: Logarithmic graph traversal scales gracefully under high concurrency. | **Linear Scan of Probing Lists**: Degrades significantly if probe counts increase to improve recall. |
-| **Dynamic Mutation** | **Resilient to Document Churn**: Maintains >95% recall as documents and sessions are continuously deleted and created. | **Centroid Drift**: Frequent deletes and inserts cause cluster centroid drift, requiring periodic index re-indexing. |
+| Evaluation Dimension    | HNSW Index (Implemented)                                                                                               | Inverted File Index (IVFFlat)                                                                                         |
+| :---------------------- | :--------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| **Warm-Up Requirement** | **Incremental Build**: Vectors can be indexed immediately as chunks arrive without pre-training.                       | **Centroid Pre-Training**: Requires a pre-existing vector dataset to train k-means cluster centroids before building. |
+| **Query Latency**       | **Sub-50ms at High Recall**: Logarithmic graph traversal scales gracefully under high concurrency.                     | **Linear Scan of Probing Lists**: Degrades significantly if probe counts increase to improve recall.                  |
+| **Dynamic Mutation**    | **Resilient to Document Churn**: Maintains >95% recall as documents and sessions are continuously deleted and created. | **Centroid Drift**: Frequent deletes and inserts cause cluster centroid drift, requiring periodic index re-indexing.  |
 
 ---
 
@@ -72,13 +72,13 @@ The platform implements **Hierarchical Navigable Small World (HNSW)** indexing o
 
 B-tree indexes are applied across foreign keys and filtering columns to enforce tenant separation and sub-10ms query execution:
 
-| Index Name | Target Entity & Columns | Index Type | Operational Purpose |
-| :--- | :--- | :--- | :--- |
-| `sessions_session_token_key` | `sessions(session_token)` | `UNIQUE B-tree` | Sub-millisecond HMAC signature lookup on incoming HTTP requests. |
-| `documents_session_id_idx` | `documents(session_id)` | `B-tree` | Instantaneous listing of documents belonging to an active user session. |
-| `processing_jobs_session_id_status_idx` | `processing_jobs(session_id, status)` | `Compound B-tree` | Powers the Tier-2 concurrency validation check, counting active in-flight jobs in <2ms. |
-| `document_chunks_session_id_idx` | `document_chunks(session_id)` | `B-tree` | Pre-filters the vector search space to the active user session before computing cosine distance. |
-| `documents_s3_key_key` | `documents(s3_key)` | `UNIQUE B-tree` | Guarantees absolute storage key uniqueness across all Amazon S3 uploads. |
+| Index Name                              | Target Entity & Columns               | Index Type        | Operational Purpose                                                                              |
+| :-------------------------------------- | :------------------------------------ | :---------------- | :----------------------------------------------------------------------------------------------- |
+| `sessions_session_token_key`            | `sessions(session_token)`             | `UNIQUE B-tree`   | Sub-millisecond HMAC signature lookup on incoming HTTP requests.                                 |
+| `documents_session_id_idx`              | `documents(session_id)`               | `B-tree`          | Instantaneous listing of documents belonging to an active user session.                          |
+| `processing_jobs_session_id_status_idx` | `processing_jobs(session_id, status)` | `Compound B-tree` | Powers the Tier-2 concurrency validation check, counting active in-flight jobs in <2ms.          |
+| `document_chunks_session_id_idx`        | `document_chunks(session_id)`         | `B-tree`          | Pre-filters the vector search space to the active user session before computing cosine distance. |
+| `documents_s3_key_key`                  | `documents(s3_key)`                   | `UNIQUE B-tree`   | Guarantees absolute storage key uniqueness across all Amazon S3 uploads.                         |
 
 ---
 
@@ -98,10 +98,10 @@ The `document_chunks` table enforces a composite uniqueness constraint across th
 
 Relational integrity is enforced using PostgreSQL foreign keys with cascading deletion rules across all child entities:
 
-| Relationship | Cascade Rule | Architectural Behavior |
-| :--- | :--- | :--- |
-| `sessions` -> `documents` | `ON DELETE CASCADE` | Deleting an expired session automatically cleans up all associated document records. |
-| `sessions` -> `query_logs` | `ON DELETE CASCADE` | Purges conversational history when the user session expires. |
-| `documents` -> `processing_jobs` | `ON DELETE CASCADE` | Purges worker state and checkpoint counters when a document is removed. |
-| `documents` -> `document_chunks` | `ON DELETE CASCADE` | Reclaims vector memory and disk space immediately upon document deletion. |
-| `audit_log` (Standalone) | **No Cascade** | Intentionally decoupled from foreign keys to preserve immutable forensic logs. |
+| Relationship                     | Cascade Rule        | Architectural Behavior                                                               |
+| :------------------------------- | :------------------ | :----------------------------------------------------------------------------------- |
+| `sessions` -> `documents`        | `ON DELETE CASCADE` | Deleting an expired session automatically cleans up all associated document records. |
+| `sessions` -> `query_logs`       | `ON DELETE CASCADE` | Purges conversational history when the user session expires.                         |
+| `documents` -> `processing_jobs` | `ON DELETE CASCADE` | Purges worker state and checkpoint counters when a document is removed.              |
+| `documents` -> `document_chunks` | `ON DELETE CASCADE` | Reclaims vector memory and disk space immediately upon document deletion.            |
+| `audit_log` (Standalone)         | **No Cascade**      | Intentionally decoupled from foreign keys to preserve immutable forensic logs.       |

@@ -48,7 +48,7 @@ flowchart TD
         Mutate["CI Step: sed rewrite to<br/>name: docintel-dev-api"]
         Push1["helm push oci://.../docintel-dev-api"]
         ECR1["Flat ECR Repo: docintel-dev-api"]
-        
+
         Chart1 --> Mutate -->|Dirty Git Tree| Push1 --> ECR1
     end
 
@@ -57,7 +57,7 @@ flowchart TD
         Push2["helm push oci://${ECR_REGISTRY}/docintel/dev"]
         ECR2["Hierarchical ECR Repo:<br/>${ECR_REGISTRY}/docintel/dev/api"]
         Docker["Docker Image:<br/>${ECR_REGISTRY}/docintel/dev/api:${TAG}"]
-        
+
         Chart2 -->|Native Helm OCI| Push2 --> ECR2
         Docker -->|Coexists in Same Repo| ECR2
     end

@@ -11,7 +11,7 @@ description: "Three-tier idempotency architecture, checkpoint recovery, and dist
 
 ## The Distributed Failure Problem
 
-In cloud-native Kubernetes environments, worker pods are subject to abrupt terminations caused by **KEDA scale-down events**, **EKS Spot Instance reclamation**, and **node drains**. 
+In cloud-native Kubernetes environments, worker pods are subject to abrupt terminations caused by **KEDA scale-down events**, **EKS Spot Instance reclamation**, and **node drains**.
 
 Without idempotency and checkpointing, an interrupted 500-page document processing job would either:
 
@@ -44,11 +44,11 @@ sequenceDiagram
 
 The worker implements a layered defense ensuring crash resiliency:
 
-| Mechanism | Implementation Detail | Guarantee Provided |
-|:---|:---|:---|
-| **1. Composite Upsert Key** | `UNIQUE (document_id, chunk_index)` with `ON CONFLICT DO UPDATE` | Re-running any chunk batch safely updates records in place without duplicating database rows. |
-| **2. Checkpoint Resume** | `checkpoint_index` on `processing_jobs` table | Tracks the last successfully committed batch (e.g., batch 4). On restart, the worker skips directly to batch 5, avoiding redundant Bedrock embedding costs. |
-| **3. Distributed Visibility Lock** | 600-second SQS `VisibilityTimeout` | SQS conceals the in-flight message from other pods during processing without requiring external distributed locks (e.g. Redis Redlock). If the pod dies, the lock expires automatically. |
+| Mechanism                          | Implementation Detail                                            | Guarantee Provided                                                                                                                                                                       |
+| :--------------------------------- | :--------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. Composite Upsert Key**        | `UNIQUE (document_id, chunk_index)` with `ON CONFLICT DO UPDATE` | Re-running any chunk batch safely updates records in place without duplicating database rows.                                                                                            |
+| **2. Checkpoint Resume**           | `checkpoint_index` on `processing_jobs` table                    | Tracks the last successfully committed batch (e.g., batch 4). On restart, the worker skips directly to batch 5, avoiding redundant Bedrock embedding costs.                              |
+| **3. Distributed Visibility Lock** | 600-second SQS `VisibilityTimeout`                               | SQS conceals the in-flight message from other pods during processing without requiring external distributed locks (e.g. Redis Redlock). If the pod dies, the lock expires automatically. |
 
 ---
 

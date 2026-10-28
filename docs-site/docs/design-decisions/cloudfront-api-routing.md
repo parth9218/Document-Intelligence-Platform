@@ -56,7 +56,7 @@ flowchart TD
         CF1["CloudFront Distribution<br/>(Default SSL Certificate)"]
         S3_1["Amazon S3 Bucket<br/>(Static Assets)"]
         ALB1["AWS Application Load Balancer<br/>(HTTP Only: Port 80)"]
-        
+
         Browser1 -->|1. HTTPS GET /| CF1 --> S3_1
         Browser1 -.->|2. HTTP POST /api/session| ALB1
         ALB1 -.->|BLOCKED BY BROWSER| Err1["Mixed Active Content Error<br/>(Request Dropped by Client)"]
@@ -69,7 +69,7 @@ flowchart TD
         S3_2["Amazon S3 Origin<br/>(Cache: /*)"]
         ALB2["AWS ALB Origin<br/>(CacheDisabled: /api/*)"]
         API2["EKS Express API Pods"]
-        
+
         Browser2 -->|1. HTTPS GET /| CF2
         Browser2 -->|2. HTTPS POST /api/session| CF2
         CF2 -->|Path /* -> S3| S3_2
@@ -120,6 +120,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **Terraform Circular Dependency**: CloudFront requires the ALB DNS hostname at provisioning time, but the ALB is generated dynamically by the Kubernetes Gateway API, which requires the EKS cluster and VPC to exist first.
-  - *Mitigation*: The infrastructure CI/CD pipeline deploys AWS infrastructure initially with a placeholder, applies the Kubernetes platform layer to allocate the ALB DNS, and re-executes the AWS Terraform module via the lightweight zero-provider query module (`infra/terraform/query/`).
+  - _Mitigation_: The infrastructure CI/CD pipeline deploys AWS infrastructure initially with a placeholder, applies the Kubernetes platform layer to allocate the ALB DNS, and re-executes the AWS Terraform module via the lightweight zero-provider query module (`infra/terraform/query/`).
 - **Edge Latency Overhead**: Requests traverse an additional CloudFront hop before reaching the ALB.
-  - *Mitigation*: CloudFront routes internal traffic across AWS's private global fiber backbone, mitigating public Internet transit latency.
+  - _Mitigation_: CloudFront routes internal traffic across AWS's private global fiber backbone, mitigating public Internet transit latency.

@@ -55,12 +55,12 @@ The cookie payload consists of two period-separated segments:
 
 ### Security Protections
 
-| Security Vector | Implementation Mechanism | Purpose |
-|:---|:---|:---|
-| **Timing Attack Mitigation** | `crypto.timingSafeEqual` | Compares signature buffers in constant time, preventing byte-by-byte timing inference. |
-| **XSS Exfiltration Defense** | `HttpOnly: true` | Prevents malicious client-side JavaScript from reading or exporting session tokens. |
-| **CSRF Mitigation** | `SameSite: Lax` | Blocks unauthorized third-party cross-site request forgery while preserving top-level navigation. |
-| **Transport Encryption** | `Secure: true` (Production) | Enforces cookie transmission exclusively over TLS/HTTPS connections. |
+| Security Vector              | Implementation Mechanism    | Purpose                                                                                           |
+| :--------------------------- | :-------------------------- | :------------------------------------------------------------------------------------------------ |
+| **Timing Attack Mitigation** | `crypto.timingSafeEqual`    | Compares signature buffers in constant time, preventing byte-by-byte timing inference.            |
+| **XSS Exfiltration Defense** | `HttpOnly: true`            | Prevents malicious client-side JavaScript from reading or exporting session tokens.               |
+| **CSRF Mitigation**          | `SameSite: Lax`             | Blocks unauthorized third-party cross-site request forgery while preserving top-level navigation. |
+| **Transport Encryption**     | `Secure: true` (Production) | Enforces cookie transmission exclusively over TLS/HTTPS connections.                              |
 
 ---
 

@@ -27,7 +27,7 @@ sequenceDiagram
     UI->>Hook: sendQuery(question)
     Hook->>Store: addChatMessage(User Question)
     Hook->>Store: addChatMessage(Empty Assistant Placeholder)
-    
+
     Hook->>API: POST /api/query/search (credentials: 'include', AbortSignal)
     API-->>Hook: HTTP 200 OK (Transfer-Encoding: chunked)
 

@@ -11,7 +11,7 @@ description: "Zero static database credentials, dynamic RDS token signing, cachi
 
 ## Architectural Problem & Solution
 
-Traditional containerized microservices store static database passwords inside Kubernetes Secrets. If credentials are leaked or compromised, database access can be retained indefinitely. 
+Traditional containerized microservices store static database passwords inside Kubernetes Secrets. If credentials are leaked or compromised, database access can be retained indefinitely.
 
 The API service eliminates static database passwords in AWS environments by authenticating to Amazon RDS PostgreSQL using **IAM Database Authentication tokens** via **EKS Pod Identity Associations**.
 
@@ -47,6 +47,7 @@ sequenceDiagram
 AWS RDS IAM tokens are temporary strings valid for exactly **15 minutes**. Generating a SigV4 signature on every connection request introduces unnecessary CPU overhead and AWS SDK latency.
 
 ### The 10-Minute Caching Strategy
+
 Implemented in `src/utils/rds-auth.ts`:
 
 - **Token Lifetime**: AWS tokens expire at 15 minutes.

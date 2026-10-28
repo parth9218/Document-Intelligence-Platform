@@ -25,7 +25,7 @@ sequenceDiagram
     Client->>API: POST /api/documents (batch array of file metadata)
     API->>API: Tier 1: Per-file format & size checks
     API->>DB: Tier 2: Evaluate session concurrency (<=5) & storage (<=50MB)
-    
+
     alt Quota Exceeded
         API-->>Client: HTTP 429 (Concurrency) or HTTP 400 (Storage Quota)
     else Validation Passed
@@ -50,18 +50,20 @@ sequenceDiagram
 Requests submitted to `POST /api/documents` undergo strict two-phase validation:
 
 ### Tier 1: Per-File Independent Validation
+
 Each file entry in the payload array is evaluated independently. Files failing checks are marked as `rejected` in the response array with specific error codes, while valid files proceed to Tier 2:
 
 - **MIME Allowlist**: Accepts strictly `application/pdf` and `text/plain`.
 - **File Size Range**: Each individual file must be between 1 byte and 5 MB (5,242,880 bytes).
 
 ### Tier 2: Batch-Level Atomic Validation
+
 The subset of files that pass Tier 1 is evaluated atomically against the active tenant session state. If either condition fails, the entire batch is rejected with zero database rows created:
 
-| Boundary | Enforcement Limit | HTTP Rejection |
-|:---|:---|:---|
-| **Concurrency Ceiling** | Max **5 active documents** in flight (`pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`). | `HTTP 429 Too Many Requests`<br/>(`concurrency_limit_exceeded`) |
-| **Cumulative Storage Quota** | Max **50 MB (52,428,800 bytes)** cumulative storage across active documents per session. | `HTTP 400 Bad Request`<br/>(`storage_quota_exceeded`) |
+| Boundary                     | Enforcement Limit                                                                                                                        | HTTP Rejection                                                  |
+| :--------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------- |
+| **Concurrency Ceiling**      | Max **5 active documents** in flight (`pending_upload`, `uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`). | `HTTP 429 Too Many Requests`<br/>(`concurrency_limit_exceeded`) |
+| **Cumulative Storage Quota** | Max **50 MB (52,428,800 bytes)** cumulative storage across active documents per session.                                                 | `HTTP 400 Bad Request`<br/>(`storage_quota_exceeded`)           |
 
 ---
 

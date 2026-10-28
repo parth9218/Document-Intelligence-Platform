@@ -61,19 +61,19 @@ sequenceDiagram
     Agent->>IAM: AssumeRole via Pod Identity
     IAM-->>Agent: Temporary AWS Credentials (1-Hour TTL)
     Agent-->>Pod: Injected into Pod Environment (AWS SDK)
-    
+
     Note over Pod: Tier 2: RDS DB Auth Token Generation (15-Min Engine Boundary)
     Pod->>Pod: Generate Signed RDS Auth Token via SigV4 (15-min RDS Limit)
-    
+
     Note over Pod: Tier 3: In-Memory Token Cache (10-Min Preemptive TTL)
     Pod->>Pod: Cache DB Token in Memory (10-Min TTL)
-    
+
     Note over Pod,RDS: Database Connection Handshake
     Pod->>RDS: Connect with User: app_user & Password: [IAM_TOKEN]
     RDS->>IAM: Verify SigV4 Token Signature & Expiration (under 15 min)
     IAM-->>RDS: Signature Valid & Authorized
     RDS-->>Pod: Connection Established (TLS Encrypted)
-    
+
     Note over Pod: Re-auth Preemption: At 10 Minutes, DB Token Cache Refreshed
 ```
 

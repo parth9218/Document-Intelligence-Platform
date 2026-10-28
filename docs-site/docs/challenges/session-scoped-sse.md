@@ -11,7 +11,7 @@ description: "Resolving browser socket pool exhaustion and connection throttling
 
 ## Problem Statement
 
-To give users transparency during document ingestion, the platform streams real-time state changes (`downloading`, `extracting`, `chunking`, `embedding`, `completed`) via Server-Sent Events (SSE). 
+To give users transparency during document ingestion, the platform streams real-time state changes (`downloading`, `extracting`, `chunking`, `embedding`, `completed`) via Server-Sent Events (SSE).
 
 The initial design ([ADR-008](../design-decisions/index.md)) established a **per-document SSE stream** targeting individual document IDs.
 
@@ -59,7 +59,7 @@ flowchart TD
         Doc4["SSE: Doc 4"]
         Doc5["SSE: Doc 5"]
         BlockedReq["POST confirm-upload (BLOCKED: No Available Socket)"]
-        
+
         Browser1 -.-> Doc1
         Browser1 -.-> Doc2
         Browser1 -.-> Doc3
@@ -74,7 +74,7 @@ flowchart TD
         FreeSockets["5 Free TCP Sockets Available (Instant confirm-upload & queries)"]
         API["Express API Server"]
         PG["PostgreSQL (progress_sessionId channel)"]
-        
+
         Browser2 -->|"Socket 1"| SSEConn
         SSEConn --> API
         Browser2 -->|"Sockets 2-6"| FreeSockets

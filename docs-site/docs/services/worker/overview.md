@@ -25,7 +25,7 @@ flowchart TD
     subgraph WorkerPod ["Worker Daemon Pod (main.py)"]
         direction TB
         Sig["Signal Interceptor<br/>(SIGTERM / SIGINT graceful stop)"]
-        
+
         subgraph Threads ["Concurrent Execution Threads"]
             PrimaryLoop["Primary Consumer Thread<br/>(Long poll WaitTime=20s)"]
             DLQPoller["Secondary DLQ Thread<br/>(Polls every 30s for poison pills)"]
@@ -36,7 +36,7 @@ flowchart TD
             Chunker["Paragraph Chunker<br/>(500 tokens, 75 overlap)"]
             Embeddings["Embedding Provider<br/>(Bedrock Titan V2 / Local E5)"]
             Repo["Job Repository<br/>(SQLAlchemy upsert & checkpoints)"]
-            
+
             Extractor --> Chunker --> Embeddings --> Repo
         end
     end
@@ -61,15 +61,15 @@ flowchart TD
 
 The codebase is organized into modular layers:
 
-| Layer | Directory / Module | Role |
-|:---|:---|:---|
-| **Entry Point** | `main.py` | Initializes clients, registers OS signal handlers, spawns the DLQ poller thread, and runs the SQS loop. |
-| **Consumer** | `app/consumers/sqs_consumer.py` | Polls SQS with long polling (`WaitTimeSeconds=20`), validates S3 event schema, and controls message deletion. |
-| **Handler** | `app/handlers/job_handler.py` | Orchestrates document status transitions across the ingestion lifecycle. |
-| **Extractor** | `app/services/extractor.py` | Downloads files from S3, validates magic numbers, and extracts text using PyMuPDF. |
-| **Chunker** | `app/services/chunker.py` | Splits raw text into paragraph-aware chunks (~500 tokens, 75 overlap). |
-| **Embeddings** | `app/services/embeddings.py` | Converts text chunks into 1024-dimension float vectors via Bedrock Titan V2 or local models. |
-| **Repository** | `app/repositories/job_repository.py` | Manages PostgreSQL transactions, chunk upserts, progress updates, and completion flags via SQLAlchemy. |
+| Layer           | Directory / Module                   | Role                                                                                                          |
+| :-------------- | :----------------------------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Entry Point** | `main.py`                            | Initializes clients, registers OS signal handlers, spawns the DLQ poller thread, and runs the SQS loop.       |
+| **Consumer**    | `app/consumers/sqs_consumer.py`      | Polls SQS with long polling (`WaitTimeSeconds=20`), validates S3 event schema, and controls message deletion. |
+| **Handler**     | `app/handlers/job_handler.py`        | Orchestrates document status transitions across the ingestion lifecycle.                                      |
+| **Extractor**   | `app/services/extractor.py`          | Downloads files from S3, validates magic numbers, and extracts text using PyMuPDF.                            |
+| **Chunker**     | `app/services/chunker.py`            | Splits raw text into paragraph-aware chunks (~500 tokens, 75 overlap).                                        |
+| **Embeddings**  | `app/services/embeddings.py`         | Converts text chunks into 1024-dimension float vectors via Bedrock Titan V2 or local models.                  |
+| **Repository**  | `app/repositories/job_repository.py` | Manages PostgreSQL transactions, chunk upserts, progress updates, and completion flags via SQLAlchemy.        |
 
 ---
 

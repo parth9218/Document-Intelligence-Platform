@@ -16,22 +16,22 @@ To establish auditability in enterprise document intelligence, every factual cla
 ```mermaid
 flowchart TD
     RawStream["Streamed Assistant Markdown Text<br/>'...according to AWS policy [1] and cluster config [2]...'"] --> RegexParser["Regex Parser (/\[(\d+)\]/g)"]
-    
+
     subgraph Transformation ["Token Transformation"]
         Plain["Plain Text Tokens"]
         Bracket["Matched Citation Index [n]"]
-        
+
         RegexParser --> Plain
         RegexParser --> Bracket
     end
 
     ContextMap["Retrieved Context Metadata<br/>(Filename, Page Number, Match Score, Snippet)"]
-    
+
     Bracket --> Badge["CitationBadge Component<br/>(Interactive Numeric Badge [n])"]
     ContextMap --> Badge
 
     Badge -->|User Hover / Click| Popover["SourcePopover Component<br/>- Source Document Name<br/>- Exact Page Number<br/>- Relevance Match Score (%)<br/>- Grounded Text Snippet"]
-    
+
     ContextMap --> Accordion["SourceAccordion Component<br/>(Expandable drawer listing all retrieved chunks)"]
 ```
 
@@ -41,11 +41,11 @@ flowchart TD
 
 The citation visualization architecture consists of three specialized components:
 
-| Component | File Path | Interaction & Role |
-|:---|:---|:---|
-| **`CitationBadge`** | `src/components/chat/citation-badge.tsx` | Renders a styled, interactive numeric badge (`[1]`, `[2]`) in-line with the assistant prose. |
-| **`SourcePopover`** | `src/components/chat/source-popover.tsx` | Floating card revealed upon hover or tap, displaying source filename, page number, relevance score, and the exact contextual passage. |
-| **`SourceAccordion`** | `src/components/chat/source-accordion.tsx` | Expandable panel affixed beneath the assistant answer, listing all retrieved candidate snippets for comprehensive source auditing. |
+| Component             | File Path                                  | Interaction & Role                                                                                                                    |
+| :-------------------- | :----------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| **`CitationBadge`**   | `src/components/chat/citation-badge.tsx`   | Renders a styled, interactive numeric badge (`[1]`, `[2]`) in-line with the assistant prose.                                          |
+| **`SourcePopover`**   | `src/components/chat/source-popover.tsx`   | Floating card revealed upon hover or tap, displaying source filename, page number, relevance score, and the exact contextual passage. |
+| **`SourceAccordion`** | `src/components/chat/source-accordion.tsx` | Expandable panel affixed beneath the assistant answer, listing all retrieved candidate snippets for comprehensive source auditing.    |
 
 ---
 

@@ -27,11 +27,11 @@ sequenceDiagram
     Note over API: Two-Tier Validation:<br/>• MIME (PDF/TXT) & Size up to 5MB<br/>• Concurrency up to 5 & Quota up to 50MB
     API->>DB: 2. Initialize Document & ProcessingJob (pending_upload)
     API-->>User: 3. Return Presigned POST URLs & Fields
-    
+
     User->>S3: 4. Direct Multipart POST (FormData)
     Note over User,S3: Browser tracks progress (0-100% XHR)
     S3-->>User: 5. 204 No Content (Upload Confirmed)
-    
+
     par Async Event Notification
         S3->>SQS: 6. S3 ObjectCreated Notification
     and Client Status Confirmation
@@ -43,7 +43,7 @@ sequenceDiagram
     SQS-->>Worker: 10. S3 Event Message Payload
     Worker->>DB: 11. Update status = downloading
     Worker->>S3: 12. GET Object (Stream Bytes)
-    
+
     Note over Worker: Extraction Pipeline:<br/>• Validate Magic Bytes (%PDF)<br/>• PyMuPDF text extraction<br/>• Paragraph chunking (~500 tokens)
     Worker->>DB: 13. Update status = extracting to chunking
 
@@ -58,6 +58,7 @@ sequenceDiagram
 ```
 
 ### Key Ingestion Invariants
+
 - **Presigned POST vs PUT**: Uses AWS SDK v3 `createPresignedPost()` to embed strict infrastructure-level policy conditions (`content-length-range` [1B, 5MB] and `Content-Type`), preventing unauthorized storage tampering at S3.
 - **Confirm-Upload Idempotency**: If the SQS consumer picks up the message and transitions the job to `downloading` before the client's `confirm-upload` HTTP call arrives, the API logs the event and safely returns `200 OK` rather than a `409 Conflict`.
 - **Checkpoint Resumption**: Batch upserts commit to `document_chunks` using `ON CONFLICT (document_id, chunk_index) DO UPDATE`. If a worker crashes mid-document, the replacement worker resumes from `checkpoint_index + 1`.
@@ -91,7 +92,7 @@ sequenceDiagram
     Worker->>DB: 8. UPDATE processing_jobs status = completed, progress_pct = 100
     DB-->>Express: 9. PG NOTIFY completion frame
     Express-->>Browser: 10. SSE event: update (status = completed)
-    
+
     opt Fallback Polling (Network Disconnect)
         Browser->>Express: GET /api/documents/status (Every 3 seconds)
         Express-->>Browser: HTTP 200 JSON (Identical schema to snapshot)
@@ -99,6 +100,7 @@ sequenceDiagram
 ```
 
 ### Architectural Scalability Caveat
+
 - **Current Topology**: PostgreSQL `LISTEN/NOTIFY` routes events directly to session-scoped channels (`progress_{sessionId}`) with zero Express-side filtering overhead.
 - **Enterprise Trade-off**: Maintaining persistent database connections for SSE listeners consumes database connection headroom. For massive enterprise multi-tenancy (>10,000 concurrent sessions), a dedicated distributed pub/sub broker (such as Redis Pub/Sub) would decouple the database listener pool from the client-facing API tier.
 
@@ -121,15 +123,15 @@ sequenceDiagram
     Client->>API: 1. POST /api/query/search (query, stream: true)
     API->>BedrockEmbed: 2. Embed user question
     BedrockEmbed-->>API: 3. Return 1024-dimension float array
-    
+
     API->>DB: 4. Cosine similarity vector query scoped by session_id
     Note over DB: Enforces strict session isolation:<br/>WHERE session_id = current_session<br/>AND cosine_distance at most 0.5<br/>LIMIT 5
     DB-->>API: 5. Top-K relevant context chunks with page numbers
 
     API-->>Client: 6. SSE event: context (Retrieved source documents & snippets)
-    
+
     API->>BedrockClaude: 7. InvokeModelWithResponseStream (System Prompt + Numbered Context [1]..[n])
-    
+
     loop Real-Time Token Generation
         BedrockClaude-->>API: 8. Streaming text delta tokens
         API->>Validator: 9. Scan for inline bracket citations [n]
@@ -147,6 +149,7 @@ sequenceDiagram
 ```
 
 ### Grounding & Citation Validation Rules
+
 1. **Numbered Context Injection**: Chunks are provided to Claude using sequential bracket indices: `[1] (Source: doc_a.pdf, Page: 4): "..."`.
 2. **Deterministic Validation**: The `CitationValidator` uses regex matching (`/\[(\d+)\]/g`) against incoming text streams. Any referenced index greater than the number of retrieved context snippets is stripped before reaching the client.
 3. **Interactive Popover UI**: The client parses verified `[n]` bracket badges into interactive hover/click cards displaying the exact page number, document name, and text excerpt.

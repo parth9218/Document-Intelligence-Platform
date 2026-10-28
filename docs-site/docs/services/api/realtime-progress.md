@@ -56,12 +56,13 @@ sequenceDiagram
 
 The SSE stream uses typed events conforming to the standard EventSource protocol:
 
-| Event Type | Payload Format | Delivery Trigger |
-|:---|:---|:---|
-| **`event: snapshot`** | JSON array of all session documents | Emitted strictly once immediately upon initial SSE connection establishment. |
-| **`event: update`** | JSON object of an individual document | Emitted each time the database trigger detects status, progress, or chunk transitions. |
+| Event Type            | Payload Format                        | Delivery Trigger                                                                       |
+| :-------------------- | :------------------------------------ | :------------------------------------------------------------------------------------- |
+| **`event: snapshot`** | JSON array of all session documents   | Emitted strictly once immediately upon initial SSE connection establishment.           |
+| **`event: update`**   | JSON object of an individual document | Emitted each time the database trigger detects status, progress, or chunk transitions. |
 
 ### Document Status Payload Structure
+
 Both `snapshot` items and `update` frames share an identical schema contract:
 
 - `documentId`: Target document UUID.

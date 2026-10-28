@@ -16,18 +16,18 @@ Once document text is extracted, the worker divides continuous prose into overla
 ```mermaid
 flowchart TD
     ExtractedPages["Extracted Pages Array<br/>[{ pageNumber, text }]"] --> Chunker["Paragraph Chunker<br/>(Target: ~500 tokens, Overlap: ~75 tokens)"]
-    
+
     Chunker --> ChunkList["Ordered Chunks Array<br/>[{ chunkIndex, pageNumber, content }]"]
     ChunkList --> SetTotal["UPDATE processing_jobs<br/>SET status = 'chunking', total_chunks = count"]
 
     SetTotal --> BatchSplitter["Split Chunks into Batches (50 chunks per batch)"]
-    
+
     subgraph ProviderStrategy ["Provider Strategy Architecture"]
         direction TB
         Switch{"EMBEDDING_PROVIDER"}
         Titan["BedrockEmbeddingProvider<br/>(amazon.titan-embed-text-v2:0)"]
         LocalE5["LocalEmbeddingProvider<br/>(intfloat/e5-large-v2 with 'passage: ' prefix)"]
-        
+
         Switch -->|bedrock| Titan
         Switch -->|local| LocalE5
     end
@@ -35,7 +35,7 @@ flowchart TD
     BatchSplitter --> ProviderStrategy
     Titan --> BatchEmbeddings["Batch Vector Embeddings<br/>(1024-dimension float arrays)"]
     LocalE5 --> BatchEmbeddings
-    
+
     BatchEmbeddings --> StatusEmbed["UPDATE status = 'embedding'"]
     StatusEmbed --> VectorStore["Forward to Vector Storage"]
 ```
@@ -59,12 +59,13 @@ Implemented in `app/services/chunker.py`:
 
 Embeddings are generated via a Strategy pattern conforming to `EmbeddingProvider`:
 
-| Environment | Provider Class | Model | Dimensions | Prefix Convention |
-|:---|:---|:---|:---|:---|
-| **Production / Staging** | `BedrockEmbeddingProvider` | `amazon.titan-embed-text-v2:0` | 1024 | None |
-| **Local / Test** | `LocalEmbeddingProvider` | `intfloat/e5-large-v2` | 1024 | `"passage: {text}"` |
+| Environment              | Provider Class             | Model                          | Dimensions | Prefix Convention   |
+| :----------------------- | :------------------------- | :----------------------------- | :--------- | :------------------ |
+| **Production / Staging** | `BedrockEmbeddingProvider` | `amazon.titan-embed-text-v2:0` | 1024       | None                |
+| **Local / Test**         | `LocalEmbeddingProvider`   | `intfloat/e5-large-v2`         | 1024       | `"passage: {text}"` |
 
 ### Asymmetric E5 Query-Document Invariant
+
 When running offline models (e5-large-v2), bi-encoders require distinct instruction prefixes:
 
 - **Worker Ingestion**: Prefixes chunks with `passage: ` before embedding into pgvector.

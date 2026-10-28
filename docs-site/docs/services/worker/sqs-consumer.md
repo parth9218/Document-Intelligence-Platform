@@ -56,12 +56,12 @@ sequenceDiagram
 
 ## Polling Configuration & SQS Parameters
 
-| Parameter | Value | Operational Rationale |
-|:---|:---|:---|
-| **`WaitTimeSeconds`** | `20` | Long-polling interval minimizing empty response requests, reducing AWS API costs. |
-| **`MaxNumberOfMessages`** | `1` | One message per poll ensuring predictable pod memory footprints during heavy PDF parsing. |
-| **`VisibilityTimeout`** | `600` (10 mins) | Prevents duplicate pickup while worker extracts, chunks, and embeds large documents. |
-| **`maxReceiveCount`** | `3` | Retries transient errors up to 3 times before routing poison-pill messages to DLQ. |
+| Parameter                 | Value           | Operational Rationale                                                                     |
+| :------------------------ | :-------------- | :---------------------------------------------------------------------------------------- |
+| **`WaitTimeSeconds`**     | `20`            | Long-polling interval minimizing empty response requests, reducing AWS API costs.         |
+| **`MaxNumberOfMessages`** | `1`             | One message per poll ensuring predictable pod memory footprints during heavy PDF parsing. |
+| **`VisibilityTimeout`**   | `600` (10 mins) | Prevents duplicate pickup while worker extracts, chunks, and embeds large documents.      |
+| **`maxReceiveCount`**     | `3`             | Retries transient errors up to 3 times before routing poison-pill messages to DLQ.        |
 
 ---
 
@@ -71,11 +71,11 @@ Incoming SQS messages wrap AWS S3 Event Notifications (`Records[0].s3`):
 
 - **S3 Key Schema**: `sessions/{sessionId}/documents/{documentId}/original`
 - **Key Extraction via `key.split('/')` (0-indexed)**:
-    - `parts[0]` = `"sessions"` (literal prefix)
-    - `parts[1]` = `{sessionId}` (tenant session UUID)
-    - `parts[2]` = `"documents"` (literal path separator)
-    - `parts[3]` = `{documentId}` (document UUID)
-    - `parts[4]` = `"original"` (target file identifier)
+  - `parts[0]` = `"sessions"` (literal prefix)
+  - `parts[1]` = `{sessionId}` (tenant session UUID)
+  - `parts[2]` = `"documents"` (literal path separator)
+  - `parts[3]` = `{documentId}` (document UUID)
+  - `parts[4]` = `"original"` (target file identifier)
 - **Poison-Pill Protection**: If the key has fewer than 4 parts or fails validation (`parts[0] != 'sessions'` or `parts[2] != 'documents'`), the message is logged and deleted immediately to prevent polling loops.
 
 ---

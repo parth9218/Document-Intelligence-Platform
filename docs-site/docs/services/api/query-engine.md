@@ -56,10 +56,10 @@ sequenceDiagram
 
 Both embedding generation and LLM completion leverage the **Strategy Pattern** with environment-driven runtime factory instantiation:
 
-| Role | Strategy Interface | Cloud Implementation | Local Emulation | Configuration Switch |
-|:---|:---|:---|:---|:---|
-| **Query Embedding** | `IEmbeddingProvider` | `BedrockEmbeddingProvider`<br/>(Amazon Titan Embeddings V2) | `LocalEmbeddingProvider`<br/>(E5-large-v2 with `query: ` prefix) | `EMBEDDING_PROVIDER=bedrock\|local` |
-| **Response Generation** | `ILlmProvider` | `BedrockLlmProvider`<br/>(Claude 3.5 Sonnet via IRSA/Pod Identity) | `LocalLlmProvider`<br/>(Ollama streaming API / offline stub) | `LLM_PROVIDER=bedrock\|local` |
+| Role                    | Strategy Interface   | Cloud Implementation                                               | Local Emulation                                                  | Configuration Switch                |
+| :---------------------- | :------------------- | :----------------------------------------------------------------- | :--------------------------------------------------------------- | :---------------------------------- |
+| **Query Embedding**     | `IEmbeddingProvider` | `BedrockEmbeddingProvider`<br/>(Amazon Titan Embeddings V2)        | `LocalEmbeddingProvider`<br/>(E5-large-v2 with `query: ` prefix) | `EMBEDDING_PROVIDER=bedrock\|local` |
+| **Response Generation** | `ILlmProvider`       | `BedrockLlmProvider`<br/>(Claude 3.5 Sonnet via IRSA/Pod Identity) | `LocalLlmProvider`<br/>(Ollama streaming API / offline stub)     | `LLM_PROVIDER=bedrock\|local`       |
 
 ---
 

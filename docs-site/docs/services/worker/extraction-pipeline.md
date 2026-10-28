@@ -18,7 +18,7 @@ flowchart TD
     Start["SQS Event Received"] --> StatusDown["UPDATE status = 'downloading'"]
     StatusDown --> S3Fetch["Fetch Object from S3 (boto3)"]
     S3Fetch --> StatusVal["UPDATE status = 'validating'"]
-    
+
     StatusVal --> MagicCheck{"Inspect Magic Bytes"}
     MagicCheck -->|PDF: %PDF magic bytes verified| ParsePDF["Parse with PyMuPDF (fitz)"]
     MagicCheck -->|TXT: UTF-8 compliance verified| ParseTXT["Decode UTF-8 Text Buffer"]
@@ -26,10 +26,10 @@ flowchart TD
 
     ParsePDF --> PageLoop["Iterate Pages 1..N<br/>Clean Whitespace & Track Page Number"]
     ParseTXT --> SinglePage["Single Segment (Page 1)"]
-    
+
     PageLoop --> StatusExt["UPDATE status = 'extracting'"]
     SinglePage --> StatusExt
-    
+
     StatusExt --> EmitResult["Yield Extracted Pages Array<br/>[{ pageNumber, text }]"]
     FailPermanent --> DeleteMsg["Delete SQS Message (Permanent)"]
 ```
@@ -40,10 +40,10 @@ flowchart TD
 
 Web clients can spoof MIME types during upload. To ensure parser security, the worker never trusts the uploaded `Content-Type` header blindly:
 
-| Expected Format | Inspection Rule | Failure Action |
-|:---|:---|:---|
-| **PDF Documents** | First 4 bytes must match `%PDF` (`0x25 0x50 0x44 0x46`). | Rejects spoofed files (e.g. executables renamed to `.pdf`) as `corrupt_file`. |
-| **Plain Text Files** | Verifies strict UTF-8 decoding without byte errors. | Rejects binary or non-UTF-8 character encodings as `unsupported_encoding`. |
+| Expected Format      | Inspection Rule                                          | Failure Action                                                                |
+| :------------------- | :------------------------------------------------------- | :---------------------------------------------------------------------------- |
+| **PDF Documents**    | First 4 bytes must match `%PDF` (`0x25 0x50 0x44 0x46`). | Rejects spoofed files (e.g. executables renamed to `.pdf`) as `corrupt_file`. |
+| **Plain Text Files** | Verifies strict UTF-8 decoding without byte errors.      | Rejects binary or non-UTF-8 character encodings as `unsupported_encoding`.    |
 
 ---
 

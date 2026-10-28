@@ -68,7 +68,7 @@ flowchart TD
         Select["2. Scoped File Injection<br/>(Only apps/api and values.yaml from Release Tag)"]
         Stage["3. Stage Scoped Paths<br/>(Siblings worker and frontend untouched)"]
         Result2["Append-Only Fast-Forward Commit<br/>api UPDATED<br/>worker and frontend PRESERVED"]
-        
+
         Tree2 --> Fetch --> Select --> Stage --> Result2
     end
 

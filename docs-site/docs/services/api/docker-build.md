@@ -38,7 +38,7 @@ flowchart TD
         R2["Copy Production node_modules, dist, prisma, CA bundle"]
         R3["Set Security Context (USER 1001)"]
         R4["Expose Port 3000 & Execute (npm start)"]
-        
+
         R1 --> R2 --> R3 --> R4
     end
 
@@ -51,10 +51,10 @@ flowchart TD
 
 The continuous integration pipeline (`.github/workflows/api-worker-cicd.yml`) builds two distinct image variants in parallel for development and higher environments:
 
-| Variant Name | Build Argument | ECR Image Tag | Target Environment | Swagger UI Included |
-|:---|:---|:---|:---|:---|
-| **Full Image** | `ENVIRONMENT=dev` | `${SHORT_SHA}` | `dev` | Yes (`/api-docs` active) |
-| **Slim Image** | `ENVIRONMENT=prod` | `${SHORT_SHA}-slim` | `stg` and `prod` | No (`swagger-ui-express` purged) |
+| Variant Name   | Build Argument     | ECR Image Tag       | Target Environment | Swagger UI Included              |
+| :------------- | :----------------- | :------------------ | :----------------- | :------------------------------- |
+| **Full Image** | `ENVIRONMENT=dev`  | `${SHORT_SHA}`      | `dev`              | Yes (`/api-docs` active)         |
+| **Slim Image** | `ENVIRONMENT=prod` | `${SHORT_SHA}-slim` | `stg` and `prod`   | No (`swagger-ui-express` purged) |
 
 ---
 

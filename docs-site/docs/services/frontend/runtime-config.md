@@ -11,7 +11,7 @@ description: "Runtime config.js injection, window.__APP_CONFIG__ resolution, and
 
 ## The Compile-Time Coupling Anti-Pattern
 
-In conventional Next.js applications, environment variables prefixed with `NEXT_PUBLIC_*` are statically evaluated and inlined into JavaScript bundles during `next build`. 
+In conventional Next.js applications, environment variables prefixed with `NEXT_PUBLIC_*` are statically evaluated and inlined into JavaScript bundles during `next build`.
 
 This creates a critical cloud deployment vulnerability: promoting a static build from staging to production requires **recompiling the entire application** to update backend endpoints, violating artifact immutability.
 
@@ -21,14 +21,14 @@ flowchart TD
         DevBuild["npm run build (NEXT_PUBLIC_API=dev.api)"] --> BundleDev["Bundle Baked with Dev URL"]
         StgBuild["npm run build (NEXT_PUBLIC_API=stg.api)"] --> BundleStg["Bundle Recompiled for Staging"]
         ProdBuild["npm run build (NEXT_PUBLIC_API=prod.api)"] --> BundleProd["Bundle Recompiled for Production"]
-        
+
         BundleDev -.->|Cannot Promote! Must Rebuild| StgBuild
         BundleStg -.->|Cannot Promote! Must Rebuild| ProdBuild
     end
 
     subgraph RuntimeDecoupledPattern ["Platform Decoupled Runtime Pattern"]
         BuildOnce["Single Build in Dev (next build)<br/>Static assets exported to tarball"] --> S3Artifact["S3 Central Artifact Bucket"]
-        
+
         S3Artifact --> DeployDev["Deploy to Dev S3<br/>+ Generate Dev config.js"]
         S3Artifact --> DeployStg["Promote to Staging S3<br/>+ Generate Staging config.js"]
         S3Artifact --> DeployProd["Promote to Production S3<br/>+ Generate Production config.js"]

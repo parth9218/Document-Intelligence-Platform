@@ -25,7 +25,7 @@ Git branches and semantic tags are **mutable pointers** that advance dynamically
 
 - Git clone operations capture whatever commit HEAD points to at that specific millisecond.
 - If a pipeline pushes code changes in commit $C_1$ and image tag updates in commit $C_2$, ArgoCD may reconcile $C_1$ before $C_2$ exists, causing pods to crash due to schema mismatches with old container images.
-- Audit compliance fails because determining *exactly which commit* was running at any given time requires correlating Git commit timestamps with Kubernetes replica revision logs.
+- Audit compliance fails because determining _exactly which commit_ was running at any given time requires correlating Git commit timestamps with Kubernetes replica revision logs.
 
 ---
 

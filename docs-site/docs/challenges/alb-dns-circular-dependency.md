@@ -67,14 +67,14 @@ sequenceDiagram
     Query->>K8S: Read api_alb_dns
     K8S-->>Query: Return ALB DNS (or placeholder if greenfield)
     AWS_CI->>AWS: Apply VPC, EKS, CloudFront (Origin = ALB or placeholder)
-    
+
     Note over K8S_CI: Phase 2: Kubernetes Gateway Deployment
     Dev->>K8S_CI: Trigger k8s-deploy.yml (Release or Dispatch)
     K8S_CI->>Query: Validate AWS Prerequisites (VPC, EKS, ACM)
     K8S_CI->>EKS: Apply Gateway API and AWS LB Controller
     EKS-->>K8S_CI: Dynamic ALB DNS Allocated
     K8S_CI->>K8S: Persist api_alb_dns to K8s Remote State
-    
+
     Note over K8S_CI: Phase 3: GitHub Step Summary and Reconciliation
     K8S_CI->>Query: Compare new ALB DNS with CloudFront origin in AWS state
     alt ALB DNS Differs from CloudFront Origin

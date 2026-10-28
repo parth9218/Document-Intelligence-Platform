@@ -63,7 +63,7 @@ flowchart TD
         GitCheckout["Secondary Git Checkout of Caws<br/>(git fetch + sparse-checkout aws/)"]
         Init1["terraform init (infra/terraform/aws)<br/>Download 700MB AWS + K8s Providers"]
         Output1["terraform output -json"]
-        
+
         CommitMismatch --> GitCheckout
         GitCheckout --> Init1
         Init1 -->|"60-90s Delay"| Output1
@@ -75,7 +75,7 @@ flowchart TD
         Init2["terraform init (infra/terraform/query)<br/>Zero External Providers (0 MB Download)"]
         Read2["Direct S3 .tfstate Read<br/>(data.terraform_remote_state)"]
         Output2["terraform output -json outputs"]
-        
+
         NoGit --> Init2
         Init2 -->|"Under 1.5s (Zero Downloads)"| Read2
         Read2 -->|"Under 1.5s"| Output2
