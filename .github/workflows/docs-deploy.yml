@@ -79,3 +79,27 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Generate Deployment Summary
+        if: always()
+        run: |
+          echo "## 📚 Technical Documentation Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.deployment.outcome }}" = "success" ]; then
+            echo "### Status: ✅ Successfully Deployed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The documentation has been updated and is available at: [${{ steps.deployment.outputs.page_url }}](${{ steps.deployment.outputs.page_url }})" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📌 Deployment Details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Documentation URL** | [${{ steps.deployment.outputs.page_url }}](${{ steps.deployment.outputs.page_url }}) |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Triggered By** | \`${{ github.actor }}\` (\`${{ github.event_name }}\`) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Status: ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Documentation deployment failed. Please check the workflow run logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
