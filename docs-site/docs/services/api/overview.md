@@ -22,7 +22,7 @@ flowchart TD
     subgraph MiddlewareChain ["Global Express Middleware Chain"]
         direction TB
         CORS["CORS Middleware<br/>(Dynamic dev / Strict whitelist prod)"]
-        Parser["JSON Body Parser<br/>(express.json with 10MB limit)"]
+        Parser["JSON Body Parser<br/>(express.json default 100KB)"]
         Logger["Structured Request Logger<br/>(JSON in prod / Colorized in dev)"]
         SessionAuth["Session Middleware<br/>(HMAC-SHA256 signature & auto-init)"]
         CORS --> Parser --> Logger --> SessionAuth
@@ -82,7 +82,7 @@ The service strictly enforces separation of concerns across five decoupled tiers
 Incoming requests traverse an ordered pipeline before reaching route handlers:
 
 1. **CORS Middleware**: Evaluates origin against environment policies. Returns `Access-Control-Allow-Credentials: true` and caches preflight `OPTIONS` requests for 24 hours.
-2. **Body Parsers**: Decodes JSON payloads with strict size caps to protect memory headroom.
+2. **Body Parsers**: Decodes JSON payloads using Express standard defaults (100KB) to prevent buffer exhaustion; file uploads bypass API memory entirely via direct S3 presigned POST.
 3. **Structured Request Logger**: Intercepts request metadata, assigns correlation IDs, and logs execution latency.
 4. **Session HMAC Middleware**: Validates the cryptographic cookie signature, auto-creates guest sessions if missing, and extends the 24-hour expiration window.
 5. **Route Validators**: Blocks malformed requests before service dispatch.
@@ -92,6 +92,6 @@ Incoming requests traverse an ordered pipeline before reaching route handlers:
 
 ## Production Invariants & Guardrails
 
-- **Zero Raw SQL in Routes**: All database reads, writes, and transactional state changes execute through Prisma ORM models or parameter-isolated queries.
+- **Prisma ORM & Parameterized Vector SQL**: Standard relational reads, writes, and transactional state changes execute through Prisma ORM models. Because Prisma lacks native pgvector support (`Unsupported("vector(1024)")`), vector similarity searches execute via parameterized `prisma.$queryRaw` tagged templates with strict UUID tenant isolation.
 - **Fail-Fast Request Validation**: Payloads failing schema or limit checks are rejected with descriptive HTTP 400/422 responses before invoking database or AWS SDK resources.
 - **Graceful Lifecycle Management**: The process captures `SIGTERM` and `SIGINT` signals, closing open HTTP sockets, releasing `pgPool` connections, and disconnecting Prisma cleanly.

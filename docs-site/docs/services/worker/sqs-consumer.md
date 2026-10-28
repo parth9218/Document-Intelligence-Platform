@@ -65,14 +65,18 @@ sequenceDiagram
 
 ---
 
-## S3 Key Parsing & Schema Contract
+## S3 Key Parsing & Envelope Contract
 
-Incoming messages are filtered to match the canonical S3 key convention:
+Incoming SQS messages wrap AWS S3 Event Notifications (`Records[0].s3`):
 
-`sessions/{sessionId}/documents/{documentId}/original`
-
-- **Malformed Messages**: If an object key does not match this structure, the message is logged and deleted immediately to prevent infinite poison-pill polling loops.
-- **Envelope Extraction**: Extracts `bucket.name`, `object.key`, `sessionId` (segment 1), and `documentId` (segment 3).
+- **S3 Key Schema**: `sessions/{sessionId}/documents/{documentId}/original`
+- **Key Extraction via `key.split('/')` (0-indexed)**:
+    - `parts[0]` = `"sessions"` (literal prefix)
+    - `parts[1]` = `{sessionId}` (tenant session UUID)
+    - `parts[2]` = `"documents"` (literal path separator)
+    - `parts[3]` = `{documentId}` (document UUID)
+    - `parts[4]` = `"original"` (target file identifier)
+- **Poison-Pill Protection**: If the key has fewer than 4 parts or fails validation (`parts[0] != 'sessions'` or `parts[2] != 'documents'`), the message is logged and deleted immediately to prevent polling loops.
 
 ---
 

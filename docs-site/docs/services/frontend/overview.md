@@ -13,7 +13,7 @@ description: "Next.js App Router architecture, Tailwind CSS v4 styling, Zustand 
 
 The frontend application (`apps/frontend`) runs as a decoupled Single Page Application (SPA) built with **Next.js 16.2 App Router**, **React 19**, and **Tailwind CSS v4**. 
 
-Compiled with static export (`output: 'export'`), the application builds into pure static assets (`HTML`, `CSS`, `JS`) served globally from **Amazon S3** through **Amazon CloudFront**, eliminating in-cluster frontend Node.js server overhead and scaling to infinite web traffic at under $3.00/month.
+Compiled with static export (`output: 'export'`), the application builds into pure static assets (`HTML`, `CSS`, `JS`) served globally from **Amazon S3** through **Amazon CloudFront**. This eliminates in-cluster Node.js server overhead, leverages CloudFront's permanent free tier (1 TB egress/mo and 10M requests) for negligible baseline hosting costs (<$3.00/month), and scales elastically with global edge bandwidth on demand.
 
 ```mermaid
 flowchart TD
