@@ -157,7 +157,7 @@ nav:
       - AWS Cloud Infrastructure:
           - "Overview & Architecture": "infrastructure/aws/overview.md"
           - "Terraform Modules": "infrastructure/aws/terraform-modules.md"
-          - "Initial Provisioning Guide": "infrastructure/aws/initial-setup.md"
+       #  - "Initial Provisioning Guide": "infrastructure/aws/initial-setup.md"
       - Kubernetes Platform (EKS):
           - "Cluster Topology & Architecture": "infrastructure/kubernetes/overview.md"
           - "Secrets Store CSI Driver": "infrastructure/kubernetes/secrets-csi-driver.md"

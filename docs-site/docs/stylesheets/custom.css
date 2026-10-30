@@ -129,3 +129,128 @@
   background-color: #1e293b !important;
   border-color: #334155 !important;
 }
+
+/* ==========================================================================
+   Panzoom Toolbar & Mobile Touch Optimization
+   ========================================================================== */
+.panzoom-nav {
+  touch-action: manipulation !important;
+  z-index: 1000 !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  column-gap: 6px !important;
+  padding: 4px 6px !important;
+  border-radius: 6px !important;
+  background-color: var(--md-default-bg-color, #ffffff) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  opacity: 0.95 !important;
+}
+
+.panzoom-button {
+  min-width: 38px !important;
+  min-height: 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  padding: 6px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  background: transparent !important;
+  transition: background-color 0.15s ease, transform 0.1s ease !important;
+}
+
+/* Ensure hidden state always overrides button display */
+.panzoom-hidden,
+.panzoom-button.panzoom-hidden {
+  display: none !important;
+}
+
+/* State-based visibility: exactly one fullscreen toggle button visible at any time */
+.panzoom-box:not(.panzoom-fullscreen) .panzoom-min {
+  display: none !important;
+}
+
+.panzoom-box:not(.panzoom-fullscreen) .panzoom-max:not(.panzoom-hidden) {
+  display: inline-flex !important;
+}
+
+.panzoom-box.panzoom-fullscreen .panzoom-max {
+  display: none !important;
+}
+
+.panzoom-box.panzoom-fullscreen .panzoom-min:not(.panzoom-hidden) {
+  display: inline-flex !important;
+}
+
+.panzoom-button:hover,
+.panzoom-button:active {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-md-color-scheme="slate"] .panzoom-button:hover,
+[data-md-color-scheme="slate"] .panzoom-button:active {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.panzoom-button .panzoom-icon,
+.panzoom-button svg,
+.panzoom-button path {
+  pointer-events: none !important;
+  width: 1.25em !important;
+  height: 1.25em !important;
+}
+
+/* In fullscreen mode, pin toolbar with prominent z-index and clear contrast */
+.panzoom-fullscreen .panzoom-nav {
+  position: fixed !important;
+  top: 1rem !important;
+  right: 1rem !important;
+  z-index: 100000 !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18) !important;
+  border-radius: 8px !important;
+  padding: 6px 8px !important;
+}
+
+[data-md-color-scheme="slate"] .panzoom-fullscreen .panzoom-nav {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Mobile viewport optimizations (<768px) */
+@media (max-width: 768px) {
+  .panzoom-nav {
+    top: 8px !important;
+    right: 8px !important;
+    column-gap: 8px !important;
+    padding: 4px !important;
+  }
+
+  .panzoom-button {
+    min-width: 42px !important;
+    min-height: 42px !important;
+    width: 42px !important;
+    height: 42px !important;
+    padding: 8px !important;
+  }
+
+  .panzoom-button .panzoom-icon,
+  .panzoom-button svg {
+    width: 1.4em !important;
+    height: 1.4em !important;
+  }
+
+  .panzoom-fullscreen .panzoom-nav {
+    top: 12px !important;
+    right: 12px !important;
+    padding: 6px !important;
+  }
+}
+

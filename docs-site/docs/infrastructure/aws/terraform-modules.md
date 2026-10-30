@@ -44,13 +44,15 @@ flowchart TD
 ## Child Module Specifications
 
 ### 1. Core Orchestration Module (`modules/core`)
+
 - **Purpose**: High-level composition module that receives root environment variables, computes CIDR subnet allocations, calls child modules in dependency order, and re-exports consolidated outputs.
 - **Key Resources**: Coordinates inter-module dependencies without instantiating AWS resources directly.
 - **Inputs**: `project_name`, `environment`, `vpc_cidr`, `db_name`, `db_username`, `api_alb_dns_name`, `github_actions_ci_role`.
 - **Outputs**: Re-exports all underlying VPC IDs, EKS cluster endpoints, RDS hostnames, S3 bucket names, SQS URLs, ECR registry URLs, and CloudFront distribution IDs.
 
 ### 2. Networking & Isolation Module (`modules/vpc`)
-- **Purpose**: Provisions isolated multi-AZ networking foundation across two Availability Zones (`us-east-1a` and `us-east-1b`).
+
+- **Purpose**: Provisions isolated multi-AZ networking foundation across two Availability Zones.
 - **Key Resources**:
   - `aws_vpc`: Dedicated VPC with DNS hostnames and resolution enabled.
   - `aws_subnet` (4x): Two public subnets for ingress/egress, two private subnets for compute/data.
@@ -61,6 +63,7 @@ flowchart TD
 - **Outputs**: `vpc_id`, `public_subnets`, `private_subnets`, `vpc_cidr_block`.
 
 ### 3. Container Compute & Identity Module (`modules/eks`)
+
 - **Purpose**: Deploys managed Amazon EKS cluster operating in **EKS Auto Mode** with native Pod Identity Associations, managed cluster add-ons, and administrative access entries.
 - **Key Resources**:
   - `aws_eks_cluster`: Managed Kubernetes 1.37 cluster with Auto Mode enabled (`general-purpose` and `system` node pools).
@@ -78,6 +81,7 @@ flowchart TD
 - **Outputs**: `cluster_name`, `cluster_endpoint`, `cluster_certificate_authority_data`, `api_role_arn`, `worker_role_arn`, `external_secrets_role_arn`.
 
 ### 4. Storage & Content Delivery Module (`modules/storage`)
+
 - **Purpose**: Establishes persistent vector storage, document staging buckets, and global CDN distribution.
 - **Key Resources**:
   - `aws_db_instance`: RDS PostgreSQL 16 engine pre-configured with `pgvector`, multi-AZ failover, encrypted storage, and IAM database authentication enabled.
@@ -89,6 +93,7 @@ flowchart TD
 - **Outputs**: `db_address`, `db_port`, `documents_bucket_name`, `documents_bucket_id`, `frontend_bucket_name`, `cloudfront_domain`, `cloudfront_distribution_id`.
 
 ### 5. Asynchronous Messaging Module (`modules/messaging`)
+
 - **Purpose**: Manages event-driven handoff from S3 document uploads to background Python ingestion workers.
 - **Key Resources**:
   - `aws_sqs_queue`: Standard FIFO/Standard queue with 20-second long-polling and 600-second visibility timeout.
@@ -99,6 +104,7 @@ flowchart TD
 - **Outputs**: `sqs_queue_url`, `sqs_queue_arn`, `dlq_url`, `dlq_arn`.
 
 ### 6. Container Registry Module (`modules/ecr`)
+
 - **Purpose**: Houses container images and Helm OCI charts within hierarchical, slash-delimited namespaces.
 - **Key Resources**:
   - `aws_ecr_repository` (API): `${project_name}/${environment}/api` repository.
@@ -109,6 +115,7 @@ flowchart TD
 - **Outputs**: `ecr_registry_url`, `api_repository_url`, `worker_repository_url`.
 
 ### 7. Configuration & Secrets Module (`modules/secrets`)
+
 - **Purpose**: Provisions central parameter management for runtime configuration and pod hydration.
 - **Key Resources**:
   - `aws_secretsmanager_secret`: Holds database master passwords and HMAC session encryption signing keys.
@@ -116,23 +123,15 @@ flowchart TD
 - **Inputs**: `project_name`, `environment`, `db_name`, `db_username`, `db_host`, `db_port`, `s3_bucket`, `cloudfront_domain`, `sqs_url`, `dlq_url`.
 - **Outputs**: `db_secret_arn`, `session_secret_arn`, `ssm_parameter_prefix`.
 
-### 8. Transport Security Module (`modules/acm`)
-- **Purpose**: Manages TLS/SSL public certificates for custom domains when integrated.
-- **Key Resources**:
-  - `aws_acm_certificate`: Wildcard TLS certificate resource with DNS validation.
-  - `aws_acm_certificate_validation`: Automated validation status tracker.
-- **Inputs**: `domain_name`, `environment`, `validation_method`.
-- **Outputs**: `certificate_arn`.
-
 ---
 
 ## Inter-Module Parameter Coupling
 
-| Providing Module | Output Attribute | Consuming Module | Injected Usage |
-|---|---|---|---|
-| `vpc` | `private_subnets` | `eks`, `storage` | Pod scheduling and database subnet group binding |
-| `vpc` | `vpc_id` | `storage`, `eks` | Security group attachment and network boundary |
-| `storage` | `documents_bucket_arn` | `messaging` | SQS queue policy authorization for S3 notifications |
-| `storage` | `db_address`, `db_port` | `secrets` | SSM parameters for Express API & Worker DB connection |
-| `messaging` | `sqs_queue_url`, `dlq_url`| `secrets` | SSM parameters for worker consumer long-polling |
-| `ecr` | `ecr_registry_url` | Root Outputs | Upstream consumption by ArgoCD GitOps and CI/CD promotion |
+| Providing Module | Output Attribute           | Consuming Module | Injected Usage                                            |
+| ---------------- | -------------------------- | ---------------- | --------------------------------------------------------- |
+| `vpc`            | `private_subnets`          | `eks`, `storage` | Pod scheduling and database subnet group binding          |
+| `vpc`            | `vpc_id`                   | `storage`, `eks` | Security group attachment and network boundary            |
+| `storage`        | `documents_bucket_arn`     | `messaging`      | SQS queue policy authorization for S3 notifications       |
+| `storage`        | `db_address`, `db_port`    | `secrets`        | SSM parameters for Express API & Worker DB connection     |
+| `messaging`      | `sqs_queue_url`, `dlq_url` | `secrets`        | SSM parameters for worker consumer long-polling           |
+| `ecr`            | `ecr_registry_url`         | Root Outputs     | Upstream consumption by ArgoCD GitOps and CI/CD promotion |

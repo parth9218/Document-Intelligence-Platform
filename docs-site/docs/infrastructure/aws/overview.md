@@ -11,7 +11,7 @@ description: "Foundational AWS topology: VPC, EKS Auto Mode v1.37, RDS PostgreSQ
 
 ## Architectural Role & Principles
 
-The AWS cloud infrastructure establishes the foundational hosting, persistence, messaging, and compute platform for the AI Document Intelligence Platform. Designed under **AWS Certified DevOps Engineer — Professional (AWS-DOP)** standards, it enforces:
+The AWS cloud infrastructure establishes the foundational hosting, persistence, messaging, and compute platform for the AI Document Intelligence Platform.
 
 - **EKS Auto Mode Compute (Kubernetes 1.37)**: Replaces legacy EC2 Managed Node Groups and manual launch templates with automated AWS-managed `general-purpose` and `system` node pools, delivering automated OS patching, right-sizing, and built-in EBS CSI storage integration.
 - **Zero Static Credentials**: Workload pods assume IAM roles dynamically via native **EKS Pod Identity Associations**, while database connections utilize ephemeral 15-minute IAM tokens via `@aws-sdk/rds-signer`.
@@ -35,17 +35,17 @@ The pre-rendered architecture topology below depicts the cloud primitives provis
 
 ## Core Cloud Services Matrix
 
-| AWS Service                       | Architecture Domain       | Operational Role & Configuration                                                                                                                |
-| --------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Amazon VPC**                    | Network Isolation         | Multi-AZ network across 2 AZs; 2 private subnets, 2 public subnets, 2 NAT Gateways, and DNS hostnames enabled.                                  |
+| AWS Service                       | Architecture Domain       | Operational Role & Configuration                                                                                                                                                                                   |
+| --------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Amazon VPC**                    | Network Isolation         | Multi-AZ network across 2 AZs; 2 private subnets, 2 public subnets, 2 NAT Gateways, and DNS hostnames enabled.                                                                                                     |
 | **Amazon EKS (Auto Mode)**        | Container Compute         | Managed Kubernetes 1.37 cluster with automated node pools (`general-purpose`, `system`), native managed add-ons (`eks-pod-identity-agent`, `aws-secrets-store-csi-driver-provider`), and CloudWatch audit logging. |
-| **Amazon RDS PostgreSQL**         | Relational & Vector Store | Multi-AZ PostgreSQL 16 engine with native `pgvector` extension, IAM database authentication enabled, and dedicated db subnet group.             |
-| **Amazon S3**                     | Storage & Static Assets   | Dual-bucket architecture: private Documents bucket (presigned multipart ingestion) and private Frontend bucket (static build hosting with OAC). |
-| **Amazon SQS & DLQ**              | Asynchronous Messaging    | S3 `ObjectCreated` event-driven queue; 20s long-polling, 600s visibility timeout, and Dead Letter Queue with 3-retry max receive count.         |
-| **Amazon CloudFront**             | Global Edge Routing       | Dual-origin CDN distribution: S3 default origin for SPA assets and ALB custom origin for `/api/*` with `CachingDisabled` policy.                |
-| **Amazon ECR**                    | Container & OCI Registry  | Slash-delimited private repositories (`${project}/${env}/${app}`) hosting Docker container images and Helm OCI charts in identical namespaces.  |
-| **AWS Secrets Manager & SSM**     | Configuration Management  | Dynamic storage of database credentials, HMAC session signing secrets, and environment parameters mounted into pods via CSI drivers.            |
-| **AWS Certificate Manager (ACM)** | Transport Security        | TLS certificate management and automated domain validation for external load balancer listeners and CloudFront distributions.                   |
+| **Amazon RDS PostgreSQL**         | Relational & Vector Store | Multi-AZ PostgreSQL 16 engine with native `pgvector` extension, IAM database authentication enabled, and dedicated db subnet group.                                                                                |
+| **Amazon S3**                     | Storage & Static Assets   | Dual-bucket architecture: private Documents bucket (presigned multipart ingestion) and private Frontend bucket (static build hosting with OAC).                                                                    |
+| **Amazon SQS & DLQ**              | Asynchronous Messaging    | S3 `ObjectCreated` event-driven queue; 20s long-polling, 600s visibility timeout, and Dead Letter Queue with 3-retry max receive count.                                                                            |
+| **Amazon CloudFront**             | Global Edge Routing       | Dual-origin CDN distribution: S3 default origin for SPA assets and ALB custom origin for `/api/*` with `CachingDisabled` policy.                                                                                   |
+| **Amazon ECR**                    | Container & OCI Registry  | Slash-delimited private repositories (`${project}/${env}/${app}`) hosting Docker container images and Helm OCI charts in identical namespaces.                                                                     |
+| **AWS Secrets Manager & SSM**     | Configuration Management  | Dynamic storage of database credentials, HMAC session signing secrets, and environment parameters mounted into pods via CSI drivers.                                                                               |
+| **AWS Certificate Manager (ACM)** | Transport Security        | TLS certificate management and automated domain validation for external load balancer listeners and CloudFront distributions.                                                                                      |
 
 ---
 
