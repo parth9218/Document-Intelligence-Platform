@@ -17,15 +17,15 @@ description: "Decoupling high-concurrency client I/O in Node.js from compute-int
 The platform simultaneously executes two fundamentally divergent computational workloads:
 
 1. **High-Concurrency Real-Time Web I/O**:
-   - Serving REST endpoints for batch upload initialization, session authentication, and query execution.
-   - Maintaining hundreds of concurrent, long-lived **Server-Sent Events (SSE)** connections for real-time document progress updates (`GET /api/documents/progress`) and grounded LLM token streaming (`POST /api/query/search`).
-   - Requires minimal memory footprint per connection and non-blocking asynchronous event dispatching.
+    - Serving REST endpoints for batch upload initialization, session authentication, and query execution.
+    - Maintaining hundreds of concurrent, long-lived **Server-Sent Events (SSE)** connections for real-time document progress updates (`GET /api/documents/progress`) and grounded LLM token streaming (`POST /api/query/search`).
+    - Requires minimal memory footprint per connection and non-blocking asynchronous event dispatching.
 
 2. **Compute-Intensive Document Ingestion**:
-   - Downloading large binary PDF documents from S3.
-   - Executing low-level C-bindings to sniff magic bytes, parse font glyphs, and extract structured page-by-page text.
-   - Performing sliding-window text chunking, calculating cosine vectors via AWS Bedrock Titan V2 (or local CPU bi-encoders), and committing batch upserts to `pgvector`.
-   - Requires high memory throughput and specialized machine learning/data extraction libraries.
+    - Downloading large binary PDF documents from S3.
+    - Executing low-level C-bindings to sniff magic bytes, parse font glyphs, and extract structured page-by-page text.
+    - Performing sliding-window text chunking, calculating cosine vectors via AWS Bedrock Titan V2 (or local CPU bi-encoders), and committing batch upserts to `pgvector`.
+    - Requires high memory throughput and specialized machine learning/data extraction libraries.
 
 ### The Monolithic Single-Language Dilemma
 
@@ -41,14 +41,14 @@ Unifying both concerns into a single service creates severe runtime pathologies:
 We decided to partition the backend into **two polyglot microservices** decoupled asynchronously via Amazon S3 and Amazon SQS:
 
 1. **Client-Facing API Service (`apps/api/`)**:
-   - **Runtime**: Node.js 24 with TypeScript and Express.
-   - **Responsibilities**: Session cookie HMAC signing, rate limits, presigned POST URL generation, Prisma ORM database transactions, Bedrock Claude SSE answer streaming, and PostgreSQL `LISTEN/NOTIFY` push distribution.
-   - **Autoscaling**: Scaled horizontally by the **KEDA HTTP Add-on** based on incoming HTTP request rate and concurrent connection metrics.
+    - **Runtime**: Node.js 24 with TypeScript and Express.
+    - **Responsibilities**: Session cookie HMAC signing, rate limits, presigned POST URL generation, Prisma ORM database transactions, Bedrock Claude SSE answer streaming, and PostgreSQL `LISTEN/NOTIFY` push distribution.
+    - **Autoscaling**: Scaled horizontally by the **KEDA HTTP Add-on** based on incoming HTTP request rate and concurrent connection metrics.
 
 2. **Background Processing Worker (`apps/worker/`)**:
-   - **Runtime**: Python 3.11 with Boto3 and PyMuPDF (`fitz`).
-   - **Responsibilities**: Long-polling SQS queues (`WaitTimeSeconds=20`), S3 file downloads, magic byte sniffers, page extraction, paragraph chunking, Bedrock Titan V2 embeddings, and SQLAlchemy batch upserts with checkpoint resumption.
-   - **Autoscaling**: Scaled from **0 to 10 pods** by **KEDA** based strictly on SQS queue depth (`ApproximateNumberOfMessagesVisible`).
+    - **Runtime**: Python 3.11 with Boto3 and PyMuPDF (`fitz`).
+    - **Responsibilities**: Long-polling SQS queues (`WaitTimeSeconds=20`), S3 file downloads, magic byte sniffers, page extraction, paragraph chunking, Bedrock Titan V2 embeddings, and SQLAlchemy batch upserts with checkpoint resumption.
+    - **Autoscaling**: Scaled from **0 to 10 pods** by **KEDA** based strictly on SQS queue depth (`ApproximateNumberOfMessagesVisible`).
 
 ---
 
@@ -117,6 +117,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **Multi-Language Operational Overhead**: Requires maintaining two separate container packaging pipelines, Dockerfiles, and package managers (`package.json` vs `requirements.txt`).
-  - *Mitigation*: Unified GitHub Actions workflow (`.github/workflows/api-worker-cicd.yml`) manages parallel matrix builds and automated promotion across both services.
+    - *Mitigation*: Unified GitHub Actions workflow (`.github/workflows/api-worker-cicd.yml`) manages parallel matrix builds and automated promotion across both services.
 - **Database Model Synchronization**: Two runtimes share the same PostgreSQL database schema.
-  - *Mitigation*: ADR-009 enforces **Prisma Migrate** as the single source of truth, with mirrored SQLAlchemy declarative models in Python.
+    - *Mitigation*: ADR-009 enforces **Prisma Migrate** as the single source of truth, with mirrored SQLAlchemy declarative models in Python.

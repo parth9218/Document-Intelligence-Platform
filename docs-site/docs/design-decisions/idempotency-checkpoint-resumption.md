@@ -35,13 +35,13 @@ Without an explicit idempotency and checkpoint strategy:
 We decided to implement a **three-mechanism idempotency and batch checkpoint resumption strategy**:
 
 1. **Composite Upsert Key on Document Chunks**:
-   The `document_chunks` table enforces a composite unique constraint on `(document_id, chunk_index)` in the database schema. When saving chunks, the worker performs atomic upserts (`ON CONFLICT DO UPDATE`), safely updating existing records if re-processed without creating duplicate rows or throwing constraint errors.
+    The `document_chunks` table enforces a composite unique constraint on `(document_id, chunk_index)` in the database schema. When saving chunks, the worker performs atomic upserts (`ON CONFLICT DO UPDATE`), safely updating existing records if re-processed without creating duplicate rows or throwing constraint errors.
 
 2. **Per-Batch Checkpoint State Persistence**:
-   The `processing_jobs` table maintains a `checkpoint_index` column. After successfully embedding and committing each batch of 50 chunks, the worker atomically commits the current batch index, increments the processed chunk count, and updates the linear progress percentage. If a worker restarts mid-document, it queries the database for the last committed checkpoint index and resumes execution starting strictly from the next batch, skipping all previously completed chunks.
+    The `processing_jobs` table maintains a `checkpoint_index` column. After successfully embedding and committing each batch of 50 chunks, the worker atomically commits the current batch index, increments the processed chunk count, and updates the linear progress percentage. If a worker restarts mid-document, it queries the database for the last committed checkpoint index and resumes execution starting strictly from the next batch, skipping all previously completed chunks.
 
 3. **Delayed SQS Message Deletion & Visibility Timeout**:
-   The SQS message is never deleted during processing. The consumer sets a 600-second (10-minute) visibility timeout. If a pod terminates abruptly, the message remains unacknowledged in the queue. Once the 600-second window elapses, SQS automatically makes the message visible again to surviving worker pods. Only after the document is completely processed and marked completed does the worker acknowledge and delete the SQS message.
+    The SQS message is never deleted during processing. The consumer sets a 600-second (10-minute) visibility timeout. If a pod terminates abruptly, the message remains unacknowledged in the queue. Once the 600-second window elapses, SQS automatically makes the message visible again to surviving worker pods. Only after the document is completely processed and marked completed does the worker acknowledge and delete the SQS message.
 
 ---
 
@@ -99,6 +99,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **Write Amplification on Job Table**: Writing progress updates every 50 chunks produces periodic transactions.
-  - *Mitigation*: Batching updates every 50 chunks balances database write load (only 20 writes for 1,000 chunks) with real-time UI visibility.
+    - *Mitigation*: Batching updates every 50 chunks balances database write load (only 20 writes for 1,000 chunks) with real-time UI visibility.
 - **Visibility Timeout Delay**: If a worker pod crashes, the job will not be retried until the 600-second visibility timeout elapses.
-  - *Mitigation*: 600 seconds is necessary to allow valid large documents to complete without concurrent workers picking up the same message.
+    - *Mitigation*: 600 seconds is necessary to allow valid large documents to complete without concurrent workers picking up the same message.

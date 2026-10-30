@@ -16,9 +16,9 @@ The Kubernetes platform layer (`infra/terraform/k8s`) transforms the raw Amazon 
 - **EKS Auto Mode (Kubernetes 1.37)**: Operates with AWS-managed `general-purpose` and `system` node pools. Traditional EC2 launch templates, manual node group patching, and custom Karpenter CRD configurations are replaced by AWS-managed automated node scaling, OS patching, and built-in EBS CSI integration.
 - **Modern Gateway API Ingress (v1.6.1)**: Replaces legacy Ingress with declarative `GatewayClass`, `Gateway`, and `HTTPRoute` resources managed natively by the **AWS Load Balancer Controller (v3.5.0)** with direct VPC CNI IP-target routing.
 - **Multi-Source ArgoCD GitOps Engine**: Reconciles microservices using ArgoCD's Multiple Sources pattern (`$ref`), which pulls from two decoupled upstream sources simultaneously:
-  - **Source 1 (Packaging)**: An immutable, versioned Helm OCI chart hosted in an OCI registry (AWS ECR: `{{chart_name}}:{{chart_version}}`).
-  - **Source 2 (Configuration)**: The environment-specific `values.yaml` in Git (`$app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`), pinned to an exact commit SHA (`{{target_commit}}`).
-  - **Matrix Generator Join**: Dynamically links application image releases (tracked on `{env}/app`) and Helm chart releases (tracked on `{env}/helm`), allowing templates and application parameters to evolve and release completely independently.
+    - **Source 1 (Packaging)**: An immutable, versioned Helm OCI chart hosted in an OCI registry (AWS ECR: `{{chart_name}}:{{chart_version}}`).
+    - **Source 2 (Configuration)**: The environment-specific `values.yaml` in Git (`$app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`), pinned to an exact commit SHA (`{{target_commit}}`).
+    - **Matrix Generator Join**: Dynamically links application image releases (tracked on `{env}/app`) and Helm chart releases (tracked on `{env}/helm`), allowing templates and application parameters to evolve and release completely independently.
 - **Automated Credential Rotation**: Deploys the **External Secrets Operator (ESO)** with EKS Pod Identity to generate 12-hour AWS ECR authorization tokens, rotating them every 1 hour into ArgoCD repository secrets to solve private Helm OCI authentication.
 - **Dual Workload Autoscaling**: Implements **KEDA (v2.20.2)** to autoscale workloads based on real workload pressure: scaling Python Worker pods 0→10 on Amazon SQS queue depth, and Express API pods on HTTP connection saturation via the KEDA HTTP Add-on.
 

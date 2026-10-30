@@ -38,16 +38,16 @@ The issue is governed by standard browser network connection limits defined in R
 We superseded ADR-008 with **Session-Scoped SSE Streams ([ADR-017](../design-decisions/session-scoped-sse.md))**:
 
 1. **Single Persistent Connection**:
-   - Replaced per-document routes with one session-scoped endpoint: `GET /api/documents/progress`.
-   - Only **one** SSE socket is established per browser session, regardless of whether 1, 5, or 20 documents are actively processing.
+    - Replaced per-document routes with one session-scoped endpoint: `GET /api/documents/progress`.
+    - Only **one** SSE socket is established per browser session, regardless of whether 1, 5, or 20 documents are actively processing.
 2. **PostgreSQL Session-Scoped NOTIFY Channel**:
-   - Overwrote the database trigger `notify_progress_channel()` to emit notifications on a channel partitioned strictly by session ID (`progress_{sessionId}`, replacing hyphens with underscores).
-   - Express executes `LISTEN progress_{sessionId}` once per connected user session, avoiding global broadcast noise.
+    - Overwrote the database trigger `notify_progress_channel()` to emit notifications on a channel partitioned strictly by session ID (`progress_{sessionId}`, replacing hyphens with underscores).
+    - Express executes `LISTEN progress_{sessionId}` once per connected user session, avoiding global broadcast noise.
 3. **Typed SSE Event Lifecycle**:
-   - **`event: snapshot`**: Emitted once on connection establishment, delivering the current status array of all active documents in the session.
-   - **`event: update`**: Emitted whenever the PostgreSQL trigger fires for any document belonging to that session.
+    - **`event: snapshot`**: Emitted once on connection establishment, delivering the current status array of all active documents in the session.
+    - **`event: update`**: Emitted whenever the PostgreSQL trigger fires for any document belonging to that session.
 4. **Resilient Polling Fallback**:
-   - If SSE disconnects or corporate proxies terminate long-lived streams, the frontend transparently falls back to polling `GET /api/documents/status` every 3 seconds.
+    - If SSE disconnects or corporate proxies terminate long-lived streams, the frontend transparently falls back to polling `GET /api/documents/status` every 3 seconds.
 
 ```mermaid
 flowchart TD

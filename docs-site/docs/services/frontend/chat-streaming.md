@@ -61,11 +61,11 @@ Implemented in `src/hooks/useQuery.ts`:
 
 - **Stream Decoding**: Reads the incoming UTF-8 byte stream using `response.body.getReader()`, splitting buffer lines on `\n\n` delimiters.
 - **Event Frame Dispatcher**:
-  - `event: context`: Delivers the top-5 retrieved context passages.
-  - `event: token`: Appends incremental text deltas to the active assistant response.
-  - `event: citation`: Binds citation metadata (document name, page number, relevance match) to the message.
-  - `event: done`: Closes the active generation cycle.
-  - `event: error`: Renders inline conversational alert banners on stream interruptions.
+    - `event: context`: Delivers the top-5 retrieved context passages.
+    - `event: token`: Appends incremental text deltas to the active assistant response.
+    - `event: citation`: Binds citation metadata (document name, page number, relevance match) to the message.
+    - `event: done`: Closes the active generation cycle.
+    - `event: error`: Renders inline conversational alert banners on stream interruptions.
 - **AbortController Invariant**: Every query binds an `AbortController`. If a user clicks "Stop Generating" or navigates away, the signal aborts the request, notifying Express to close the Bedrock stream immediately.
 
 ---

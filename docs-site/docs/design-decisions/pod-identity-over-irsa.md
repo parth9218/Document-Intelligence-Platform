@@ -36,13 +36,13 @@ Historically, Kubernetes workloads on AWS utilized **IAM Roles for Service Accou
 We decided to adopt **Amazon EKS Pod Identity Associations** as the authoritative workload identity mechanism across all environments:
 
 1. **Native Association Resource**:
-   Terraform manages native Pod Identity Associations, directly mapping the target cluster name, namespace, and Kubernetes ServiceAccount to the corresponding IAM role without intermediary OIDC identity provider resources.
+    Terraform manages native Pod Identity Associations, directly mapping the target cluster name, namespace, and Kubernetes ServiceAccount to the corresponding IAM role without intermediary OIDC identity provider resources.
 
 2. **Unified, Cluster-Agnostic Trust Policy**:
-   All workload IAM roles declare a single, standardized trust policy delegating authority directly to the AWS EKS Pod Identity service principal (`pods.eks.amazonaws.com`) with role-assumption and session-tagging permissions. Because the policy no longer embeds cluster-specific OIDC hashes, the same IAM role definition can be shared across development, staging, and production clusters.
+    All workload IAM roles declare a single, standardized trust policy delegating authority directly to the AWS EKS Pod Identity service principal (`pods.eks.amazonaws.com`) with role-assumption and session-tagging permissions. Because the policy no longer embeds cluster-specific OIDC hashes, the same IAM role definition can be shared across development, staging, and production clusters.
 
 3. **EKS Pod Identity Agent DaemonSet**:
-   The native `eks-pod-identity-agent` runs on cluster worker nodes, intercepting AWS SDK requests to the standard link-local metadata address and supplying temporary IAM credentials.
+    The native `eks-pod-identity-agent` runs on cluster worker nodes, intercepting AWS SDK requests to the standard link-local metadata address and supplying temporary IAM credentials.
 
 ---
 
@@ -118,6 +118,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **EKS Version Constraint**: Requires Kubernetes 1.24+ and the `eks-pod-identity-agent` cluster add-on.
-  - *Mitigation*: Our cluster runs modern Kubernetes 1.37 with AWS EKS Auto Mode, where the Pod Identity agent is managed natively.
+    - *Mitigation*: Our cluster runs modern Kubernetes 1.37 with AWS EKS Auto Mode, where the Pod Identity agent is managed natively.
 - **Cross-Account Limitations**: EKS Pod Identity does not directly assume cross-account roles in the initial association.
-  - *Mitigation*: The workload role assumes a secondary cross-account role via standard STS `sts:AssumeRole` if external account access is required.
+    - *Mitigation*: The workload role assumes a secondary cross-account role via standard STS `sts:AssumeRole` if external account access is required.

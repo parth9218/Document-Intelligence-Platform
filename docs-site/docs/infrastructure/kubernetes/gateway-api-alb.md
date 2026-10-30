@@ -66,17 +66,17 @@ flowchart TD
 ### 2. Gateway (`api_gateway.yaml`)
 - Provisions the shared AWS Application Load Balancer across public VPC subnets.
 - Configured listener hierarchy:
-  - **HTTP (Port 80) — Active Production Ingress**: Receives reverse-proxied traffic forwarded from Amazon CloudFront across the private AWS backbone. Public TLS encryption is terminated at CloudFront, keeping ALB ingress simple and cost-efficient.
-  - **HTTPS (Port 443) — Declared but Currently Inactive**: Declared in the manifest template with an ACM certificate binding (`alb.ingress.kubernetes.io/certificate-arn: ${acm_cert_arn}`) for future direct custom-domain edge termination, but currently unused in production to avoid custom domain certificate overhead.
+    - **HTTP (Port 80) — Active Production Ingress**: Receives reverse-proxied traffic forwarded from Amazon CloudFront across the private AWS backbone. Public TLS encryption is terminated at CloudFront, keeping ALB ingress simple and cost-efficient.
+    - **HTTPS (Port 443) — Declared but Currently Inactive**: Declared in the manifest template with an ACM certificate binding (`alb.ingress.kubernetes.io/certificate-arn: ${acm_cert_arn}`) for future direct custom-domain edge termination, but currently unused in production to avoid custom domain certificate overhead.
 
 ### 3. Cross-Namespace ReferenceGrant (`httproute.yaml`)
 - Security boundary explicitly permitting the `HTTPRoute` in the `default` namespace to forward traffic across namespace boundaries to the `keda-add-ons-http-interceptor-proxy` located in the `keda` namespace.
 
 ### 4. HTTPRoute with URLRewrite (`httproute.yaml`)
 - Declares application routing rules attached to the parent `api-gateway`:
-  - **Path Matching**: Evaluates incoming requests with path prefix `/api`.
-  - **URLRewrite Filter**: Executes a `ReplacePrefixMatch` filter replacing the `/api` segment with `/` (e.g. `/api/documents` rewritten to `/documents`, and `/api/query` rewritten to `/query`).
-  - **Backend Reference**: Routes rewritten requests directly to the KEDA HTTP Add-on interceptor proxy on port `8080`.
+    - **Path Matching**: Evaluates incoming requests with path prefix `/api`.
+    - **URLRewrite Filter**: Executes a `ReplacePrefixMatch` filter replacing the `/api` segment with `/` (e.g. `/api/documents` rewritten to `/documents`, and `/api/query` rewritten to `/query`).
+    - **Backend Reference**: Routes rewritten requests directly to the KEDA HTTP Add-on interceptor proxy on port `8080`.
 
 ---
 

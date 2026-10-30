@@ -37,14 +37,14 @@ For staging and portfolio demonstration environments, purchasing and renewing de
 We implemented **CloudFront Dual-Origin Unified Reverse Proxying** (formalized in [ADR-021](../design-decisions/cloudfront-api-routing.md)):
 
 1. **Dual Origins in a Single Distribution**:
-   - **S3 Origin**: Target for static assets, HTML, JavaScript chunks, and images.
-   - **ALB Custom Origin**: Target for API traffic (`OriginProtocolPolicy: http-only`, Port 80).
+    - **S3 Origin**: Target for static assets, HTML, JavaScript chunks, and images.
+    - **ALB Custom Origin**: Target for API traffic (`OriginProtocolPolicy: http-only`, Port 80).
 2. **Path-Pattern Cache Behaviors**:
-   - `/*` (Default): Serves static assets from S3 with aggressive browser caching (`public, max-age=31536000, immutable`).
-   - `/api/*`: Forwards all HTTP methods directly to the ALB origin. Enforces `Redirect-to-HTTPS` at the edge and applies the AWS managed `CachingDisabled` policy.
+    - `/*` (Default): Serves static assets from S3 with aggressive browser caching (`public, max-age=31536000, immutable`).
+    - `/api/*`: Forwards all HTTP methods directly to the ALB origin. Enforces `Redirect-to-HTTPS` at the edge and applies the AWS managed `CachingDisabled` policy.
 3. **AWS Private Backbone Routing**:
-   - CloudFront terminates TLS at the nearest global edge location.
-   - Traffic between CloudFront and the ALB travels across AWS's low-latency, private global network.
+    - CloudFront terminates TLS at the nearest global edge location.
+    - Traffic between CloudFront and the ALB travels across AWS's low-latency, private global network.
 
 ```mermaid
 flowchart TD

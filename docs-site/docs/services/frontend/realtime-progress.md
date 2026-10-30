@@ -61,8 +61,8 @@ Built around standard browser `EventSource` with custom resiliency logic:
 
 - **Credentials Invariant**: Configured with `withCredentials: true` to forward session cookies across origins.
 - **Typed Event Listeners**:
-  - `snapshot`: Populates or resets the entire Zustand document dictionary upon connection.
-  - `update`: Incrementally updates an individual document record in place.
+    - `snapshot`: Populates or resets the entire Zustand document dictionary upon connection.
+    - `update`: Incrementally updates an individual document record in place.
 - **Heartbeat & Reconnection**: Standard browser EventSource mechanisms automatically attempt reconnection if network connectivity drops.
 
 ---
@@ -83,6 +83,6 @@ Ingestion progress is visualized using dedicated UI cards:
 
 - **Lifecycle Stage Badges**: Displays distinct styled badges mapping to active state machine phases (`Downloading`, `Validating`, `Extracting`, `Chunking`, `Embedding`, `Completed`).
 - **Granular Sub-Stage Indicators**:
-  - During chunking: Displays extracted chunk counters (`"Chunking (4 of 8 chunks)..."`).
-  - During embedding: Displays calculated percentage progress bars (`"Embedding (50% complete)..."`).
+    - During chunking: Displays extracted chunk counters (`"Chunking (4 of 8 chunks)..."`).
+    - During embedding: Displays calculated percentage progress bars (`"Embedding (50% complete)..."`).
 - **Orphan Ingestion Interceptor**: If a document transitions to `failed` or `expired`, the card renders an amber/red warning glow, presents detailed error diagnostics, and provides **Dismiss** (removes card) and **Retry** (prompts file re-selection) actions.

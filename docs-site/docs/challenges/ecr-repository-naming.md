@@ -34,12 +34,12 @@ Dynamically mutating `Chart.yaml` during CI packaging created critical operation
 We refactored all ECR infrastructure and CI/CD pipelines to adopt **hierarchical, slash-delimited ECR repository namespaces**:
 
 1. **Slash-Delimited Repository Naming**:
-   - Updated ECR provisioning to structure repositories by project, environment, and application: `${project_name}/${environment}/${app}` (for example, `docintel/dev/api` and `docintel/dev/worker`).
+    - Updated ECR provisioning to structure repositories by project, environment, and application: `${project_name}/${environment}/${app}` (for example, `docintel/dev/api` and `docintel/dev/worker`).
 2. **Harmonized Docker and Helm Registry Target**:
-   - **Docker Container Images**: Pushed directly to the full repository path matching the application name.
-   - **Helm OCI Chart Packages**: Pushed to the parent namespace path (`docintel/dev`), allowing Helm to append `name: api` natively without changing the chart manifest.
+    - **Docker Container Images**: Pushed directly to the full repository path matching the application name.
+    - **Helm OCI Chart Packages**: Pushed to the parent namespace path (`docintel/dev`), allowing Helm to append `name: api` natively without changing the chart manifest.
 3. **ArgoCD Multi-Source Compatibility**:
-   - The ArgoCD ApplicationSet points to the parent repository namespace as the base URL, resolving chart names and versions dynamically via matrix parameters.
+    - The ArgoCD ApplicationSet points to the parent repository namespace as the base URL, resolving chart names and versions dynamically via matrix parameters.
 
 ```mermaid
 flowchart TD

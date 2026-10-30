@@ -32,14 +32,14 @@ Investigating GitHub Actions workflow trigger mechanics revealed a subtle platfo
 We established a **Deterministic Release Tagging and Bootstrap Protocol**:
 
 1. **Why `[skip ci]` is Necessary on `dev`**:
-   - When CI completes tests and builds container images, the workflow updates `values.yaml` with the new short SHA on the `dev` trunk branch.
-   - This automated commit **must carry `[skip ci]`** to prevent GitHub Actions from re-triggering itself in an infinite recursive build loop on `dev` (`on: push: branches: [dev]`).
+    - When CI completes tests and builds container images, the workflow updates `values.yaml` with the new short SHA on the `dev` trunk branch.
+    - This automated commit **must carry `[skip ci]`** to prevent GitHub Actions from re-triggering itself in an infinite recursive build loop on `dev` (`on: push: branches: [dev]`).
 2. **The Empty Release Anchor Commit**:
-   - Because `dev`'s latest commit carries `[skip ci]`, cutting a semantic release tag directly from that commit causes the tag to inherit the `[skip ci]` message, silently aborting the tag-push webhook.
-   - To bypass this deadlock, release engineers or automation scripts push an explicit clean empty commit (`git commit --allow-empty -m "chore(release): prepare release v1.0.0"`) to `dev`.
-   - Creating the release tag on this clean commit ensures the tagged commit contains no bypass flags, allowing GitHub Actions to detect the tag and trigger the staging or production pipeline.
+    - Because `dev`'s latest commit carries `[skip ci]`, cutting a semantic release tag directly from that commit causes the tag to inherit the `[skip ci]` message, silently aborting the tag-push webhook.
+    - To bypass this deadlock, release engineers or automation scripts push an explicit clean empty commit (`git commit --allow-empty -m "chore(release): prepare release v1.0.0"`) to `dev`.
+    - Creating the release tag on this clean commit ensures the tagged commit contains no bypass flags, allowing GitHub Actions to detect the tag and trigger the staging or production pipeline.
 3. **Workflow Dispatch Fallback**:
-   - All deployment workflows declare manual `workflow_dispatch` triggers, allowing platform engineers to trigger promotions directly from the GitHub UI with explicit version inputs, bypassing tag-push webhook evaluation entirely if needed.
+    - All deployment workflows declare manual `workflow_dispatch` triggers, allowing platform engineers to trigger promotions directly from the GitHub UI with explicit version inputs, bypassing tag-push webhook evaluation entirely if needed.
 
 ```mermaid
 sequenceDiagram

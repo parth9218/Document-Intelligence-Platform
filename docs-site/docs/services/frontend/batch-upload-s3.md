@@ -64,8 +64,8 @@ The upload hook coordinates multi-file batch execution:
 
 1. **Batch Contract**: Groups all valid selected files into a single `POST /api/documents` payload.
 2. **Response Classification**:
-   - `rejected` files: Stored directly into the document registry with inline error codes (`file_too_large`, `invalid_mime_type`) and displayed in the feed.
-   - `ready` files: Added to `localProgressQueue` and passed to the S3 uploader pool.
+    - `rejected` files: Stored directly into the document registry with inline error codes (`file_too_large`, `invalid_mime_type`) and displayed in the feed.
+    - `ready` files: Added to `localProgressQueue` and passed to the S3 uploader pool.
 3. **Modal Dialog Alerts**: If batch-level concurrency or storage quotas are exceeded, the hook presents a glassmorphic dialog detailing exact limit thresholds.
 
 ---

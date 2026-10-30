@@ -60,19 +60,19 @@ The platform configures a unified `SecretProviderClass` (`${project_name}-${envi
 ### 1. Application Infrastructure Parameters
 - **Source**: AWS SSM Parameter Store (`${project_name}/${environment}/config`).
 - **Managed Parameters**:
-  - `DB_IAM_AUTH_ENABLED`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_SSL`.
-  - `S3_BUCKET` (Documents bucket identifier).
-  - `CORS_ALLOWED_ORIGIN` (Whitelisted domain for cross-origin credentials).
-  - `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_ENDPOINT`.
-  - `LLM_PROVIDER`, `LLM_MODEL`, `LLM_ENDPOINT`, `LLM_MAX_TOKENS`.
-  - `QUEUE_URL`, `DLQ_URL`.
+    - `DB_IAM_AUTH_ENABLED`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_SSL`.
+    - `S3_BUCKET` (Documents bucket identifier).
+    - `CORS_ALLOWED_ORIGIN` (Whitelisted domain for cross-origin credentials).
+    - `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_ENDPOINT`.
+    - `LLM_PROVIDER`, `LLM_MODEL`, `LLM_ENDPOINT`, `LLM_MAX_TOKENS`.
+    - `QUEUE_URL`, `DLQ_URL`.
 
 ### 2. Cryptographic & Sensitive Secrets
 - **Source**: AWS SSM Parameter Store Encrypted SecureString / Secrets Manager.
 - **Managed Parameters**:
-  - `SESSION_SECRET`: 256-bit cryptographic key used for HMAC session cookie signing.
-  - `LLM_API_KEY`: API credentials for external model endpoints when operating in hybrid cloud mode.
-  - `EMBEDDING_API_KEY`: Credentials for external embedding inference.
+    - `SESSION_SECRET`: 256-bit cryptographic key used for HMAC session cookie signing.
+    - `LLM_API_KEY`: API credentials for external model endpoints when operating in hybrid cloud mode.
+    - `EMBEDDING_API_KEY`: Credentials for external embedding inference.
 
 ---
 

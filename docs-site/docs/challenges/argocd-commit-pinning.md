@@ -34,20 +34,20 @@ Git branches and semantic tags are **mutable pointers** that advance dynamically
 We implemented **Multi-Source Matrix GitOps with Dual-Generator Commit Pinning** orchestrated by ArgoCD `ApplicationSet`:
 
 1. **Dual Git Generators Tracking Distinct Revision Pointers**:
-   - The `ApplicationSet` defines a cross-generator **matrix** combining two independent Git discovery generators:
-     - **Generator 1 (Application Values Pointer)**: Tracks `${targetRevision_app}` (release branch `{env}/${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/${app}/config.json` to resolve the immutable `target_commit` Git hash.
-     - **Generator 2 (Helm Chart Release Pointer)**: Tracks `${targetRevision_helm}` (release branch `{env}/helm-${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/helm-${app}/config.json` to resolve `chart_name` and `chart_version`.
+    - The `ApplicationSet` defines a cross-generator **matrix** combining two independent Git discovery generators:
+        - **Generator 1 (Application Values Pointer)**: Tracks `${targetRevision_app}` (release branch `{env}/${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/${app}/config.json` to resolve the immutable `target_commit` Git hash.
+        - **Generator 2 (Helm Chart Release Pointer)**: Tracks `${targetRevision_helm}` (release branch `{env}/helm-${app}` in staging/prod or `dev` in development), reading `infra/k8s/argocd/${environment}/helm-${app}/config.json` to resolve `chart_name` and `chart_version`.
 2. **ArgoCD Multiple Sources Cross-Reconciliation (`$app_values`)**:
-   - The matrix join dynamically instantiates an ArgoCD `Application` configuring two synchronized sources:
-     - **Source 1 (Immutable Helm OCI Package)**: Pulls the packaged Helm chart directly from the private AWS ECR OCI registry (`targetRevision: "{{chart_version}}"`), injecting base chart defaults.
-     - **Source 2 (Pinned Application Values)**: Clones the Git repository strictly at `targetRevision: "{{target_commit}}"`, assigned the named reference `ref: app_values`.
-     - **Values Overlay**: In Source 1, Helm receives `- $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`, merging the pinned values and image tags directly onto the ECR Helm chart.
+    - The matrix join dynamically instantiates an ArgoCD `Application` configuring two synchronized sources:
+        - **Source 1 (Immutable Helm OCI Package)**: Pulls the packaged Helm chart directly from the private AWS ECR OCI registry (`targetRevision: "{{chart_version}}"`), injecting base chart defaults.
+        - **Source 2 (Pinned Application Values)**: Clones the Git repository strictly at `targetRevision: "{{target_commit}}"`, assigned the named reference `ref: app_values`.
+        - **Values Overlay**: In Source 1, Helm receives `- $app_values/infra/k8s/argocd/${environment}/{{app}}/values.yaml`, merging the pinned values and image tags directly onto the ECR Helm chart.
 3. **Decoupled Helm Commits vs Application Commits**:
-   - **Helm Release Pipeline (`{env}-helm-{app}-v*`)**: Updates Helm templates independently, publishes versioned OCI tarballs to AWS ECR, and commits the new `chart_version` to `{env}/helm-${app}`.
-   - **Workload Release Pipeline (`{env}-{app}-v*`)**: Employs an atomic 2-commit protocol:
-     - **Commit 1 ($C_1$)**: Updates application code and environment `values.yaml` (new container image tag).
-     - **Commit 2 ($C_2$)**: Updates `config.json` with `target_commit` set to $C_1$'s SHA and `target_version` set to the release version.
-   - Pushing both commits together allows ArgoCD to discover $C_2$ on the tracking branch and checkout the exact immutable tree of $C_1$.
+    - **Helm Release Pipeline (`{env}-helm-{app}-v*`)**: Updates Helm templates independently, publishes versioned OCI tarballs to AWS ECR, and commits the new `chart_version` to `{env}/helm-${app}`.
+    - **Workload Release Pipeline (`{env}-{app}-v*`)**: Employs an atomic 2-commit protocol:
+        - **Commit 1 ($C_1$)**: Updates application code and environment `values.yaml` (new container image tag).
+        - **Commit 2 ($C_2$)**: Updates `config.json` with `target_commit` set to $C_1$'s SHA and `target_version` set to the release version.
+    - Pushing both commits together allows ArgoCD to discover $C_2$ on the tracking branch and checkout the exact immutable tree of $C_1$.
 
 ```mermaid
 flowchart TD

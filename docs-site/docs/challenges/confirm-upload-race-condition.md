@@ -40,11 +40,11 @@ Because the worker's asynchronous pipeline ran across high-speed internal AWS ne
 We refactored `confirmUpload()` in `apps/api/src/services/document.service.ts` to be **fully idempotent**:
 
 1. **Idempotent State Machine**:
-   - **`pending_upload`**: Atomically transition status to `uploaded` and return `200 OK`.
-   - **`uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`**: Recognize that asynchronous processing has already begun or finished. Log the benign race condition and **return `200 OK` immediately** without mutating the advanced status.
-   - **`expired`, `cancelled`**: Throw `409 Conflict`, as uploads cannot be confirmed for aborted jobs.
+    - **`pending_upload`**: Atomically transition status to `uploaded` and return `200 OK`.
+    - **`uploaded`, `downloading`, `validating`, `extracting`, `chunking`, `embedding`, `completed`**: Recognize that asynchronous processing has already begun or finished. Log the benign race condition and **return `200 OK` immediately** without mutating the advanced status.
+    - **`expired`, `cancelled`**: Throw `409 Conflict`, as uploads cannot be confirmed for aborted jobs.
 2. **Multi-Table Atomic Transaction**:
-   - Executes `prisma.$transaction([ ... ])` to update both `documents` and `processing_jobs` tables atomically, ensuring that status transitions never leave the database in an inconsistent partial state.
+    - Executes `prisma.$transaction([ ... ])` to update both `documents` and `processing_jobs` tables atomically, ensuring that status transitions never leave the database in an inconsistent partial state.
 
 ```mermaid
 sequenceDiagram

@@ -22,12 +22,12 @@ The platform's decoupled architecture consists of a Node.js Express API and a Py
 ### The Dual-ORM Challenge
 
 1. **Strict ORM-First Policy**:
-   The project constitution mandates ORM-driven database access across all services:
-   > _"All relational database transactions, inserts, updates, and CRUD operations must be executed strictly via ORM models and parameters. Vector cosine similarity search (`<=>`) is executed via parameterized queries (`prisma.$queryRaw`) due to Prisma 5's unsupported vector type mapping."_
+    The project constitution mandates ORM-driven database access across all services:
+    > _"All relational database transactions, inserts, updates, and CRUD operations must be executed strictly via ORM models and parameters. Vector cosine similarity search (`<=>`) is executed via parameterized queries (`prisma.$queryRaw`) due to Prisma 5's unsupported vector type mapping."_
 2. **Dual Migration Hazard**:
-   If both runtimes run independent migration frameworks (e.g., Prisma Migrate in TypeScript and Alembic in Python), migration histories inevitably diverge, resulting in deadlocks, race conditions, and corrupted table constraints.
+    If both runtimes run independent migration frameworks (e.g., Prisma Migrate in TypeScript and Alembic in Python), migration histories inevitably diverge, resulting in deadlocks, race conditions, and corrupted table constraints.
 3. **Ecosystem Specialization**:
-   Prisma provides auto-generated TypeScript clients with compile-time type safety for Express, while SQLAlchemy provides battle-tested connection management and native `pgvector` type bindings for Python.
+    Prisma provides auto-generated TypeScript clients with compile-time type safety for Express, while SQLAlchemy provides battle-tested connection management and native `pgvector` type bindings for Python.
 
 ---
 
@@ -36,17 +36,17 @@ The platform's decoupled architecture consists of a Node.js Express API and a Py
 We decided to establish a **Dual ORM Architecture** governed by a strict, unidirectional schema lifecycle:
 
 1. **Prisma Migrate as the Single Source of Truth**:
-   The Prisma schema file (`apps/api/prisma/schema.prisma`) is the **sole authoritative definition** of the platform's database structure:
-   - Defines all 6 relational tables: `sessions`, `documents`, `processing_jobs`, `document_chunks`, `query_logs`, and `audit_log`.
-   - Declares foreign key cascades (`onDelete: Cascade`), composite unique constraints (`[document_id, chunk_index]`), and HNSW cosine similarity indexes.
-   - All migrations are generated, versioned, and applied exclusively via Prisma CLI (`prisma migrate dev`).
+    The Prisma schema file (`apps/api/prisma/schema.prisma`) is the **sole authoritative definition** of the platform's database structure:
+    - Defines all 6 relational tables: `sessions`, `documents`, `processing_jobs`, `document_chunks`, `query_logs`, and `audit_log`.
+    - Declares foreign key cascades (`onDelete: Cascade`), composite unique constraints (`[document_id, chunk_index]`), and HNSW cosine similarity indexes.
+    - All migrations are generated, versioned, and applied exclusively via Prisma CLI (`prisma migrate dev`).
 
 2. **SQLAlchemy Declarative Mirroring in Python**:
-   The Python worker defines SQLAlchemy ORM models (`apps/worker/app/models/`) that mirror the Prisma-generated database tables 1:1:
-   - Uses `pgvector.sqlalchemy.Vector(1024)` to map dimensional embeddings.
-   - Uses PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` for atomic, idempotent batch upserts.
+    The Python worker defines SQLAlchemy ORM models (`apps/worker/app/models/`) that mirror the Prisma-generated database tables 1:1:
+    - Uses `pgvector.sqlalchemy.Vector(1024)` to map dimensional embeddings.
+    - Uses PostgreSQL `ON CONFLICT (document_id, chunk_index) DO UPDATE` for atomic, idempotent batch upserts.
 3. **Zero Python Database Migrations**:
-   The Python worker daemon never creates, drops, or alters database tables. It assumes the schema has already been migrated by the API container or pre-flight deployment job.
+    The Python worker daemon never creates, drops, or alters database tables. It assumes the schema has already been migrated by the API container or pre-flight deployment job.
 
 ---
 
@@ -109,4 +109,4 @@ flowchart TD
 ### Negative Consequences & Mitigations
 
 - **Model Drift Risk**: If a developer adds a column in `schema.prisma` but forgets to update `apps/worker/app/models/`, the worker will fail to map the new attribute.
-  - _Mitigation_: Both services share unified end-to-end integration test suites (`apps/worker/tests/test_integration.py` and `apps/api/src/tests/documents.test.ts`) executed against real PostgreSQL containers during local CI runs.
+    - _Mitigation_: Both services share unified end-to-end integration test suites (`apps/worker/tests/test_integration.py` and `apps/api/src/tests/documents.test.ts`) executed against real PostgreSQL containers during local CI runs.

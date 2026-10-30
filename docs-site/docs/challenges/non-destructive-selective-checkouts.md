@@ -27,11 +27,11 @@ However, Git branch references are inherently mutable pointers that can be rewri
 Analysis of the deployment failure identified two distinct failure modes—one in working tree management and one in branch governance:
 
 1. **Working Tree Obliteration**:
-   - Standard CI checkout workflows create an empty branch snapshot and clone only the deploying application's repository subset.
-   - When Git checks out a branch and executes a blanket staging commit (`git add .`), any file not explicitly present in the working tree is treated as deleted.
-   - Because container CI/CD pipelines operate independently for `api` and `worker`, an `api` deployment had no awareness of `worker` or `frontend` code, overwriting the consolidated tracking tree with a snapshot containing only `apps/api`.
+    - Standard CI checkout workflows create an empty branch snapshot and clone only the deploying application's repository subset.
+    - When Git checks out a branch and executes a blanket staging commit (`git add .`), any file not explicitly present in the working tree is treated as deleted.
+    - Because container CI/CD pipelines operate independently for `api` and `worker`, an `api` deployment had no awareness of `worker` or `frontend` code, overwriting the consolidated tracking tree with a snapshot containing only `apps/api`.
 2. **Branch Mutability & History Overwrites**:
-   - Git branches provide no cryptographic immutability on their own. Without explicit repository governance, force pushes, accidental re-initializations, or non-fast-forward pushes can overwrite branch histories, destroying the chronological audit trail.
+    - Git branches provide no cryptographic immutability on their own. Without explicit repository governance, force pushes, accidental re-initializations, or non-fast-forward pushes can overwrite branch histories, destroying the chronological audit trail.
 
 ---
 
@@ -40,14 +40,14 @@ Analysis of the deployment failure identified two distinct failure modes—one i
 We implemented a two-pillar strategy combining **Strict Branch Governance** with a **Non-Destructive Selective Checkout Protocol**:
 
 1. **Branch Governance & Access Control (Immutable Audit Ledger)**:
-   - **Zero Human Writes**: Release tracking branches (`{env}/app`, `{env}/infra-aws`, `{env}/infra-k8s`) are protected via GitHub repository rulesets. Manual commits and pull request merges by human developers are strictly blocked.
-   - **Force Pushes Disabled**: `Allow force pushes` is set to `false`, preventing any historical revision tampering.
-   - **Deletions Prohibited**: `Allow deletions` is set to `false`.
-   - **Pipeline-Only Fast-Forward Commits**: Only automated CI/CD runners (using short-lived workflow tokens) are authorized to commit to tracking branches, and only via forward-only fast-forward commits upon a verified, successful deployment apply.
+    - **Zero Human Writes**: Release tracking branches (`{env}/app`, `{env}/infra-aws`, `{env}/infra-k8s`) are protected via GitHub repository rulesets. Manual commits and pull request merges by human developers are strictly blocked.
+    - **Force Pushes Disabled**: `Allow force pushes` is set to `false`, preventing any historical revision tampering.
+    - **Deletions Prohibited**: `Allow deletions` is set to `false`.
+    - **Pipeline-Only Fast-Forward Commits**: Only automated CI/CD runners (using short-lived workflow tokens) are authorized to commit to tracking branches, and only via forward-only fast-forward commits upon a verified, successful deployment apply.
 2. **Non-Destructive Selective Checkout Protocol**:
-   - **Existing Tree Preservation**: The pipeline fetches and checks out the remote tracking branch (`{env}/app`). If it exists, it preserves all existing sibling files (`worker`, `frontend`) from prior deployments.
-   - **Scoped File Extraction**: Rather than wiping the workspace, the pipeline selectively extracts **only** the target service directory and its specific GitOps values from the release tag (`git checkout tags/${TAG} -- apps/${APP} infra/k8s/argocd/${ENV}/${APP}`).
-   - **Scoped Staging**: Stages only the extracted paths, guaranteeing sibling microservice directories remain completely untouched in the newly created commit.
+    - **Existing Tree Preservation**: The pipeline fetches and checks out the remote tracking branch (`{env}/app`). If it exists, it preserves all existing sibling files (`worker`, `frontend`) from prior deployments.
+    - **Scoped File Extraction**: Rather than wiping the workspace, the pipeline selectively extracts **only** the target service directory and its specific GitOps values from the release tag (`git checkout tags/${TAG} -- apps/${APP} infra/k8s/argocd/${ENV}/${APP}`).
+    - **Scoped Staging**: Stages only the extracted paths, guaranteeing sibling microservice directories remain completely untouched in the newly created commit.
 
 ```mermaid
 flowchart TD

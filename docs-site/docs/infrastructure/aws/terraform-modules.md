@@ -54,11 +54,11 @@ flowchart TD
 
 - **Purpose**: Provisions isolated multi-AZ networking foundation across two Availability Zones.
 - **Key Resources**:
-  - `aws_vpc`: Dedicated VPC with DNS hostnames and resolution enabled.
-  - `aws_subnet` (4x): Two public subnets for ingress/egress, two private subnets for compute/data.
-  - `aws_internet_gateway`: Inbound/outbound internet gateway attached to public subnets.
-  - `aws_nat_gateway` (2x): Redundant NAT Gateways placed in public subnets with dedicated Elastic IPs.
-  - `aws_route_table` & associations: Route tables directing private subnet egress to AZ-specific NAT gateways.
+    - `aws_vpc`: Dedicated VPC with DNS hostnames and resolution enabled.
+    - `aws_subnet` (4x): Two public subnets for ingress/egress, two private subnets for compute/data.
+    - `aws_internet_gateway`: Inbound/outbound internet gateway attached to public subnets.
+    - `aws_nat_gateway` (2x): Redundant NAT Gateways placed in public subnets with dedicated Elastic IPs.
+    - `aws_route_table` & associations: Route tables directing private subnet egress to AZ-specific NAT gateways.
 - **Inputs**: `project_name`, `environment`, `vpc_cidr`, `public_subnets`, `private_subnets`, `azs`.
 - **Outputs**: `vpc_id`, `public_subnets`, `private_subnets`, `vpc_cidr_block`.
 
@@ -66,13 +66,13 @@ flowchart TD
 
 - **Purpose**: Deploys managed Amazon EKS cluster operating in **EKS Auto Mode** with native Pod Identity Associations, managed cluster add-ons, and administrative access entries.
 - **Key Resources**:
-  - `aws_eks_cluster`: Managed Kubernetes 1.37 cluster with Auto Mode enabled (`general-purpose` and `system` node pools).
-  - `aws_eks_pod_identity_association`: Binds IAM roles to service accounts for Express API (`api-sa`), Python Worker (`worker-sa`), and External Secrets (`external-secrets-sa`).
-  - `aws_iam_role` & policies: Least-privilege IAM policies granting Bedrock invoke, S3 read/write, SQS receive/delete, RDS IAM connect, and SSM/Secrets Manager access.
-  - `aws_eks_access_entry`: Cluster access entries granting `AmazonEKSClusterAdminPolicy` to administrator ARNs for AWS Console management.
+    - `aws_eks_cluster`: Managed Kubernetes 1.37 cluster with Auto Mode enabled (`general-purpose` and `system` node pools).
+    - `aws_eks_pod_identity_association`: Binds IAM roles to service accounts for Express API (`api-sa`), Python Worker (`worker-sa`), and External Secrets (`external-secrets-sa`).
+    - `aws_iam_role` & policies: Least-privilege IAM policies granting Bedrock invoke, S3 read/write, SQS receive/delete, RDS IAM connect, and SSM/Secrets Manager access.
+    - `aws_eks_access_entry`: Cluster access entries granting `AmazonEKSClusterAdminPolicy` to administrator ARNs for AWS Console management.
 - **Managed Cluster Add-ons (`addons` configuration)**:
-  - `eks-pod-identity-agent`: Configured with `before_compute = true` to guarantee the Pod Identity daemonset initializes on nodes before application workloads launch, enabling non-blocking, immediate IAM credential acquisition for pods.
-  - `aws-secrets-store-csi-driver-provider`: Managed add-on provisioning the Secrets Store CSI Driver and AWS provider, with custom parameters:
+    - `eks-pod-identity-agent`: Configured with `before_compute = true` to guarantee the Pod Identity daemonset initializes on nodes before application workloads launch, enabling non-blocking, immediate IAM credential acquisition for pods.
+    - `aws-secrets-store-csi-driver-provider`: Managed add-on provisioning the Secrets Store CSI Driver and AWS provider, with custom parameters:
     - Secret rotation poll interval set to 120 seconds (`rotationPollInterval: 120s`) for automated credential refreshes.
     - Kubernetes Secret synchronization enabled (`syncSecret.enabled: true`) for environment variable binding.
     - Projected service account token audience configured for Pod Identity (`tokenRequests.audience: pods.eks.amazonaws.com`).
@@ -84,11 +84,11 @@ flowchart TD
 
 - **Purpose**: Establishes persistent vector storage, document staging buckets, and global CDN distribution.
 - **Key Resources**:
-  - `aws_db_instance`: RDS PostgreSQL 16 engine pre-configured with `pgvector`, multi-AZ failover, encrypted storage, and IAM database authentication enabled.
-  - `aws_db_subnet_group`: Private database subnet group binding to private VPC subnets.
-  - `aws_s3_bucket` (Documents): Private bucket for multipart presigned uploads with lifecycle expiration rules.
-  - `aws_s3_bucket` (Frontend): Private bucket hosting statically compiled Single Page Application assets.
-  - `aws_cloudfront_distribution`: Dual-origin CDN with S3 Origin Access Control (OAC) for `/*` and ALB custom origin for `/api/*`.
+    - `aws_db_instance`: RDS PostgreSQL 16 engine pre-configured with `pgvector`, multi-AZ failover, encrypted storage, and IAM database authentication enabled.
+    - `aws_db_subnet_group`: Private database subnet group binding to private VPC subnets.
+    - `aws_s3_bucket` (Documents): Private bucket for multipart presigned uploads with lifecycle expiration rules.
+    - `aws_s3_bucket` (Frontend): Private bucket hosting statically compiled Single Page Application assets.
+    - `aws_cloudfront_distribution`: Dual-origin CDN with S3 Origin Access Control (OAC) for `/*` and ALB custom origin for `/api/*`.
 - **Inputs**: `project_name`, `environment`, `vpc_id`, `private_subnets`, `db_name`, `db_user_name`, `api_alb_dns_name`.
 - **Outputs**: `db_address`, `db_port`, `documents_bucket_name`, `documents_bucket_id`, `frontend_bucket_name`, `cloudfront_domain`, `cloudfront_distribution_id`.
 
@@ -96,10 +96,10 @@ flowchart TD
 
 - **Purpose**: Manages event-driven handoff from S3 document uploads to background Python ingestion workers.
 - **Key Resources**:
-  - `aws_sqs_queue`: Standard FIFO/Standard queue with 20-second long-polling and 600-second visibility timeout.
-  - `aws_sqs_queue` (DLQ): Dead Letter Queue isolating abandoned payloads after 3 failed delivery attempts.
-  - `aws_sqs_queue_redrive_policy`: Redrive policy binding primary queue to the DLQ (`maxReceiveCount = 3`).
-  - `aws_sqs_queue_policy`: IAM queue policy permitting `s3:ObjectCreated:*` notifications from the Documents bucket.
+    - `aws_sqs_queue`: Standard FIFO/Standard queue with 20-second long-polling and 600-second visibility timeout.
+    - `aws_sqs_queue` (DLQ): Dead Letter Queue isolating abandoned payloads after 3 failed delivery attempts.
+    - `aws_sqs_queue_redrive_policy`: Redrive policy binding primary queue to the DLQ (`maxReceiveCount = 3`).
+    - `aws_sqs_queue_policy`: IAM queue policy permitting `s3:ObjectCreated:*` notifications from the Documents bucket.
 - **Inputs**: `project_name`, `environment`, `s3_bucket_arn`.
 - **Outputs**: `sqs_queue_url`, `sqs_queue_arn`, `dlq_url`, `dlq_arn`.
 
@@ -107,10 +107,10 @@ flowchart TD
 
 - **Purpose**: Houses container images and Helm OCI charts within hierarchical, slash-delimited namespaces.
 - **Key Resources**:
-  - `aws_ecr_repository` (API): `${project_name}/${environment}/api` repository.
-  - `aws_ecr_repository` (Worker): `${project_name}/${environment}/worker` repository.
-  - `aws_ecr_repository_policy`: Account-wide pull permissions enabling cross-environment deployment.
-  - `aws_ecr_lifecycle_policy`: Automatic pruning keeping the last 30 untagged images.
+    - `aws_ecr_repository` (API): `${project_name}/${environment}/api` repository.
+    - `aws_ecr_repository` (Worker): `${project_name}/${environment}/worker` repository.
+    - `aws_ecr_repository_policy`: Account-wide pull permissions enabling cross-environment deployment.
+    - `aws_ecr_lifecycle_policy`: Automatic pruning keeping the last 30 untagged images.
 - **Inputs**: `project_name`, `environment`, `account_id`.
 - **Outputs**: `ecr_registry_url`, `api_repository_url`, `worker_repository_url`.
 
@@ -118,8 +118,8 @@ flowchart TD
 
 - **Purpose**: Provisions central parameter management for runtime configuration and pod hydration.
 - **Key Resources**:
-  - `aws_secretsmanager_secret`: Holds database master passwords and HMAC session encryption signing keys.
-  - `aws_ssm_parameter`: Stores service endpoints (database host/port, SQS URL, S3 bucket name, CloudFront domain).
+    - `aws_secretsmanager_secret`: Holds database master passwords and HMAC session encryption signing keys.
+    - `aws_ssm_parameter`: Stores service endpoints (database host/port, SQS URL, S3 bucket name, CloudFront domain).
 - **Inputs**: `project_name`, `environment`, `db_name`, `db_username`, `db_host`, `db_port`, `s3_bucket`, `cloudfront_domain`, `sqs_url`, `dlq_url`.
 - **Outputs**: `db_secret_arn`, `session_secret_arn`, `ssm_parameter_prefix`.
 

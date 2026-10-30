@@ -49,9 +49,9 @@ Implemented in `app/services/chunker.py`:
 - **Target Chunk Size**: Approximately **500 tokens** (~2,000 characters), sized to fit within embedding context windows while providing rich context for RAG retrieval.
 - **Contextual Overlap**: **75 tokens** (~300 characters) carried over between adjacent chunks to prevent cutting critical concepts, sentences, or names at boundaries.
 - **Metadata Retention**: Every chunk maintains its origin metadata:
-  - `chunk_index`: 0-indexed sequential position within the document.
-  - `page_number`: 1-indexed document page where the chunk text originated.
-  - `content`: Extracted text snippet.
+    - `chunk_index`: 0-indexed sequential position within the document.
+    - `page_number`: 1-indexed document page where the chunk text originated.
+    - `content`: Extracted text snippet.
 
 ---
 

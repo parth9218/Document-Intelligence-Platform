@@ -34,15 +34,15 @@ Under ADR-013, users can initiate batches of up to **5 concurrent uploads**. In 
 We decided to supersede ADR-008 and consolidate all real-time progress monitoring into a **single, session-scoped static streaming architecture**:
 
 1. **Session-Scoped Push Endpoint (`GET /api/documents/progress`)**:
-   - The browser opens **one persistent SSE connection** for the entire user session.
-   - On connect, the server executes a fast snapshot query and emits a typed `snapshot` event containing an array of all active documents belonging to that session.
-   - Subsequent progress transitions are streamed as individual typed `update` events.
+    - The browser opens **one persistent SSE connection** for the entire user session.
+    - On connect, the server executes a fast snapshot query and emits a typed `snapshot` event containing an array of all active documents belonging to that session.
+    - Subsequent progress transitions are streamed as individual typed `update` events.
 
 2. **Session-Scoped PostgreSQL NOTIFY Channels**:
-   The PostgreSQL database trigger dynamically constructs a session-isolated channel name by prefixing the sanitized session UUID (`progress_{sessionId}`). When worker pods commit batch checkpoints, the trigger automatically publishes a lightweight JSON progress payload to that specific session channel. The Express API listens strictly to the active user's session channel using a dedicated connection pool client. Because PostgreSQL routes notifications directly to the subscribing listener, Node.js never receives or processes event traffic belonging to other sessions.
+    The PostgreSQL database trigger dynamically constructs a session-isolated channel name by prefixing the sanitized session UUID (`progress_{sessionId}`). When worker pods commit batch checkpoints, the trigger automatically publishes a lightweight JSON progress payload to that specific session channel. The Express API listens strictly to the active user's session channel using a dedicated connection pool client. Because PostgreSQL routes notifications directly to the subscribing listener, Node.js never receives or processes event traffic belonging to other sessions.
 
 3. **Session-Scoped Polling Fallback (`GET /api/documents/status`)**:
-   If an enterprise firewall blocks SSE connections, the React client automatically falls back to polling `GET /api/documents/status` every 3 seconds, returning the exact same data schema as the `snapshot` frame.
+    If an enterprise firewall blocks SSE connections, the React client automatically falls back to polling `GET /api/documents/status` every 3 seconds, returning the exact same data schema as the `snapshot` frame.
 
 ---
 

@@ -34,14 +34,14 @@ S3 presigned PUT mechanisms generate a signed signature based only on the HTTP m
 We migrated the entire direct upload engine from presigned PUT to **AWS SDK v3 Presigned POST (`createPresignedPost`)** (formalized in [ADR-016](../design-decisions/index.md)):
 
 1. **Storage-Layer Policy Conditions**:
-   - `createPresignedPost` generates a cryptographically signed IAM policy document containing exact validation conditions:
-     - `content-length-range`: Strictly enforced between 1 byte and 5 MB (5,242,880 bytes).
-     - `Content-Type`: Strictly matches the verified MIME type allowlist (`application/pdf`, `text/plain`).
-     - `Expires`: Presigned credentials expire automatically after 15 minutes.
+    - `createPresignedPost` generates a cryptographically signed IAM policy document containing exact validation conditions:
+        - `content-length-range`: Strictly enforced between 1 byte and 5 MB (5,242,880 bytes).
+        - `Content-Type`: Strictly matches the verified MIME type allowlist (`application/pdf`, `text/plain`).
+        - `Expires`: Presigned credentials expire automatically after 15 minutes.
 2. **Multipart FormData Protocol**:
-   - Amazon S3 requires form fields to appear in the multipart body **before** the file data.
-   - The frontend constructs a native `FormData`, appends all key-value pairs from the signed policy fields, and appends the raw file object last.
-   - S3 validates the policy conditions in-flight; any violation aborts the transfer immediately at the AWS edge before persisting data.
+    - Amazon S3 requires form fields to appear in the multipart body **before** the file data.
+    - The frontend constructs a native `FormData`, appends all key-value pairs from the signed policy fields, and appends the raw file object last.
+    - S3 validates the policy conditions in-flight; any violation aborts the transfer immediately at the AWS edge before persisting data.
 
 ```mermaid
 sequenceDiagram

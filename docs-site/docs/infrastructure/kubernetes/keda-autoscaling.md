@@ -54,8 +54,8 @@ flowchart TD
 - **Target Value (`queueLength`)**: Configured target threshold (e.g. 2 messages per pod). When 8 messages arrive, KEDA scales the deployment to 4 pods.
 - **Replica Bounds**: `minReplicaCount: 0`, `maxReplicaCount: 10`.
 - **Timing Parameters**:
-  - `pollingInterval: 15s` (Evaluates queue depth every 15 seconds).
-  - `cooldownPeriod: 300s` (5-minute stabilization window before scaling to zero, preventing flapping).
+    - `pollingInterval: 15s` (Evaluates queue depth every 15 seconds).
+    - `cooldownPeriod: 300s` (5-minute stabilization window before scaling to zero, preventing flapping).
 
 ### Zero-Credential Pod Identity Authentication
 - The worker `ScaledObject` references a native `TriggerAuthentication` custom resource (`keda-auth-aws`).
@@ -97,9 +97,9 @@ sequenceDiagram
 - **Trigger Type**: `external-push`
 - **Target Workload**: `api-deployment`
 - **Routing Manifest (`InterceptorRoute`)**:
-  - Captures incoming traffic routed from Gateway API `HTTPRoute` to `keda-add-ons-http-interceptor-proxy:8080`.
-  - Measures request rates and pending HTTP connection pools.
-  - Dynamically triggers HPA scaling adjustments as active streaming sessions (SSE progress streams and Bedrock LLM responses) accumulate.
+    - Captures incoming traffic routed from Gateway API `HTTPRoute` to `keda-add-ons-http-interceptor-proxy:8080`.
+    - Measures request rates and pending HTTP connection pools.
+    - Dynamically triggers HPA scaling adjustments as active streaming sessions (SSE progress streams and Bedrock LLM responses) accumulate.
 
 ### HTTP Autoscaling Lifecycle Sequence
 

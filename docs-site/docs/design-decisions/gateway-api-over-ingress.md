@@ -17,13 +17,13 @@ description: "Implementing Kubernetes Gateway API (v1.6.1) with AWS Load Balance
 Exposing the Express API Gateway to external edge traffic requires a resilient, declarative ingress layer on Amazon EKS. Historically, this was handled via the Kubernetes `Ingress` (v1) API. However, `Ingress` presents severe architectural liabilities in enterprise production environments:
 
 1. **Annotation Sprawl & Vendor Lock-In**:
-   Standard Ingress specifications only support rudimentary host and prefix matching. Advanced load balancer features (such as IP-mode target groups, internet-facing schemes, and custom health check paths) require proprietary controller annotations. These untyped string annotations fail silently on syntax errors and bypass Kubernetes schema validation.
+    Standard Ingress specifications only support rudimentary host and prefix matching. Advanced load balancer features (such as IP-mode target groups, internet-facing schemes, and custom health check paths) require proprietary controller annotations. These untyped string annotations fail silently on syntax errors and bypass Kubernetes schema validation.
 
 2. **Violation of Separation of Concerns**:
-   In standard `Ingress`, a single YAML manifest mixes cluster-level infrastructure (ALB provisioning, subnets, IP target types) with application-level routing rules (paths, prefixes, services). This forces application developers to manage infrastructure concerns in their Helm charts.
+    In standard `Ingress`, a single YAML manifest mixes cluster-level infrastructure (ALB provisioning, subnets, IP target types) with application-level routing rules (paths, prefixes, services). This forces application developers to manage infrastructure concerns in their Helm charts.
 
 3. **SIG-Network Deprecation Trajectory**:
-   Kubernetes SIG-Network has officially frozen the `Ingress` specification in maintenance mode, focusing all future routing innovation on the **Gateway API**.
+    Kubernetes SIG-Network has officially frozen the `Ingress` specification in maintenance mode, focusing all future routing innovation on the **Gateway API**.
 
 ---
 
@@ -32,13 +32,13 @@ Exposing the Express API Gateway to external edge traffic requires a resilient, 
 We decided to adopt the **Kubernetes Gateway API (v1.6.1)** managed by the **AWS Load Balancer Controller (v3.5.0)**:
 
 1. **Role-Oriented Resource Separation**:
-   The ingress architecture is explicitly separated into three decoupled personas:
-   - **Infrastructure Provider (Kubernetes)**: Defines the `GatewayClass` (`alb_gatewayclass.yaml`) backed by controller `eks.amazonaws.com/alb`.
-   - **Cluster Operator (Terraform `infra/terraform/k8s/`)**: Provisions the `Gateway` (`api_gateway.yaml`), specifying listeners, protocols, and infrastructure parameters.
-   - **Application Developer (Helm `infra/k8s/helm/api/`)**: Provisions the `HTTPRoute` (`httproute.yaml`), declaring path routing rules (`/api/*`, `/health`) and attaching them to the operator's parent `Gateway`.
+    The ingress architecture is explicitly separated into three decoupled personas:
+    - **Infrastructure Provider (Kubernetes)**: Defines the `GatewayClass` (`alb_gatewayclass.yaml`) backed by controller `eks.amazonaws.com/alb`.
+    - **Cluster Operator (Terraform `infra/terraform/k8s/`)**: Provisions the `Gateway` (`api_gateway.yaml`), specifying listeners, protocols, and infrastructure parameters.
+    - **Application Developer (Helm `infra/k8s/helm/api/`)**: Provisions the `HTTPRoute` (`httproute.yaml`), declaring path routing rules (`/api/*`, `/health`) and attaching them to the operator's parent `Gateway`.
 
 2. **First-Class AWS ALB Controller Integration**:
-   The AWS Load Balancer Controller provisions and reconciles the AWS Application Load Balancer directly from the `Gateway` and `HTTPRoute` definitions, completely eliminating the legacy `ingress-nginx` or annotation-based ALB workflows.
+    The AWS Load Balancer Controller provisions and reconciles the AWS Application Load Balancer directly from the `Gateway` and `HTTPRoute` definitions, completely eliminating the legacy `ingress-nginx` or annotation-based ALB workflows.
 
 ---
 
@@ -106,6 +106,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **CRD Pre-requisite**: The cluster must install the experimental or standard Gateway API CRDs before Helm manifests can be applied.
-  - *Mitigation*: Our Terraform Kubernetes module (`infra/terraform/k8s/k8s.tf`) installs Gateway API CRDs (v1.6.1) prior to reconciling Helm releases.
+    - *Mitigation*: Our Terraform Kubernetes module (`infra/terraform/k8s/k8s.tf`) installs Gateway API CRDs (v1.6.1) prior to reconciling Helm releases.
 - **Ecosystem Maturity**: Some legacy Kubernetes ingress management tools do not yet support Gateway API natively.
-  - *Mitigation*: The AWS Load Balancer Controller v3.5.0 provides native, production-grade support for Gateway API, and CloudFront handles external TLS termination.
+    - *Mitigation*: The AWS Load Balancer Controller v3.5.0 provides native, production-grade support for Gateway API, and CloudFront handles external TLS termination.

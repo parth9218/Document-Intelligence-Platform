@@ -36,17 +36,17 @@ Enabling IAM authentication in RDS requires coordinating three separate layers t
 We implemented a **multi-tiered credential and dynamic token caching architecture** that clearly separates pod-level AWS IAM session credentials from database-level authentication tokens:
 
 1. **Two Distinct Credential Lifecycles**:
-   - **Layer 1: Pod-Level AWS IAM Session Credentials (1-Hour TTL)**: The EKS Pod Identity Agent injects temporary AWS IAM credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) into the pod. These credentials have a standard 1-hour validity and are refreshed automatically by the AWS SDK in the background.
-   - **Layer 2: Database-Level RDS IAM Auth Token (15-Minute Engine Limit)**: Using its AWS credentials, the application calls the RDS signer SDK to produce a signed SigV4 token used as the database password. **Amazon RDS strictly enforces a 15-minute maximum lifetime** on this token; any connection handshake attempted with a token older than 15 minutes is rejected by RDS PAM authentication.
+    - **Layer 1: Pod-Level AWS IAM Session Credentials (1-Hour TTL)**: The EKS Pod Identity Agent injects temporary AWS IAM credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) into the pod. These credentials have a standard 1-hour validity and are refreshed automatically by the AWS SDK in the background.
+    - **Layer 2: Database-Level RDS IAM Auth Token (15-Minute Engine Limit)**: Using its AWS credentials, the application calls the RDS signer SDK to produce a signed SigV4 token used as the database password. **Amazon RDS strictly enforces a 15-minute maximum lifetime** on this token; any connection handshake attempted with a token older than 15 minutes is rejected by RDS PAM authentication.
 2. **Application In-Memory Token Cache (10-Minute TTL)**:
-   - Generating a new SigV4 token on every single pool connection adds unnecessary latency.
-   - Both the Node.js Express API (`apps/api`) and Python Worker (`apps/worker`) cache the generated database token in memory with a **10-minute Time-To-Live (TTL)**.
-   - This guarantees that tokens are refreshed 5 minutes prior to the 15-minute RDS cutoff, ensuring every pool reconnection receives a valid, unexpired token without restarting pods.
+    - Generating a new SigV4 token on every single pool connection adds unnecessary latency.
+    - Both the Node.js Express API (`apps/api`) and Python Worker (`apps/worker`) cache the generated database token in memory with a **10-minute Time-To-Live (TTL)**.
+    - This guarantees that tokens are refreshed 5 minutes prior to the 15-minute RDS cutoff, ensuring every pool reconnection receives a valid, unexpired token without restarting pods.
 3. **Dual ORM Lifecycle Integration**:
-   - **Express API (Prisma ORM)**: Configured the database connection pool with dynamic password resolution, injecting refreshed tokens into the raw pool and the Prisma Client via the driver adapter.
-   - **Python Worker (SQLAlchemy ORM)**: Hooks into SQLAlchemy engine `do_connect` events via `boto3.client('rds').generate_db_auth_token()` to supply fresh cached tokens.
+    - **Express API (Prisma ORM)**: Configured the database connection pool with dynamic password resolution, injecting refreshed tokens into the raw pool and the Prisma Client via the driver adapter.
+    - **Python Worker (SQLAlchemy ORM)**: Hooks into SQLAlchemy engine `do_connect` events via `boto3.client('rds').generate_db_auth_token()` to supply fresh cached tokens.
 4. **Least-Privilege EKS Pod Identity**:
-   - The IAM role bound to the service account includes `rds-db:connect` permissions scoped strictly to the authorized database resource identifier and username.
+    - The IAM role bound to the service account includes `rds-db:connect` permissions scoped strictly to the authorized database resource identifier and username.
 
 ```mermaid
 sequenceDiagram

@@ -38,11 +38,11 @@ For a portfolio demonstration and staging environment, purchasing and maintainin
 We decided to establish **Amazon CloudFront as the Unified Ingress and Reverse Proxy** for both static assets and API workloads under a single, shared CloudFront domain:
 
 1. **Dual-Origin CloudFront Architecture**:
-   - **Primary Origin (S3 Bucket)**: Serves static client bundles, icons, and pre-rendered assets.
-   - **Secondary Origin (Application Load Balancer)**: Points directly to the AWS ALB DNS name as a custom HTTP origin (`OriginProtocolPolicy: http-only`, Port 80).
+    - **Primary Origin (S3 Bucket)**: Serves static client bundles, icons, and pre-rendered assets.
+    - **Secondary Origin (Application Load Balancer)**: Points directly to the AWS ALB DNS name as a custom HTTP origin (`OriginProtocolPolicy: http-only`, Port 80).
 2. **Path-Based Cache Behavior Routing**:
-   - **Default Cache Behavior (`/*`)**: Routes to the S3 origin. Enforces `Redirect-to-HTTPS`, optimal edge caching (TTL 1 year for hashed static chunks), and compression (`brotli`, `gzip`).
-   - **API Cache Behavior (`/api/*`)**: Routes to the ALB origin. Enforces `Redirect-to-HTTPS`, forwards all HTTP methods (`GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE`), and applies AWS managed `CachingDisabled` and `AllViewerExceptHostHeader` request policies.
+    - **Default Cache Behavior (`/*`)**: Routes to the S3 origin. Enforces `Redirect-to-HTTPS`, optimal edge caching (TTL 1 year for hashed static chunks), and compression (`brotli`, `gzip`).
+    - **API Cache Behavior (`/api/*`)**: Routes to the ALB origin. Enforces `Redirect-to-HTTPS`, forwards all HTTP methods (`GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE`), and applies AWS managed `CachingDisabled` and `AllViewerExceptHostHeader` request policies.
 
 ---
 
@@ -120,6 +120,6 @@ sequenceDiagram
 ### Negative Consequences & Mitigations
 
 - **Terraform Circular Dependency**: CloudFront requires the ALB DNS hostname at provisioning time, but the ALB is generated dynamically by the Kubernetes Gateway API, which requires the EKS cluster and VPC to exist first.
-  - _Mitigation_: The infrastructure CI/CD pipeline deploys AWS infrastructure initially with a placeholder, applies the Kubernetes platform layer to allocate the ALB DNS, and re-executes the AWS Terraform module via the lightweight zero-provider query module (`infra/terraform/query/`).
+    - _Mitigation_: The infrastructure CI/CD pipeline deploys AWS infrastructure initially with a placeholder, applies the Kubernetes platform layer to allocate the ALB DNS, and re-executes the AWS Terraform module via the lightweight zero-provider query module (`infra/terraform/query/`).
 - **Edge Latency Overhead**: Requests traverse an additional CloudFront hop before reaching the ALB.
-  - _Mitigation_: CloudFront routes internal traffic across AWS's private global fiber backbone, mitigating public Internet transit latency.
+    - _Mitigation_: CloudFront routes internal traffic across AWS's private global fiber backbone, mitigating public Internet transit latency.

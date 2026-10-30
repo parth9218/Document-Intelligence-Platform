@@ -37,18 +37,18 @@ Terraform resolves dependencies via a Directed Acyclic Graph (DAG). When two res
 We implemented a **decoupled pipeline handshake and automated drift detection protocol** orchestrated between `aws-deploy.yml` and `k8s-deploy.yml` using the zero-provider query module:
 
 1. **Independent Pipeline Handshake (`aws-deploy.yml`)**:
-   - When deploying AWS infrastructure, GitHub Actions queries `infra/terraform/query` against the K8s remote state for the target environment.
-   - **Existing Ingress**: If K8s has already deployed the Gateway, the query module extracts the live `api_alb_dns` and passes it directly to `TF_VAR_api_alb_dns_name`.
-   - **Greenfield / Bootstrap**: If K8s has not yet been deployed, the query module supplies a fallback placeholder (`placeholder-alb.internal`), allowing CloudFront to deploy edge routing rules without deadlock.
+    - When deploying AWS infrastructure, GitHub Actions queries `infra/terraform/query` against the K8s remote state for the target environment.
+    - **Existing Ingress**: If K8s has already deployed the Gateway, the query module extracts the live `api_alb_dns` and passes it directly to `TF_VAR_api_alb_dns_name`.
+    - **Greenfield / Bootstrap**: If K8s has not yet been deployed, the query module supplies a fallback placeholder (`placeholder-alb.internal`), allowing CloudFront to deploy edge routing rules without deadlock.
 2. **Kubernetes Gateway Deployment (`k8s-deploy.yml`)**:
-   - The K8s pipeline pre-validates AWS outputs (`vpc_id`, `eks_cluster_name`, `acm_cert_arn`) from remote state via `infra/terraform/query`.
-   - Deploys Gateway API manifests and polls the Gateway resource until the AWS Load Balancer Controller provisions the physical ALB and allocates the dynamic AWS DNS.
-   - The dynamic ALB DNS is saved into the K8s remote state output `api_alb_dns`.
+    - The K8s pipeline pre-validates AWS outputs (`vpc_id`, `eks_cluster_name`, `acm_cert_arn`) from remote state via `infra/terraform/query`.
+    - Deploys Gateway API manifests and polls the Gateway resource until the AWS Load Balancer Controller provisions the physical ALB and allocates the dynamic AWS DNS.
+    - The dynamic ALB DNS is saved into the K8s remote state output `api_alb_dns`.
 3. **Blast-Radius Isolation & GitHub Job Summary Guidance**:
-   - **Strict Stack Separation**: The K8s pipeline **never** performs targeted applies on AWS storage or CloudFront modules, preserving team ownership boundaries and blast-radius isolation.
-   - **Drift Comparison**: Instead, `k8s-deploy.yml` automatically queries the AWS remote state via `infra/terraform/query` and compares the live Gateway ALB DNS against the CloudFront distribution origin.
-   - **Reconciliation via Re-run**: If the ALB DNS is unaligned (e.g. initial greenfield bootstrap or after an ALB recreation), the pipeline does not send external alerts or require cutting an anti-pattern release tag. Instead, it generates a structured **GitHub Job Summary** (`$GITHUB_STEP_SUMMARY`) instructing operators to simply **re-run the currently deployed AWS Infrastructure workflow** (`aws-deploy.yml`).
-   - **Automatic Convergence**: When re-run, `aws-deploy.yml` queries the K8s remote state, discovers the active `api_alb_dns`, and updates CloudFront's origin target directly without modifying any other AWS resources.
+    - **Strict Stack Separation**: The K8s pipeline **never** performs targeted applies on AWS storage or CloudFront modules, preserving team ownership boundaries and blast-radius isolation.
+    - **Drift Comparison**: Instead, `k8s-deploy.yml` automatically queries the AWS remote state via `infra/terraform/query` and compares the live Gateway ALB DNS against the CloudFront distribution origin.
+    - **Reconciliation via Re-run**: If the ALB DNS is unaligned (e.g. initial greenfield bootstrap or after an ALB recreation), the pipeline does not send external alerts or require cutting an anti-pattern release tag. Instead, it generates a structured **GitHub Job Summary** (`$GITHUB_STEP_SUMMARY`) instructing operators to simply **re-run the currently deployed AWS Infrastructure workflow** (`aws-deploy.yml`).
+    - **Automatic Convergence**: When re-run, `aws-deploy.yml` queries the K8s remote state, discovers the active `api_alb_dns`, and updates CloudFront's origin target directly without modifying any other AWS resources.
 
 ```mermaid
 sequenceDiagram

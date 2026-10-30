@@ -73,32 +73,32 @@ flowchart TD
 
 ### 1. Express API Chart (`infra/k8s/helm/api`)
 - **`deployment.yaml`**:
-  - Pod template specifying Node.js 24 Alpine container image.
-  - Security context running as non-root user (`runAsUser: 1001`, `readOnlyRootFilesystem: true`).
-  - Liveness and readiness probes pointing to `GET /health` on port 3000 with 10s initial delay.
-  - Ephemeral CSI volume mount attaching the AWS `SecretProviderClass` at `/mnt/secrets`.
+    - Pod template specifying Node.js 24 Alpine container image.
+    - Security context running as non-root user (`runAsUser: 1001`, `readOnlyRootFilesystem: true`).
+    - Liveness and readiness probes pointing to `GET /health` on port 3000 with 10s initial delay.
+    - Ephemeral CSI volume mount attaching the AWS `SecretProviderClass` at `/mnt/secrets`.
 - **`service.yaml`**:
-  - `ClusterIP` service exposing port 3000 to internal cluster routing.
+    - `ClusterIP` service exposing port 3000 to internal cluster routing.
 - **`httproute.yaml`**:
-  - Gateway API route attaching to the shared `api-gateway`.
-  - Implements `URLRewrite` (`ReplacePrefixMatch: /`) and cross-namespace `ReferenceGrant` to forward traffic to the KEDA proxy on port 8080.
+    - Gateway API route attaching to the shared `api-gateway`.
+    - Implements `URLRewrite` (`ReplacePrefixMatch: /`) and cross-namespace `ReferenceGrant` to forward traffic to the KEDA proxy on port 8080.
 - **`migration-job.yaml`**:
-  - Kubernetes pre-deploy hook job executing `npx prisma migrate deploy` before application pods roll out, ensuring zero-downtime database schema updates.
+    - Kubernetes pre-deploy hook job executing `npx prisma migrate deploy` before application pods roll out, ensuring zero-downtime database schema updates.
 - **`keda.yaml`**:
-  - Declares `InterceptorRoute` and `ScaledObject` (`type: external-push`) for request-rate autoscaling.
+    - Declares `InterceptorRoute` and `ScaledObject` (`type: external-push`) for request-rate autoscaling.
 - **`serviceaccount.yaml`**:
-  - Workload identity service account annotated for EKS Pod Identity Associations.
+    - Workload identity service account annotated for EKS Pod Identity Associations.
 
 ### 2. Python Worker Chart (`infra/k8s/helm/worker`)
 - **`deployment.yaml`**:
-  - Pod template for the Python 3.11 consumer daemon.
-  - Security context running as non-root user (`runAsUser: 1001`).
-  - Configured with `terminationGracePeriodSeconds: 60` to allow in-flight SQS batches to reach their checkpoint before pod eviction.
-  - Ephemeral CSI volume mount attaching AWS secrets.
+    - Pod template for the Python 3.11 consumer daemon.
+    - Security context running as non-root user (`runAsUser: 1001`).
+    - Configured with `terminationGracePeriodSeconds: 60` to allow in-flight SQS batches to reach their checkpoint before pod eviction.
+    - Ephemeral CSI volume mount attaching AWS secrets.
 - **`keda.yaml`**:
-  - Declares `ScaledObject` and `TriggerAuthentication` scaling the worker deployment from 0 to 10 pods based on Amazon SQS queue depth.
+    - Declares `ScaledObject` and `TriggerAuthentication` scaling the worker deployment from 0 to 10 pods based on Amazon SQS queue depth.
 - **`serviceaccount.yaml`**:
-  - Dedicated service account binding worker pods to the worker IAM role for Bedrock, S3, SQS, and RDS IAM authentication.
+    - Dedicated service account binding worker pods to the worker IAM role for Bedrock, S3, SQS, and RDS IAM authentication.
 
 ---
 

@@ -31,14 +31,14 @@ Investigating the ArgoCD repo-server container logs uncovered two intersecting r
 We implemented an automated, self-healing credential rotation engine combining the **External Secrets Operator (ESO)** with **EKS Pod Identity**:
 
 1. **IAM Role & Pod Identity Binding**:
-   - Created a dedicated IAM policy granting `ecr:GetAuthorizationToken` and `ecr:BatchGetImage`.
-   - Bound the IAM role directly to the `external-secrets` ServiceAccount in the `external-secrets` namespace using an EKS Pod Identity Association.
+    - Created a dedicated IAM policy granting `ecr:GetAuthorizationToken` and `ecr:BatchGetImage`.
+    - Bound the IAM role directly to the `external-secrets` ServiceAccount in the `external-secrets` namespace using an EKS Pod Identity Association.
 2. **Automated Token Generation (`ECRAuthorizationToken`)**:
-   - Declared an ECR token generator in namespace `argocd` that automatically requests authentication tokens from the target AWS region.
+    - Declared an ECR token generator in namespace `argocd` that automatically requests authentication tokens from the target AWS region.
 3. **Continuous Secret Synchronization (`ExternalSecret`)**:
-   - Created an `ExternalSecret` resource configured with a **1-hour refresh interval** (`refreshInterval: 1h`).
-   - Generates an `argocd.argoproj.io/secret-type: repository` secret with `enableOCI: "true"` directly targeting the ECR repository URL.
-   - Refreshes the secret every hour—well before the 12-hour AWS expiration window.
+    - Created an `ExternalSecret` resource configured with a **1-hour refresh interval** (`refreshInterval: 1h`).
+    - Generates an `argocd.argoproj.io/secret-type: repository` secret with `enableOCI: "true"` directly targeting the ECR repository URL.
+    - Refreshes the secret every hour—well before the 12-hour AWS expiration window.
 
 ```mermaid
 flowchart TD

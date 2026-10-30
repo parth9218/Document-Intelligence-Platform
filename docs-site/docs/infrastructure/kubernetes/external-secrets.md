@@ -15,7 +15,7 @@ description: "Automated AWS ECR authorization token generation and hourly rotati
 - The platform uses private Amazon ECR OCI registries (`${project}/${env}/${app}`) to host immutable Helm charts.
 - AWS ECR authorization tokens generated via `aws ecr get-login-password` expire strictly after **12 hours**.
 - Enabling ArgoCD repo-server's native credential helper (`reposerver.ecr.credential.helper = "true"`) fails consistently:
-  The credential helper successfully authenticates internal Go library calls, but fails when ArgoCD forks external **Helm CLI subprocesses** (`helm pull oci://...`), resulting in `authentication required` and `401 Unauthorized` errors during sync cycles.
+    The credential helper successfully authenticates internal Go library calls, but fails when ArgoCD forks external **Helm CLI subprocesses** (`helm pull oci://...`), resulting in `authentication required` and `401 Unauthorized` errors during sync cycles.
 
 ### The External Secrets Operator Solution
 - Rather than running fragile cronjobs or granting `argocd-repo-server` cluster-admin rights, the platform deploys the **External Secrets Operator (ESO v2.12.0)**.

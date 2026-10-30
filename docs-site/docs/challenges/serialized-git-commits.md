@@ -39,12 +39,12 @@ In a fast-moving continuous delivery environment, concurrent pipelines constantl
 We established a **Two-Tier Serialization and Rebase Resilience Pattern**:
 
 1. **Shared GitHub Actions Concurrency Groups**:
-   - Workflows pushing to the development trunk bind to a shared, global concurrency lock (`git-commit-dev`).
-   - Workflows promoting to staging or production use environment-scoped app locks (`git-commit-${env}-app`).
-   - Setting `cancel-in-progress: false` ensures subsequent release commits queue cleanly in sequential order rather than terminating early.
+    - Workflows pushing to the development trunk bind to a shared, global concurrency lock (`git-commit-dev`).
+    - Workflows promoting to staging or production use environment-scoped app locks (`git-commit-${env}-app`).
+    - Setting `cancel-in-progress: false` ensures subsequent release commits queue cleanly in sequential order rather than terminating early.
 2. **Automated Rebase-and-Retry Push Loop**:
-   - Even with concurrency groups, network jitter or manual pushes can introduce race conditions.
-   - The commit step implements an automated 5-attempt retry loop that executes `git pull --rebase` before each push attempt, applying exponential backoff between retries.
+    - Even with concurrency groups, network jitter or manual pushes can introduce race conditions.
+    - The commit step implements an automated 5-attempt retry loop that executes `git pull --rebase` before each push attempt, applying exponential backoff between retries.
 
 ```mermaid
 sequenceDiagram

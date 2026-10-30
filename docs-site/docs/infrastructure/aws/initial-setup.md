@@ -48,11 +48,11 @@ flowchart TD
 Environment parameters and remote state configurations are strictly isolated under `environments/{env}/`:
 
 - **Backend Configuration (`backend.config.hcl`)**:
-  - Defines S3 state storage coordinates: `bucket`, `key`, `region`, and native S3 state locking.
-  - Dedicated state keys per environment: `dev/terraform.tfstate`, `stg/terraform.tfstate`, `prod/terraform.tfstate`.
+    - Defines S3 state storage coordinates: `bucket`, `key`, `region`, and native S3 state locking.
+    - Dedicated state keys per environment: `dev/terraform.tfstate`, `stg/terraform.tfstate`, `prod/terraform.tfstate`.
 - **Variable Overrides (`{env}.tfvars`)**:
-  - Declares environment-specific CIDR allocations, instance classes, and cluster names.
-  - Keeps modules environment-agnostic without hardcoded identifiers.
+    - Declares environment-specific CIDR allocations, instance classes, and cluster names.
+    - Keeps modules environment-agnostic without hardcoded identifiers.
 
 ---
 
@@ -61,7 +61,7 @@ Environment parameters and remote state configurations are strictly isolated und
 ### 1. Remote Backend Initialization
 From `infra/terraform/aws`:
 - Initialize Terraform referencing the target environment's backend config:
-  Pass `-backend-config=environments/{env}/backend.config.hcl`.
+    Pass `-backend-config=environments/{env}/backend.config.hcl`.
 - Terraform downloads required provider plugins (`hashicorp/aws` v6.67.0) and validates state connectivity.
 
 ### 2. Apple Silicon (ARM64) Lock File Invariant
@@ -100,6 +100,6 @@ When developing from macOS (Apple Silicon ARM64 machines):
 
 - **EKS Cluster Access**: Verify cluster status and Pod Identity agent pods running in `kube-system`.
 - **RDS PostgreSQL pgvector**: Connect via bastion or cluster pod and verify the `vector` extension is active:
-  Execute `SELECT * FROM pg_extension WHERE extname = 'vector';`.
+    Execute `SELECT * FROM pg_extension WHERE extname = 'vector';`.
 - **SQS Queue Notification**: Upload a sample file to the S3 Documents bucket and verify an event message appears in the primary SQS queue.
 - **CloudFront Distribution**: Verify the distribution status is `Deployed` and that accessing the CloudFront domain returns the Single Page Application index.

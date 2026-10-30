@@ -64,6 +64,6 @@ The active session state informs UI layout components:
 
 - **Header Console**: Displays a truncated representation of the active session UUID (e.g. `550e8400...`) along with the live countdown timer until session expiration.
 - **Quota Monitors**: Computes real-time usage metrics against session allowances:
-  - Active Upload Slots: Current in-flight documents vs 5 max.
-  - Cumulative Storage: Current megabytes occupied vs 50 MB allowance.
+    - Active Upload Slots: Current in-flight documents vs 5 max.
+    - Cumulative Storage: Current megabytes occupied vs 50 MB allowance.
 - **Re-Validation**: Periodically queries session status to keep the sliding-window expiration active while the browser tab remains in focus.

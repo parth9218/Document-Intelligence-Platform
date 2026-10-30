@@ -19,12 +19,12 @@ description: "Declarative continuous delivery via ArgoCD ApplicationSets, Matrix
 ### The Decoupled Multi-Source Solution
 - The platform implements **ArgoCD Multi-Source Applications** driven by a declarative **ApplicationSet Matrix Generator**.
 - Reconciles two decoupled artifact sources per microservice:
-  1. **Source 1 (Immutable Helm OCI Artifact)**: The chart template package published to the private AWS ECR OCI registry (`{{chart_name}}:{{chart_version}}`).
-  2. **Source 2 (Environment Values & State)**: The Git repository pinned to an immutable commit SHA (`{{target_commit}}`), injecting `$app_values/.../values.yaml`.
+    1. **Source 1 (Immutable Helm OCI Artifact)**: The chart template package published to the private AWS ECR OCI registry (`{{chart_name}}:{{chart_version}}`).
+    2. **Source 2 (Environment Values & State)**: The Git repository pinned to an immutable commit SHA (`{{target_commit}}`), injecting `$app_values/.../values.yaml`.
 - **Decoupled Tracking Branches**: In staging and production, the ApplicationSet Matrix generator reads from two distinct tracking branches:
-  - `${targetRevision_app}` points to `{env}/app` (managing application image tags and environment values).
-  - `${targetRevision_helm}` points to `{env}/helm` (managing chart release versions).
-  - Only in `dev` do both pointers track the trunk branch (`dev`). In higher environments, branch separation is what justifies and necessitates the Matrix Generator, allowing application code and Helm chart templates to release on completely independent cadences.
+    - `${targetRevision_app}` points to `{env}/app` (managing application image tags and environment values).
+    - `${targetRevision_helm}` points to `{env}/helm` (managing chart release versions).
+    - Only in `dev` do both pointers track the trunk branch (`dev`). In higher environments, branch separation is what justifies and necessitates the Matrix Generator, allowing application code and Helm chart templates to release on completely independent cadences.
 
 ---
 
