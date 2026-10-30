@@ -116,6 +116,7 @@ nav:
       - "Hierarchical ECR Naming": "challenges/ecr-repository-naming.md"
       - "Non-Destructive Selective Checkouts": "challenges/non-destructive-selective-checkouts.md"
       - "Serialized Git Commits": "challenges/serialized-git-commits.md"
+      - "PG NOTIFY 8KB Payload Limit": "challenges/pg-notify-payload-size.md"
       - "First-Time Deployment Bootstrap": "challenges/first-time-deployment-bootstrap.md"
 
   - Database Architecture:
