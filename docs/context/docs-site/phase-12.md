@@ -38,6 +38,7 @@
     └── docs/
         └── deployment/
             ├── overview.md                   # Trunk-based branching, concern separation, semver tagging
+            ├── initial-account-setup.md      # AWS state/artifact buckets, OIDC IAM role, repository vars & secrets
             ├── ci-pipeline.md                # 🚧 Pre-merge PR validation gate, parallel matrix, merge checks
             ├── cd-dev.md                     # Path-filtered trunk CD, dual API variants, serialized commits
             ├── cd-staging-production.md      # Immutable promotion, fail-fast ECR checks, 2-commit dance
@@ -53,9 +54,23 @@
 - **Trunk-Based Invariant**: Single source of truth branch (`dev`) for active development and continuous integration; zero long-lived feature branches.
 - **Concern Isolation**: Separates deployment lifecycle across AWS Infrastructure (`infra-aws`), Kubernetes Platform (`infra-k8s`), Backend Microservices (`api`, `worker`), Frontend Static Client (`frontend`), and Helm Workloads (`helm-api`, `helm-worker`).
 - **Semantic Tagging & Tracking Branches**: Dedicated audit branches (`{env}/infra-aws`, `{env}/infra-k8s`, `{env}/app`, `{env}/helm`) updated exclusively via automated pipelines.
-- **Diagram**: Flowchart illustrating code convergence on `dev`, release tagging, and promotion gates into `stg` and `prod`.
 
-### 3.2 🚧 Pull Request Validation Pipeline (`ci-pipeline.md`)
+### 3.2 Initial AWS & GitHub Bootstrapping (`initial-account-setup.md`)
+- **Foundational Cloud Backends**:
+    - S3 remote state buckets per environment (`tf-state-doc-intel-{env}-{account_id}-{region}-an`) with versioning, SSE encryption, and public access blocks.
+    - Central S3 artifact bucket (`ARTIFACT_BUCKET_NAME`) storing immutable frontend tarball packages.
+- **IAM OIDC Provider & CI Federation**:
+    - Registers `token.actions.githubusercontent.com` OIDC provider with `sts.amazonaws.com` audience.
+    - Scopes CI IAM role trust policy strictly to `repo:<owner>/<repo>:*`, eliminating static credentials in GitHub.
+- **Repository Configuration Matrices (Scoped & Differentiated)**:
+    - **Resolution Precedence**: Clearly documents that GitHub Actions overlays Environment-scope over Repository-scope when `environment: {env}` binds.
+    - **Generic Repository Variables (`vars.*`)**: `AWS_REGION`, `ARTIFACT_BUCKET_NAME` (central frontend build storage), `TF_PROJECT_NAME`, `TF_GITHUB_REPOSITORY_URL`, `TF_VAR_GITHUB_ACTIONS_CI_ROLE`.
+    - **Environment-Specific Variables (`vars.*`)**: `TF_VPC_CIDR` (non-overlapping subnets: `10.0.0.0/16`, `10.1.0.0/16`, `10.2.0.0/16`), `TF_API_HOSTNAME` (`api.dev...`, `api.stg...`, `api...`), `TF_DB_NAME`, `TF_ADMIN_USER_ARNS` (broad in dev, restricted in prod), `TF_TARGET_REVISION_*`.
+    - **Secrets Separation (`secrets.*`)**: Distinguishes generic repository fallback secrets from tier-isolated environment secrets (`TF_DB_USERNAME` as `docintel_{env}_admin`).
+    - **GitHub Environments (`dev`, `stg`, `prod`)**: Configures approval gates and deployment branch protection rules.
+- **Pre-Flight Runbook Focus**: Authored purely with distilled execution checklists, CLI commands, and structured parameter matrices without redundant diagram overhead.
+
+### 3.3 🚧 Pull Request Validation Pipeline (`ci-pipeline.md`)
 - **Shift-Left Quality Invariant**: Pre-merge validation gate for PRs targeting `dev`, preventing syntax, type, and test regressions from polluting trunk.
 - **Parallel Quality Gates**: Targeted path-based checks across API (TypeScript, Jest), Worker (Black, Pytest), Frontend (Next.js export validation), Terraform (`fmt -check`, `validate`), and Helm (`lint`, `template`).
 - **Diagram**: Sequence diagram showing PR creation, parallel matrix evaluation, commit status checks, and merge gate clearance.

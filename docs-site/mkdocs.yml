@@ -167,34 +167,35 @@ nav:
           - "Event-Driven Autoscaling (KEDA)": "infrastructure/kubernetes/keda-autoscaling.md"
           - "Helm Chart Packaging": "infrastructure/kubernetes/helm-charts.md"
 
-  - Security Architecture:
-      - "Defense-in-Depth Model": "security/overview.md"
-      - "Session Authentication": "security/session-authentication.md"
-      - "IAM Auth & Dynamic Secrets": "security/iam-auth-secrets.md"
-      - "S3 Presigned Upload Security": "security/upload-security.md"
-      - "Multi-Tenant Data Isolation": "security/tenant-isolation.md"
-      - "Cross-Origin Resource Sharing (CORS)": "security/cors-policy.md"
+#  - Security Architecture:
+#      - "Defense-in-Depth Model": "security/overview.md"
+#      - "Session Authentication": "security/session-authentication.md"
+#      - "IAM Auth & Dynamic Secrets": "security/iam-auth-secrets.md"
+#      - "S3 Presigned Upload Security": "security/upload-security.md"
+#      - "Multi-Tenant Data Isolation": "security/tenant-isolation.md"
+#      - "Cross-Origin Resource Sharing (CORS)": "security/cors-policy.md"
 
-  - Deployment & CI/CD:
-      - "Trunk-Based Architecture": "deployment/overview.md"
-      - "🚧 Pull Request Validation Pipeline": "deployment/ci-pipeline.md"
-      - "Development Continuous Deployment": "deployment/cd-dev.md"
-      - "Staging & Production Promotion": "deployment/cd-staging-production.md"
-      - "Infrastructure Deployment Order": "deployment/infrastructure-deployment.md"
-      - "Branch Protection & Governance": "deployment/branch-tag-protection.md"
+  - Deployment CI/CD & Local Dev: 
+      - Cloud Pipelines & Delivery:
+          - "Trunk-Based Architecture": "deployment/overview.md"
+          - "Initial AWS & GitHub Setup": "deployment/initial-account-setup.md"
+          - "🚧 Pull Request Validation Pipeline": "deployment/ci-pipeline.md"
+          - "Development Continuous Deployment": "deployment/cd-dev.md"
+          - "Staging & Production Promotion": "deployment/cd-staging-production.md"
+          - "Infrastructure Deployment Order": "deployment/infrastructure-deployment.md"
+          - "Branch Protection & Governance": "deployment/branch-tag-protection.md"
+      - Local Development Workflows:
+          - "Local Development Setup": "development/local-setup.md"
+          - "API Standalone Guide": "development/api-standalone.md"
+          - "Worker Standalone Guide": "development/worker-standalone.md"
+          - "Frontend Standalone Guide": "development/frontend-standalone.md"
+          - "Global Environment Variables": "development/environment-variables.md"
 
-  - Development & Operations:
-      - "Local Development Setup": "development/local-setup.md"
-      - "API Standalone Guide": "development/api-standalone.md"
-      - "Worker Standalone Guide": "development/worker-standalone.md"
-      - "Frontend Standalone Guide": "development/frontend-standalone.md"
-      - "Global Environment Variables": "development/environment-variables.md"
-
-  - Testing Strategy:
-      - "Testing Strategy & Pyramid": "testing/strategy.md"
-      - "API Test Suites": "testing/api-tests.md"
-      - "Worker Test Suites": "testing/worker-tests.md"
-      - "Local Infrastructure Parity": "testing/infrastructure-parity.md"
+#  - Testing Strategy:
+#      - "Testing Strategy & Pyramid": "testing/strategy.md"
+#      - "API Test Suites": "testing/api-tests.md"
+#      - "Worker Test Suites": "testing/worker-tests.md"
+#      - "Local Infrastructure Parity": "testing/infrastructure-parity.md"
 
   - Observability & Reliability:
       - "Observability Strategy": "observability/overview.md"
