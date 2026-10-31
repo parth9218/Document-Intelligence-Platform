@@ -198,10 +198,7 @@ nav:
 #      - "Local Infrastructure Parity": "testing/infrastructure-parity.md"
 
   - Observability & Reliability:
-      - "Observability Strategy": "observability/overview.md"
-      - "Structured Application Logging": "observability/logging.md"
-      - "Health Checks & Probes": "observability/health-checks.md"
-      - "Queue Metrics & Reliability Daemons": "observability/monitoring.md"
+      - "🚧 Planned: OpenTelemetry Strategy": "observability/overview.md"
 
   - Visual Showcase:
       - "UI Walkthrough & Screenshots": "screenshots/index.md"
