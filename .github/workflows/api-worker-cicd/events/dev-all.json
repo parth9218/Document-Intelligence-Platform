@@ -1,6 +1,0 @@
-{
-  "inputs": {
-    "app": "all",
-    "image_to_deploy": "full"
-  }
-}
