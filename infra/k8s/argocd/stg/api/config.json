@@ -1,4 +1,5 @@
 {
   "app": "api",
-  "target_commit": "stg"
+  "target_commit": "9fa4b31c16a9a6d65d2ecc45bb2bd304be140869",
+  "target_version": "1.0.0"
 }
