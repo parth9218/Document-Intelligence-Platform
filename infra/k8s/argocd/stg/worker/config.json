@@ -1,4 +1,5 @@
 {
   "app": "worker",
-  "target_commit": "stg"
+  "target_commit": "f5af75a4a231b9b91ac58598e48bafdc47c6217f",
+  "target_version": "1.0.0"
 }
