@@ -201,4 +201,7 @@ nav:
       - "🚧 Planned: OpenTelemetry Strategy": "observability/overview.md"
 
   - Visual Showcase:
-      - "UI Walkthrough & Screenshots": "screenshots/index.md"
+      - "Application UI": "screenshots/ui.md"
+      - "ArgoCD GitOps": "screenshots/argocd.md"
+      - "CI/CD Pipelines": "screenshots/cicd.md"
+      - "AWS Infrastructure": "screenshots/aws.md"
