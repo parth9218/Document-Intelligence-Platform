@@ -3,8 +3,8 @@ environment: "stg"
 replicaCount: 2
 container:
   image:
-    repository: ""
-    tag: "latest"
+    repository: "793140949744.dkr.ecr.us-east-1.amazonaws.com/docintel/stg/api"
+    tag: "1.0.0"
   secrets-provider-class: "docintel-stg-secrets-class"
   secrets-object: "docintel-stg-secrets"
   parameters-object: "docintel-stg-parameters"
